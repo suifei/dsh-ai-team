@@ -193,9 +193,9 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(data.tasks.length, 0);
 		assert.equal(data.agents.length, 3);
 		assert.equal(data.members.length, 4);
-		assert.deepEqual(data.agents.map((agent) => agent.name), ['沈舟', '林岚', '顾清']);
-		assert.equal(data.agents.find((agent) => agent.name === '沈舟').role, '主理人');
-		assert.equal(data.agents.find((agent) => agent.name === '顾清').qa, true);
+		assert.deepEqual(data.agents.map((agent) => agent.name), ['墨渊', '青岚', '白砚']);
+		assert.equal(data.agents.find((agent) => agent.name === '墨渊').role, '主理人');
+		assert.equal(data.agents.find((agent) => agent.name === '白砚').qa, true);
 		assert.equal(data.project?.owner, 'mem_lead');
 
 		const models = await fetch(`${base}/ai-team/api/models`);

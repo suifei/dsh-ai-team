@@ -21,7 +21,7 @@
 
 `@suifei/dsh-ai-team` 是 DeepSeek Harness 的按需启用插件：装进专用 `ai-team` profile 后，DSH 里出现一个三栏工作台——左侧 Project 与成员，中间主对话 / 看板 / 态势，右侧 Thread。Agent 自己认领 Task、互相交接，由做的人以外的成员验收；Human 只处理方向、信任和不可撤回的决定。
 
-新 Project 自带一组可改的默认成员：**沈舟（主理人）**、**林岚（执行）**、**顾清（验收）**。名字、职责、个性、模型都可以改；模型提供商和模型名称直接读取 DSH 的 `llm` 目录，不需要手填 id。
+新 Project 自带一组可改的默认成员：**墨渊（主理人）**、**青岚（执行）**、**白砚（验收）**。名字、职责、个性、模型都可以改；模型提供商和模型名称直接读取 DSH 的 `llm` 目录，不需要手填 id。
 
 ---
 
@@ -77,8 +77,8 @@ dsh --profile ai-team --no-open --port 33271
 │  # UI 项目       │  看板：待处理 / 进行中 / 待验收 / 完成│  验收 / 退回  │
 │                 │  态势：需要你 / 团队在做 / 等待受阻 / 最近完成 │ 任务动作     │
 │ Agents          │                                    │             │
-│  沈舟 (Lead)     │                                    │             │
-│  林岚 (QA)       │                                    │             │
+│  墨渊 (Lead)     │                                    │             │
+│  白砚 (QA)       │                                    │             │
 └─────────────────┴────────────────────────────────────┴─────────────┘
 ```
 
@@ -100,7 +100,7 @@ dsh --profile ai-team --no-open --port 33271
 | 验收 | maker 不能验收；QA 硬门禁；`qaChecklist` 逐项通过 |
 | 收件箱 | Human/Agent 各自拉取；跨 Project 聚合与项目内 ack |
 | 关注 | 关注 Task；完成后收到 `followed_task_update` |
-| 默认成员 | 新 Project 初始化沈舟 / 林岚 / 顾清；可改名、改职责、改个性、改模型 |
+| 默认成员 | 新 Project 初始化墨渊 / 青岚 / 白砚；可改名、改职责、改个性、改模型 |
 | 成员 | 持久 session；名字/角色/personality/notes/skills |
 | 模型 | Provider / Model 下拉读取 DSH `llm` 目录；可跟随系统默认 |
 | 进化 | `team.evolve` 只改自己的 personality；验收后 reflection wake |
