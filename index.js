@@ -34,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.45';
+const VERSION = '0.3.46';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -402,10 +402,12 @@ export function apply(ctx) {
 			for (const task of active) {
 				const thread = state.threads?.[task.id];
 				const threadAt = thread?.entries?.at(-1)?.at;
-				const updatedAt = Math.max(
-					Number.isFinite(task.updatedAt) ? task.updatedAt : 0,
-					Number.isFinite(threadAt) ? threadAt : 0,
-				);
+				const taskAt = Number.isFinite(task.updatedAt) ? task.updatedAt : 0;
+				// For acceptance, assignee Thread chatter must not mask a silent QA.
+				// Use the submission timestamp (task.updatedAt) as the review clock.
+				const updatedAt = task.status === 'pending_acceptance'
+					? taskAt
+					: Math.max(taskAt, Number.isFinite(threadAt) ? threadAt : 0);
 				if (updatedAt === 0) continue;
 				const idleFor = now - updatedAt;
 				if (task.status === 'pending_acceptance' && task.qaRequired === true && idleFor >= 10 * 60_000) {

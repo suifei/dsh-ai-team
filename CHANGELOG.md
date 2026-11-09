@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.46 — 2026-11-10
+
+- 验收催办时钟改用 Task 提交时间，assignee 在 Thread 继续发言不会再掩盖 QA 静默；
+- 修复 Task 长期 pending_acceptance 但 QA 未收到催办的问题。
+
 ## 0.3.45 — 2026-11-10
 
 - PMO 新增验收催办：QA Task 进入 pending_acceptance 超过 10 分钟仍无验收时，自动唤醒所有 QA 成员，要求独立复跑并验收/退回；
