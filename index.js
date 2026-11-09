@@ -144,6 +144,40 @@ export function apply(ctx) {
 						return send(res, booted.service.bootstrap(PROJECT_ID));
 					}
 
+					const board = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/board$/);
+					if (req.method === 'GET' && board !== null) {
+						const projectId = decodeURIComponent(board[1]);
+						if (projectId !== PROJECT_ID) {
+							return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
+						}
+						try {
+							const doneLimit = Number.parseInt(url.searchParams.get('doneLimit') ?? '', 10);
+							return send(res, booted.service.board(PROJECT_ID, {
+								doneLimit: Number.isSafeInteger(doneLimit) ? doneLimit : undefined,
+							}));
+						} catch (error) {
+							return errorResponse(res, error);
+						}
+					}
+
+					const quadrants = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/quadrants$/);
+					if (req.method === 'GET' && quadrants !== null) {
+						const projectId = decodeURIComponent(quadrants[1]);
+						if (projectId !== PROJECT_ID) {
+							return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
+						}
+						try {
+							const q4Limit = Number.parseInt(url.searchParams.get('q4Limit') ?? '', 10);
+							const q4Days = Number.parseFloat(url.searchParams.get('q4Days') ?? '');
+							return send(res, booted.service.quadrants(PROJECT_ID, {
+								q4Limit: Number.isSafeInteger(q4Limit) ? q4Limit : undefined,
+								q4Days: Number.isFinite(q4Days) ? q4Days : undefined,
+							}));
+						} catch (error) {
+							return errorResponse(res, error);
+						}
+					}
+
 					const commands = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/commands$/);
 					if (req.method === 'POST' && commands !== null) {
 						const projectId = decodeURIComponent(commands[1]);

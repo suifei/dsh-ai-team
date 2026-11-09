@@ -94,6 +94,21 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(afterBody.tasks.length, 1);
 		assert.equal(afterBody.tasks[0].title, '第一条真实任务');
 
+		const board = await fetch(`${base}/ai-team/api/projects/prj_main/board`);
+		assert.equal(board.status, 200);
+		const boardBody = await board.json();
+		assert.equal(boardBody.counts.todo, 1);
+		assert.equal(boardBody.counts.in_progress, 0);
+		assert.equal(boardBody.columns.todo[0].title, '第一条真实任务');
+
+		const quadrants = await fetch(`${base}/ai-team/api/projects/prj_main/quadrants`);
+		assert.equal(quadrants.status, 200);
+		const quadrantBody = await quadrants.json();
+		assert.equal(quadrantBody.q1.count, 0);
+		assert.equal(quadrantBody.q2.count, 0);
+		assert.equal(quadrantBody.q3.count, 0);
+		assert.equal(quadrantBody.q4.count, 0);
+
 		const missing = await fetch(`${base}/ai-team/api/nope`);
 		assert.equal(missing.status, 404);
 	} finally {
