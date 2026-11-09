@@ -62,6 +62,15 @@ test('TeamService drives a real ledger from project setup to accepted task and t
 		const recovered = await service.recordMemberRecovery('a2', 2, { model: 'm2' });
 		assert.equal(recovered.member.status, 'running');
 		assert.equal(service.state.members.a2.status, 'running');
+		const authFailure = await service.recordMemberFailure('a2', {
+			category: 'auth', attempt: 1, retryable: false, provider: 'p2', model: 'm2', nextAction: 'stop', message: 'invalid key',
+		});
+		assert.equal(authFailure.member.status, 'failed');
+		assert.ok(authFailure.inboxItem !== null);
+		const decisions = Object.values(service.state.inbox).filter((item) => item.requiresDecision);
+		assert.equal(decisions.length, 1);
+		assert.equal(decisions[0].ref.memberId, 'a2');
+		await service.recordMemberRecovery('a2', 1, { model: 'm2' });
 
 		const created = await service.dispatch({
 			type: 'task.create',

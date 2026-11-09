@@ -271,6 +271,20 @@ export function apply(ctx) {
 				return { error: { code: 'E_RUNTIME_UNAVAILABLE', message: 'no subagent provider is registered' }, status: 503 };
 			}
 			try {
+				const selection = ctx.get('agentDefaultModel')?.currentSelection?.();
+				const activationMember = member.config?.provider && member.config?.model
+					? member
+					: {
+						...member,
+						config: {
+							...member.config,
+							...(selection?.provider ? { provider: selection.provider } : {}),
+							...(selection?.model ? { model: selection.model } : {}),
+						},
+					};
+				if (!activationMember.config?.provider || !activationMember.config?.model) {
+					return { error: { code: 'E_RUNTIME_UNAVAILABLE', message: 'no member or default provider/model is configured' }, status: 503 };
+				}
 				const parentInfo = await ensureParent();
 				const runtime = new MemberRuntime({
 					subagents,
@@ -283,7 +297,7 @@ export function apply(ctx) {
 					provider: providers[0],
 					cwd: member.workspace ?? booted.dataDir,
 				});
-				const result = await runtime.activate(member, {
+				const result = await runtime.activate(activationMember, {
 					prompt: typeof body.payload?.prompt === 'string'
 						? body.payload.prompt
 						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。',
@@ -365,6 +379,7 @@ export function apply(ctx) {
 							ledger: { events: booted.ledger.events.length, head },
 							runtime: {
 								roots: ctx.get('agents')?.roots?.().length ?? null,
+								defaultModel: ctx.get('agentDefaultModel')?.currentSelection?.() ?? null,
 								providers: ctx.get('subagents')?.list?.() ?? [],
 								providerCaps: (ctx.get('subagents')?.list?.() ?? []).map((providerName) => {
 									const provider = ctx.get('subagents')?.getProvider?.(providerName);
@@ -394,6 +409,13 @@ export function apply(ctx) {
 												seq: entry.seq,
 												type: entry.type,
 												tool: entry.type === 'tool/call' ? entry.data?.name ?? null : undefined,
+												reason: entry.type === 'turn/end' ? entry.data?.reason ?? null : undefined,
+												inbox: entry.type === 'agent/inbox/spliced'
+													? {
+														target: entry.data?.target ?? null,
+														inserted: Array.isArray(entry.data?.inserted) ? entry.data.inserted.length : null,
+													}
+													: undefined,
 											}));
 										} catch { /* diagnostic only */ }
 										return { id: member.id, status: agent?.status ?? null, lastEvent, seq, tail };
