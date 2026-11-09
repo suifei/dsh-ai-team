@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.11 — 2026-11-10
+
+- 修复空闲默认成员不接收 Main stream：owner 无 session 时先自动激活，再记录 `wake/delivered`；
+- Project 增加工作目录：默认项目首次进入提示选择，新建项目必填，成员 cwd 使用项目目录；
+- 多 Project 用 name + workspacePath 区分，切换时显示各自目录；
+- `team` 工具新增 `members`（返回精确 id/name/role），创建 Task 时 ownerId/assigneeId 按 id 或名字解析并校验；
+- Main stream wake prompt 注入成员 id 清单，避免模型把名字拼音当 ownerId。
+
 ## 0.3.10 — 2026-11-09
 
 - 默认成员改为小说式虚拟名：墨渊（主理人）/ 青岚（执行）/ 白砚（验收）；

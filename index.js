@@ -33,7 +33,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.10';
+const VERSION = '0.3.11';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -91,6 +91,7 @@ async function boot() {
 			projectId: project.id,
 			projectName: project.name,
 			projectGoal: project.goal,
+			workspacePath: project.workspacePath ?? '',
 		});
 		runtimes.set(project.id, runtime);
 	}
@@ -208,6 +209,11 @@ export function apply(ctx) {
 		let host = null;
 		let hostPromise = null;
 		const wakeKeys = new Set();
+		const activationTasks = new Map();
+		const projectCwd = (projectRuntime, member) => member?.workspace
+			|| projectRuntime?.service?.state?.projects?.[projectRuntime.id]?.workspacePath
+			|| projectRuntime?.dir
+			|| undefined;
 		const wakeFromResult = async (projectRuntime, result, actor = {}) => {
 			if (projectRuntime === null || projectRuntime === undefined) return;
 			const plans = planWakes(projectRuntime.service.state, result, actor);
@@ -220,31 +226,54 @@ export function apply(ctx) {
 			const providers = typeof subagents.list === 'function' ? subagents.list() : [];
 			if (providers.length === 0) return;
 			const parentInfo = await ensureParent();
+			const wakePrompt = async (plan, member) => describeWake(plan, projectRuntime.service.state)
+				+ await formatSkillCatalog(skillsService, { cwd: projectCwd(projectRuntime, member) })
+				+ await loadSkillContext(member, projectRuntime.dir);
 			for (const plan of plans) {
 				if (wakeKeys.has(plan.key)) continue;
-				const member = projectRuntime.service.state.members?.[plan.memberId];
-				if (member?.sessionId === undefined || member.sessionId === null) continue;
+				let member = projectRuntime.service.state.members?.[plan.memberId];
+				if (member === undefined) continue;
 				// Reserve before the async delivery: the HTTP result and the ledger
 				// event both schedule the same plan, and only one may deliver it.
 				wakeKeys.add(plan.key);
-				const runtime = new MemberRuntime({
-					subagents, sessions, permissionPresets, sandboxPolicy,
-					agents: ctx.get('agents'),
-					agentPresets: ctx.get('agentPresets'),
-					direct: true,
-					parent: parentInfo.agent,
-					provider: providers[0],
-					preset: 'standard',
-					cwd: member.workspace ?? projectRuntime.dataDir,
-				});
+				const cwd = projectCwd(projectRuntime, member);
 				try {
-					const delivered = await runtime.wake(member, {
-						prompt: describeWake(plan, projectRuntime.service.state)
-							+ await formatSkillCatalog(skillsService, { cwd: member.workspace ?? undefined })
-							+ await loadSkillContext(member, projectRuntime.dataDir),
-					});
+					// Idle default members have no Agent session yet. A wake must
+					// activate them first; otherwise the first Human message is
+					// silently dropped in a fresh Project.
+					let messageId = null;
+					if (member.sessionId === undefined || member.sessionId === null) {
+						const activationKey = `${projectRuntime.id}:${member.id}`;
+						let activation = activationTasks.get(activationKey);
+						if (activation === undefined) {
+							activation = activateMember({
+								payload: { memberId: member.id, prompt: await wakePrompt(plan, member) },
+							}, projectRuntime);
+							activationTasks.set(activationKey, activation);
+							activation.finally(() => activationTasks.delete(activationKey)).catch(() => {});
+						}
+						const activated = await activation;
+						if (activated.error !== undefined) {
+							throw Object.assign(new Error(activated.error.message), { code: activated.error.code });
+						}
+						messageId = activated.messageId ?? null;
+						member = projectRuntime.service.state.members?.[member.id] ?? member;
+					} else {
+						const runtime = new MemberRuntime({
+							subagents, sessions, permissionPresets, sandboxPolicy,
+							agents: ctx.get('agents'),
+							agentPresets: ctx.get('agentPresets'),
+							direct: true,
+							parent: parentInfo.agent,
+							provider: providers[0],
+							preset: 'standard',
+							cwd,
+						});
+						const delivered = await runtime.wake(member, { prompt: await wakePrompt(plan, member) });
+						messageId = delivered.messageId ?? null;
+					}
 					await projectRuntime.service.recordWake(plan.memberId, {
-						ok: true, taskId: plan.taskId, reason: plan.reason, messageId: delivered.messageId,
+						ok: true, taskId: plan.taskId, reason: plan.reason, messageId,
 					});
 				} catch (error) {
 					wakeKeys.delete(plan.key);
@@ -432,12 +461,12 @@ export function apply(ctx) {
 					parent: parentInfo.agent,
 					provider: providers[0],
 					preset: 'standard',
-					cwd: member.workspace ?? projectRuntime.dataDir,
+					cwd: projectCwd(projectRuntime, member),
 				});
 				const result = await runtime.activate(activationMember, {
 					prompt: `${memberIdentity(activationMember)}\n\n${typeof body.payload?.prompt === 'string'
 						? body.payload.prompt
-						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: activationMember.workspace ?? undefined })}${await loadSkillContext(activationMember, projectRuntime.dataDir)}`,
+						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: projectCwd(projectRuntime, activationMember) })}${await loadSkillContext(activationMember, projectRuntime.dir)}`,
 				});
 				let bound;
 				try {
@@ -536,7 +565,7 @@ export function apply(ctx) {
 			}
 		};
 
-		async function activateProject(nextProjectId, projectName, projectGoal) {
+		async function activateProject(nextProjectId, projectName, projectGoal, workspacePath = '') {
 			await ready;
 			if (booted === null) throw new Error('team ledger is unavailable');
 			let next = projectRuntime(nextProjectId);
@@ -546,6 +575,7 @@ export function apply(ctx) {
 					projectId: nextProjectId,
 					projectName,
 					projectGoal,
+					workspacePath,
 				});
 				booted.runtimes.set(nextProjectId, next);
 				attachRuntime(next);
@@ -689,6 +719,7 @@ export function apply(ctx) {
 									...project,
 									owner: active?.owner ?? null,
 									goal: active?.goal ?? '',
+									workspacePath: active?.workspacePath ?? project.workspacePath ?? '',
 									archived: false,
 									active: project.id === booted.activeProjectId,
 								};
@@ -828,10 +859,12 @@ export function apply(ctx) {
 						if (body.type === 'project.create') {
 							const name = typeof body.payload?.name === 'string' ? body.payload.name.trim() : '';
 							const goal = typeof body.payload?.goal === 'string' ? body.payload.goal.trim() : '';
+							const workspacePath = typeof body.payload?.workspacePath === 'string' ? body.payload.workspacePath.trim() : '';
 							if (name === '') return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'project name is required' } }, 400);
+							if (workspacePath === '') return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'project workspacePath is required' } }, 400);
 							const id = ids.project();
-							booted.registry.add({ id, name, goal });
-							const next = await activateProject(id, name, goal);
+							booted.registry.add({ id, name, goal, workspacePath });
+							const next = await activateProject(id, name, goal, workspacePath);
 							return send(res, { ok: true, project: next.service.state.projects[id] ?? { id, name } });
 						}
 						if (body.type === 'project.activate') {

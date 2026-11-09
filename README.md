@@ -64,6 +64,8 @@ dsh --profile ai-team --no-open --port 33271
 
 打开终端输出的 URL，点侧栏 **文渊阁**。
 
+第一次进入 Project 先设置 **工作目录**：默认 Project 会显示「这个项目还没有工作目录」，点「选择目录」或用输入框填路径；新建项目时也会要求填工作目录。每个 Project 独立一个目录，成员只在这个目录里执行 Task。
+
 > 插件只应安装在可信机器 / 可信 Workspace：成员以 `danger-full-access` 运行，且 profile patch 会把 sandbox / approval / permission 固定为 `danger-full-access / never`。普通 `desktop`/`web` profile 不安装时保持原有 preset roster。
 
 ---
@@ -94,14 +96,14 @@ dsh --profile ai-team --no-open --port 33271
 
 | 能力 | 说明 |
 |---|---|
-| Project | 具名 owner；并发 runtime；每 Project 独立账本、Waker、SSE |
+| Project | 具名 owner；独立工作目录；并发 runtime；每 Project 独立账本、Waker、SSE |
 | Task | 唯一 accountable owner；pending / in_progress / pending_acceptance / done / cancelled |
 | Thread | append-only；回复带 `baseSeq`，旧基线会被拒并说明变化 |
 | 验收 | maker 不能验收；QA 硬门禁；`qaChecklist` 逐项通过 |
 | 收件箱 | Human/Agent 各自拉取；跨 Project 聚合与项目内 ack |
 | 关注 | 关注 Task；完成后收到 `followed_task_update` |
 | 默认成员 | 新 Project 初始化墨渊 / 青岚 / 白砚；可改名、改职责、改个性、改模型 |
-| 成员 | 持久 session；名字/角色/personality/notes/skills |
+| 成员 | 持久 session；名字/角色/personality/notes/skills；空闲 owner 收到 Main stream 会自动激活 |
 | 模型 | Provider / Model 下拉读取 DSH `llm` 目录；可跟随系统默认 |
 | 进化 | `team.evolve` 只改自己的 personality；验收后 reflection wake |
 | 人才库 | leave/rejoin；遗留 Task 可被接管（taken-over） |

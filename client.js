@@ -186,6 +186,19 @@ window.__ModuleLoader__.load({
 			newProjectTitle: '新建项目',
 			projectName: '项目名',
 			projectGoal: '目标',
+			workspace: '工作目录',
+			workspaceUnset: '这个项目还没有工作目录',
+			workspaceHint: '先选择代码目录再开工；每个 Project 使用独立目录。',
+			workspaceChoose: '选择目录',
+			workspaceChange: '更换目录',
+			workspaceRequired: '请先设置项目工作目录。',
+			workspaceSaved: '项目工作目录已保存。',
+			workspaceDialogTitle: '设置项目工作目录',
+			workspaceDialogHint: 'Project 的成员会在这个目录里执行 Task；多个 Project 用不同目录隔离。',
+			workspacePathPlaceholder: '例如 D:/work/my-project',
+			workspacePickUnavailable: '当前宿主不支持目录选择，请手动输入路径。',
+			workspacePickFailed: '目录选择失败，请手动输入路径。',
+			workspaceSave: '保存目录',
 			projectCreate: '创建项目',
 			projectCreated: '已创建项目 {name}。',
 			projectSwitched: '已切换项目。',
@@ -460,6 +473,19 @@ window.__ModuleLoader__.load({
 			newProjectTitle: 'New project',
 			projectName: 'Project name',
 			projectGoal: 'Goal',
+			workspace: 'Workspace',
+			workspaceUnset: 'This Project has no workspace yet',
+			workspaceHint: 'Choose a code directory before starting; each Project uses its own directory.',
+			workspaceChoose: 'Choose directory',
+			workspaceChange: 'Change directory',
+			workspaceRequired: 'Set the Project workspace first.',
+			workspaceSaved: 'Project workspace saved.',
+			workspaceDialogTitle: 'Set Project workspace',
+			workspaceDialogHint: 'Members run Tasks in this directory; separate Projects use separate directories.',
+			workspacePathPlaceholder: 'e.g. D:/work/my-project',
+			workspacePickUnavailable: 'This host has no directory picker; type a path.',
+			workspacePickFailed: 'Directory picker failed; type a path.',
+			workspaceSave: 'Save directory',
 			projectCreate: 'Create project',
 			projectCreated: 'Created project {name}.',
 			projectSwitched: 'Switched project.',
@@ -910,6 +936,10 @@ window.__ModuleLoader__.load({
 			.at-chead { flex: 0 0 auto; padding: 14px 18px 0; }
 			.at-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; color: var(--dsw-alias-label-primary); font-size: 16px; font-weight: 600; line-height: 22px; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 			.at-goal { min-width: 0; margin-top: 2px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+			.at-workspacebar { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 4px; }
+			.at-workspacepath { flex: 1 1 auto; min-width: 0; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+			.at-workspacebtn { flex: 0 0 auto; padding: 2px 7px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; }
+			.at-workspacebtn:hover { color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-label-tertiary); }
 			.at-tabs { display: flex; gap: 4px; margin-top: 8px; border-bottom: 1px solid var(--dsw-alias-border-l1); }
 			.at-tab { min-height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
 			.at-tab:hover { color: var(--dsw-alias-label-primary); }
@@ -1953,6 +1983,11 @@ window.__ModuleLoader__.load({
 			const [newOpen, setNewOpen] = React.useState(false);
 			const [nName, setNName] = React.useState('');
 			const [nGoal, setNGoal] = React.useState('');
+			const [nWorkspace, setNWorkspace] = React.useState('');
+			const [workspaceOpen, setWorkspaceOpen] = React.useState(false);
+			const [workspaceDraft, setWorkspaceDraft] = React.useState('');
+			const [workspaceError, setWorkspaceError] = React.useState('');
+			const [workspaceBusy, setWorkspaceBusy] = React.useState(false);
 			const [nBusy, setNBusy] = React.useState(false);
 			const [nError, setNError] = React.useState('');
 			const [pSuccessor, setPSuccessor] = React.useState('');
@@ -2091,7 +2126,11 @@ window.__ModuleLoader__.load({
 
 			if (phase === 'loading' || !data) return h(Skeleton, { t });
 
-			const project = data.projects.find((item) => item.id === projectId) ?? data.projects[0] ?? null;
+			const projectRecord = data.projects.find((item) => item.id === projectId) ?? data.projects[0] ?? null;
+			const project = projectRecord === null ? null : {
+				...projectRecord,
+				workspacePath: projectRecord.workspacePath || (data.project?.id === projectRecord.id ? data.project.workspacePath ?? '' : ''),
+			};
 			const tasks = data.tasks;
 			const boardTaskCount = tasks.filter((task) => ['pending', 'in_progress', 'pending_acceptance', 'done'].includes(task.status)).length;
 			const selectedTask = tasks.find((task) => task.id === selected) ?? tasks[0] ?? null;
@@ -2201,15 +2240,54 @@ window.__ModuleLoader__.load({
 			function openNewProject() {
 				setNName('');
 				setNGoal('');
+				setNWorkspace('');
 				setNError('');
 				setNewOpen(true);
 			}
+			async function pickWorkspacePath() {
+				try {
+					const picked = await ctx?.uiWorkspace?.pickDirectory?.();
+					return picked ?? null;
+				} catch {
+					return null;
+				}
+			}
+			async function pickNewWorkspace() {
+				const picked = await pickWorkspacePath();
+				if (picked) setNWorkspace(picked);
+				else setNError(t('workspacePickUnavailable'));
+			}
+			function openWorkspaceEditor() {
+				setWorkspaceDraft(project?.workspacePath ?? '');
+				setWorkspaceError('');
+				setWorkspaceOpen(true);
+			}
+			async function pickProjectWorkspace() {
+				const picked = await pickWorkspacePath();
+				if (picked) setWorkspaceDraft(picked);
+				else setWorkspaceError(t('workspacePickUnavailable'));
+			}
+			async function saveWorkspace() {
+				if (!project || workspaceBusy || !workspaceDraft.trim()) return;
+				setWorkspaceBusy(true);
+				setWorkspaceError('');
+				try {
+					await runCommand('project.workspace.update', { workspacePath: workspaceDraft.trim() }, project.id);
+					setWorkspaceOpen(false);
+					say(t('workspaceSaved'));
+					await reloadData();
+				} catch (error) {
+					setWorkspaceError(error?.message ?? String(error));
+				} finally {
+					setWorkspaceBusy(false);
+				}
+			}
 			async function createProject() {
-				if (!nName.trim() || nBusy) return;
+				if (!nName.trim() || !nWorkspace.trim() || nBusy) return;
 				setNBusy(true);
 				setNError('');
 				try {
-					const result = await runCommand('project.create', { name: nName.trim(), goal: nGoal.trim() });
+					const result = await runCommand('project.create', { name: nName.trim(), goal: nGoal.trim(), workspacePath: nWorkspace.trim() });
 					const next = result.project;
 					setNewOpen(false);
 					setScope('project');
@@ -2494,6 +2572,7 @@ window.__ModuleLoader__.load({
 			async function send() {
 				const text = draft.trim();
 				if (!text) return;
+				if (!project?.workspacePath) { say(t('workspaceRequired')); return; }
 				try {
 					if (mode === 'task') {
 						await runCommand('task.create', { title: text, resultDefinition: text, qaRequired: qaTask });
@@ -2760,6 +2839,10 @@ window.__ModuleLoader__.load({
 						h('header', { className: 'at-chead' },
 							h('div', { className: 'at-title', title: headerTitle }, headerTitle),
 							headerGoal ? h('div', { className: 'at-goal', title: headerGoal }, headerGoal) : null,
+							!inInbox && project ? h('div', { className: 'at-workspacebar' },
+								h('span', { className: 'at-workspacepath', title: project.workspacePath || t('workspaceHint') },
+									project.workspacePath ? t('workspace') + '：' + project.workspacePath : t('workspaceUnset')),
+								h('button', { className: 'at-workspacebtn', type: 'button', onClick: openWorkspaceEditor }, project.workspacePath ? t('workspaceChange') : t('workspaceChoose'))) : null,
 							inInbox ? null : h('div', { className: 'at-tabs', role: 'tablist', 'aria-label': t('tabsAria'), onKeyDown: tabKeyDown },
 								h('button', {
 									className: cx('at-tab', tab === 'main' && 'at-on'),
@@ -2804,7 +2887,7 @@ window.__ModuleLoader__.load({
 							t,
 							mode,
 							draft,
-							disabled: !project,
+							disabled: !project || !project.workspacePath,
 							qaRequired: qaTask,
 							onQaRequired: setQaTask,
 							onMode: setMode,
@@ -2951,6 +3034,24 @@ window.__ModuleLoader__.load({
 								profileAgent.status === 'failed' ? h('button', { className: 'at-btn', type: 'button', onClick: retryProfile, disabled: pBusy }, t('retry')) : null,
 								h('button', { className: 'at-btn', type: 'button', onClick: distillProfile, disabled: pBusy }, t('redistill')),
 								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: pBusy || !pName.trim() }, pBusy ? t('saving') : t('save'))))) : null,
+					workspaceOpen ? h('div', { className: 'at-modalback' },
+						h('form', {
+							className: 'at-modal',
+							role: 'dialog',
+							'aria-modal': 'true',
+							'aria-label': t('workspaceDialogTitle'),
+							onSubmit: (event) => { event.preventDefault(); saveWorkspace(); },
+						},
+							h('h2', { className: 'at-modaltitle' }, t('workspaceDialogTitle')),
+							h('p', { className: 'at-modalmeta' }, t('workspaceDialogHint')),
+							h('label', { className: 'at-field' }, h('span', null, t('workspace')),
+								h('div', { className: 'at-inlineadd' },
+									h('input', { value: workspaceDraft, onChange: (event) => setWorkspaceDraft(event.target.value), placeholder: t('workspacePathPlaceholder'), autoFocus: true }),
+									h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: pickProjectWorkspace }, t('workspaceChoose')))),
+							workspaceError ? h('div', { className: 'at-modalerror', role: 'alert' }, workspaceError) : null,
+							h('div', { className: 'at-modalactions' },
+								h('button', { className: 'at-btn', type: 'button', onClick: () => setWorkspaceOpen(false), disabled: workspaceBusy }, t('cancel')),
+								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: workspaceBusy || !workspaceDraft.trim() }, workspaceBusy ? t('saving') : t('workspaceSave'))))) : null,
 					newOpen ? h('div', { className: 'at-modalback' },
 						h('form', {
 							className: 'at-modal',
@@ -2964,10 +3065,14 @@ window.__ModuleLoader__.load({
 								h('input', { value: nName, onChange: (event) => setNName(event.target.value), autoFocus: true })),
 							h('label', { className: 'at-field' }, h('span', null, t('projectGoal')),
 								h('textarea', { value: nGoal, onChange: (event) => setNGoal(event.target.value) })),
+							h('label', { className: 'at-field' }, h('span', null, t('workspace')),
+								h('div', { className: 'at-inlineadd' },
+									h('input', { value: nWorkspace, onChange: (event) => setNWorkspace(event.target.value), placeholder: t('workspacePathPlaceholder') }),
+									h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: pickNewWorkspace }, t('workspaceChoose')))),
 							nError ? h('div', { className: 'at-modalerror', role: 'alert' }, nError) : null,
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setNewOpen(false), disabled: nBusy }, t('cancel')),
-								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: nBusy || !nName.trim() }, nBusy ? t('saving') : t('projectCreate'))))) : null));
+								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: nBusy || !nName.trim() || !nWorkspace.trim() }, nBusy ? t('saving') : t('projectCreate'))))) : null));
 		}
 
 		function PavilionMark({ size = 18 }) {

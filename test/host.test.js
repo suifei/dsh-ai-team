@@ -198,6 +198,30 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(data.agents.find((agent) => agent.name === '白砚').qa, true);
 		assert.equal(data.project?.owner, 'mem_lead');
 
+		const workspace = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				type: 'project.workspace.update',
+				payload: { workspacePath: 'E:/work/main' },
+			}),
+		});
+		assert.equal(workspace.status, 200);
+		assert.equal((await workspace.json()).project.workspacePath, 'E:/work/main');
+		const afterWorkspace = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
+		assert.equal(afterWorkspace.project.workspacePath, 'E:/work/main');
+
+		const stream = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ type: 'stream.post', payload: { body: '先做第一件事' } }),
+		});
+		assert.equal(stream.status, 200);
+		await new Promise((resolve) => setTimeout(resolve, 40));
+		const afterStream = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
+		assert.equal(afterStream.stream.at(-1).body, '先做第一件事');
+		assert.equal(afterStream.agents.find((agent) => agent.id === 'mem_lead').sessionId !== null, true);
+
 		const models = await fetch(`${base}/ai-team/api/models`);
 		assert.equal(models.status, 200);
 		const modelBody = await models.json();
@@ -355,7 +379,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		const projectCreate = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ type: 'project.create', payload: { name: '并发 P2', goal: '并发运行' } }),
+			body: JSON.stringify({ type: 'project.create', payload: { name: '并发 P2', goal: '并发运行', workspacePath: 'E:/work/p2' } }),
 		});
 		assert.equal(projectCreate.status, 200);
 		const secondProject = (await projectCreate.json()).project.id;
