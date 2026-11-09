@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.27 — 2026-11-10
+
+- 主对话「任务」模式拆成标题 + 验收标准；不再把 Human 原话直接当 resultDefinition；
+- 开启 QA 时必须逐行填写 checklist，否则不能提交；
+- 修复真实项目 #3/#4 的根因：重复创建、宽泛结果定义、QA 空清单；
+- 重复 Task 的第二条会打开已有卡，不再静默新建。
+
 ## 0.3.26 — 2026-11-10
 
 - Task 创建增加重复保护：相同 title/resultDefinition/owner 的 active Task 会被拒绝并返回已有 Task；

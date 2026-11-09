@@ -34,7 +34,12 @@ window.__ModuleLoader__.load({
 			tabSituation: '态势',
 			tabsAria: '项目视图',
 			composer: '写一条消息…',
-			taskPlaceholder: '一句话任务，可稍后补完判据',
+			taskPlaceholder: '任务标题：要做什么',
+			taskDefinitionPlaceholder: '验收标准（必填）：怎样算完成、拿什么证据',
+			taskDefinitionAria: 'Task 验收标准',
+			qaChecklistPlaceholder: 'QA 清单，每行一条（开启 QA 时必填）',
+			qaChecklistAria: 'QA 验收清单',
+			taskDefinitionRequired: '请先写验收标准，再创建 Task。',
 			discuss: '讨论',
 			taskMode: '任务',
 			send: '发送',
@@ -341,7 +346,12 @@ window.__ModuleLoader__.load({
 			tabSituation: 'Situation',
 			tabsAria: 'Project views',
 			composer: 'Write a message…',
-			taskPlaceholder: 'A one-line task; add the definition of done later',
+			taskPlaceholder: 'Task title: what to do',
+			taskDefinitionPlaceholder: 'Definition of done (required): how it is accepted, with what evidence',
+			taskDefinitionAria: 'Definition of done',
+			qaChecklistPlaceholder: 'QA checklist, one per line (required when QA is on)',
+			qaChecklistAria: 'QA checklist',
+			taskDefinitionRequired: 'Write the definition of done before creating a Task.',
 			discuss: 'Discuss',
 			taskMode: 'Task',
 			send: 'Send',
@@ -978,6 +988,9 @@ window.__ModuleLoader__.load({
 			.at-inboxactions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 			.at-qacheck { display: inline-flex; align-items: center; gap: 4px; color: var(--dsw-alias-label-tertiary); font-size: 11px; white-space: nowrap; }
 			.at-qacheck input { accent-color: var(--dsw-alias-state-business-primary); }
+			.at-taskfields { display: flex; flex-direction: column; gap: 6px; padding: 0 10px 8px; }
+			.at-taskdef, .at-taskqa { width: 100%; box-sizing: border-box; resize: vertical; min-height: 42px; padding: 7px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 18px; }
+			.at-taskdef::placeholder, .at-taskqa::placeholder { color: var(--dsw-alias-label-caption); }
 			.at-qabadge { display: inline-flex; align-items: center; margin-left: 5px; padding: 0 5px; border: 1px solid var(--dsw-alias-state-business-primary); border-radius: 999px; color: var(--dsw-alias-state-business-primary); font-size: 9px; line-height: 15px; vertical-align: 1px; }
 			.at-talented { opacity: 0.82; }
 			.at-btn-small { min-height: 24px; padding: 0 8px; font-size: 11px; }
@@ -1919,8 +1932,12 @@ window.__ModuleLoader__.load({
 							h('button', { className: 'at-send', type: 'button', disabled: !reply.trim(), onClick: onReplySend }, t('send'))))) : null);
 		}
 
-		function Composer({ t, mode, draft, disabled, qaRequired, onQaRequired, onMode, onDraft, onSend }) {
-			const send = () => { if (draft.trim() && !disabled) onSend(); };
+		function Composer({ t, mode, draft, definition, qaChecklist, disabled, qaRequired, onQaRequired, onDefinition, onQaChecklist, onMode, onDraft, onSend }) {
+			const send = () => {
+				if (!draft.trim() || disabled) return;
+				if (mode === 'task' && (!definition.trim() || (qaRequired && !qaChecklist.trim()))) return;
+				onSend();
+			};
 			return h('div', { className: 'at-composer' },
 				h('div', { className: 'at-composerinner' },
 					h('div', { className: cx('at-box', 'at-composerbox', mode === 'task' && 'at-taskmode') },
@@ -1938,6 +1955,25 @@ window.__ModuleLoader__.load({
 								}
 							},
 						}),
+						mode === 'task' ? h('div', { className: 'at-taskfields' },
+							h('textarea', {
+								className: 'at-taskdef',
+								rows: 2,
+								value: definition,
+								disabled,
+								placeholder: t('taskDefinitionPlaceholder'),
+								'aria-label': t('taskDefinitionAria'),
+								onChange: (event) => onDefinition(event.target.value),
+							}),
+							qaRequired ? h('textarea', {
+								className: 'at-taskqa',
+								rows: 2,
+								value: qaChecklist,
+								disabled,
+								placeholder: t('qaChecklistPlaceholder'),
+								'aria-label': t('qaChecklistAria'),
+								onChange: (event) => onQaChecklist(event.target.value),
+							}) : null) : null,
 						h('div', { className: 'at-barrow' },
 							h('div', { className: 'at-mode', role: 'group', 'aria-label': t('modeAria') },
 								h('button', { type: 'button', 'aria-pressed': mode === 'discuss', onClick: () => onMode('discuss') }, t('discuss')),
@@ -1946,7 +1982,7 @@ window.__ModuleLoader__.load({
 								h('input', { type: 'checkbox', checked: qaRequired, onChange: (event) => onQaRequired(event.target.checked) }),
 								h('span', null, t('qaRequired'))) : null,
 							h('span', { className: 'at-hint' }, t('enterHint')),
-							h('button', { className: 'at-send', type: 'button', disabled: disabled || !draft.trim(), onClick: send }, mode === 'task' ? t('createTask') : t('send'))))));
+							h('button', { className: 'at-send', type: 'button', disabled: disabled || !draft.trim() || (mode === 'task' && (!definition.trim() || (qaRequired && !qaChecklist.trim()))), onClick: send }, mode === 'task' ? t('createTask') : t('send'))))));
 		}
 
 		function QuadrantCard({ t, meta, quadrant, tasks, items, count, onItem, onViewAll }) {
@@ -2119,6 +2155,8 @@ window.__ModuleLoader__.load({
 			const [threadOpen, setThreadOpen] = React.useState(false);
 			const [mode, setMode] = React.useState('discuss');
 			const [qaTask, setQaTask] = React.useState(false);
+			const [taskDefinition, setTaskDefinition] = React.useState('');
+			const [qaChecklistText, setQaChecklistText] = React.useState('');
 			const [draft, setDraft] = React.useState('');
 			const [note, setNote] = React.useState('');
 			const [rightNote, setRightNote] = React.useState('');
@@ -2821,7 +2859,18 @@ window.__ModuleLoader__.load({
 				if (!project?.workspacePath) { say(t('workspaceRequired')); return; }
 				try {
 					if (mode === 'task') {
-						await runCommand('task.create', { title: text, resultDefinition: text, qaRequired: qaTask });
+						const definition = taskDefinition.trim();
+						const checklist = qaChecklistText.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+						if (definition === '') { say(t('taskDefinitionRequired')); return; }
+						if (qaTask && checklist.length === 0) { say(t('qaNeedsChecklist')); return; }
+						await runCommand('task.create', {
+							title: text,
+							resultDefinition: definition,
+							qaRequired: qaTask,
+							...(qaTask ? { qaChecklist: checklist } : {}),
+						});
+						setTaskDefinition('');
+						setQaChecklistText('');
 					} else {
 						await runCommand('stream.post', { body: text });
 					}
@@ -3171,7 +3220,11 @@ window.__ModuleLoader__.load({
 							draft,
 							disabled: !project || !project.workspacePath,
 							qaRequired: qaTask,
+							definition: taskDefinition,
+							qaChecklist: qaChecklistText,
 							onQaRequired: setQaTask,
+							onDefinition: setTaskDefinition,
+							onQaChecklist: setQaChecklistText,
 							onMode: setMode,
 							onDraft: setDraft,
 							onSend: send,
