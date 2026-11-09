@@ -173,6 +173,22 @@ window.__ModuleLoader__.load({
 			memberAdding: '正在创建…',
 			memberAdded: '成员已创建并激活。',
 			cancel: '取消',
+			memberProfileTitle: '成员资料',
+			memberProfileTitleName: '成员资料 · {name}',
+			memberProfileMeta: '{status} · 资料 v{version} · 蒸馏 v{distill}',
+			memberPersonality: '个性 / 工作方式',
+			save: '保存',
+			saving: '保存中…',
+			redistill: '重新蒸馏',
+			leaveTeam: '离开团队',
+			leaveConfirm: '离开团队后成员会进入人才库，遗留任务会列出来等待接手。确定？',
+			leftTeam: '已进入人才库；遗留任务 {n} 张，等待接手。',
+			recruited: '已从人才库重新招募。',
+			talentPoolCount: '人才库 {n}',
+			talentPool: '人才库',
+			recruit: '重新招募',
+			profileSaved: '成员资料已保存，下一次唤醒生效。',
+			profileDistilled: '已重新蒸馏并记录新版本。',
 			conversationMock: 'spike：宿主没有可用的 layout.selectPanel(conversation)。',
 			discussSent: '已发送给 Project owner。',
 			taskSent: '已创建 Task。',
@@ -374,6 +390,22 @@ window.__ModuleLoader__.load({
 			memberAdding: 'Creating…',
 			memberAdded: 'Member created and activated.',
 			cancel: 'Cancel',
+			memberProfileTitle: 'Member profile',
+			memberProfileTitleName: 'Member profile · {name}',
+			memberProfileMeta: '{status} · profile v{version} · distill v{distill}',
+			memberPersonality: 'Personality / working style',
+			save: 'Save',
+			saving: 'Saving…',
+			redistill: 'Re-distill',
+			leaveTeam: 'Leave team',
+			leaveConfirm: 'Leaving moves the member to the talent pool; unfinished tasks will be listed for takeover. Continue?',
+			leftTeam: 'Moved to the talent pool; {n} unfinished task(s) await takeover.',
+			recruited: 'Recruited from the talent pool.',
+			talentPoolCount: 'Talent pool {n}',
+			talentPool: 'Talent pool',
+			recruit: 'Recruit',
+			profileSaved: 'Profile saved; effective on the next wake.',
+			profileDistilled: 'Re-distilled and recorded as a new version.',
 			conversationMock: 'spike: this host has no working layout.selectPanel(conversation).',
 			discussSent: 'Sent to the Project owner.',
 			taskSent: 'Task created.',
@@ -744,6 +776,9 @@ window.__ModuleLoader__.load({
 			.at-agentname { align-self: flex-start; max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; line-height: 18px; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.at-agentname:hover { text-decoration: underline; }
 			.at-agentrole { min-width: 0; color: var(--dsw-alias-label-caption); font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+			.at-qabadge { display: inline-flex; align-items: center; margin-left: 5px; padding: 0 5px; border: 1px solid var(--dsw-alias-state-business-primary); border-radius: 999px; color: var(--dsw-alias-state-business-primary); font-size: 9px; line-height: 15px; vertical-align: 1px; }
+			.at-talented { opacity: 0.82; }
+			.at-btn-small { min-height: 24px; padding: 0 8px; font-size: 11px; }
 			.at-agentconfig { min-width: 0; display: flex; gap: 4px; align-items: center; color: var(--dsw-alias-label-tertiary); font-size: 10.5px; line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 			.at-agentfail { flex: none; color: var(--dsw-alias-state-warn-primary); }
 			.at-agentmore { flex: 0 0 auto; width: 28px; height: 28px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 13px; cursor: pointer; }
@@ -946,6 +981,7 @@ window.__ModuleLoader__.load({
 			.at-modalback { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 20px; background: color-mix(in srgb, var(--dsw-alias-bg-base) 72%, transparent); }
 			.at-modal { width: min(420px, 100%); max-height: 86vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; background: var(--dsw-alias-bg-layer-2); }
 			.at-modaltitle { margin: 0 0 2px; font-size: 15px; font-weight: 600; color: var(--dsw-alias-label-primary); }
+			.at-modalmeta { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
 			.at-check { display: flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
 			.at-check input { accent-color: var(--dsw-alias-state-business-primary); }
 			.at-modalerror { color: var(--dsw-alias-state-error-primary); font-size: 11.5px; line-height: 16px; }
@@ -1300,7 +1336,9 @@ window.__ModuleLoader__.load({
 				h('span', { className: 'at-dot at-dot-' + (agent.status ?? 'idle'), 'aria-hidden': 'true' }),
 				h('div', { className: 'at-agentmeta' },
 					h('button', { className: 'at-agentname', type: 'button', onClick: () => onAgent(agent), title: agent.name }, agent.name),
-					h('div', { className: 'at-agentrole', title: agent.role ?? '' }, agent.role ?? ''),
+					h('div', { className: 'at-agentrole', title: agent.role ?? '' },
+						agent.role ?? '',
+						agent.qa ? h('span', { className: 'at-qabadge' }, 'QA') : null),
 					h('div', {
 						className: 'at-agentconfig',
 						title: [model + context + version, failure ? tf(t, 'agentFailure', { category: failure.category, n: failure.attempt }) : ''].filter(Boolean).join(' · '),
@@ -1319,8 +1357,10 @@ window.__ModuleLoader__.load({
 				}, '⋯'));
 		}
 
-		function LeftPanel({ t, data, projectId, scope, tab, inboxUnread, onBack, onInbox, onBoard, onProject, onNewProject, onAgent, onAddAgent }) {
+		function LeftPanel({ t, data, projectId, scope, tab, inboxUnread, onBack, onInbox, onBoard, onProject, onNewProject, onAgent, onAddAgent, onRecruit }) {
 			const projects = data.projects.filter((project) => !project.archived);
+			const activeAgents = data.agents.filter((agent) => agent.status !== 'retired');
+			const talentAgents = data.agents.filter((agent) => agent.status === 'retired');
 			const archived = data.projects.filter((project) => project.archived);
 			const boardActive = scope === 'project' && tab === 'board';
 			return h('div', null,
@@ -1366,9 +1406,16 @@ window.__ModuleLoader__.load({
 					h('span', null, t('agents')),
 					h('button', { className: 'at-mini', type: 'button', 'aria-label': t('addAgent'), title: t('addAgent'), onClick: onAddAgent }, h(Ico, { name: 'plus', size: 12 })),
 				),
-				data.agents.length
-					? h('div', { role: 'list', 'aria-label': t('agentsAria') }, data.agents.map((agent) => h(AgentRow, { key: agent.id, t, agent, onAgent })))
-					: h('div', { className: 'at-colempty' }, t('emptyColumn')));
+				activeAgents.length
+					? h('div', { role: 'list', 'aria-label': t('agentsAria') }, activeAgents.map((agent) => h(AgentRow, { key: agent.id, t, agent, onAgent })))
+					: h('div', { className: 'at-colempty' }, t('emptyColumn')),
+				talentAgents.length ? h('details', { className: 'at-archived' },
+					h('summary', null, tf(t, 'talentPoolCount', { n: talentAgents.length })),
+					h('div', { role: 'list', 'aria-label': t('talentPool') }, talentAgents.map((agent) => h('div', { key: agent.id, className: 'at-agent at-talented' },
+						h('div', { className: 'at-agentmeta' },
+							h('span', { className: 'at-agentname' }, agent.name),
+							h('div', { className: 'at-agentrole' }, agent.role ?? '', agent.qa ? h('span', { className: 'at-qabadge' }, 'QA') : null)),
+						h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => onRecruit(agent) }, t('recruit')))))) : null);
 		}
 
 		function ConvertForm({ t, project, task, thread, title, dod, onTitle, onDod, onCancel, onSubmit }) {
@@ -1697,6 +1744,12 @@ window.__ModuleLoader__.load({
 			const [mOwner, setMOwner] = React.useState(false);
 			const [mBusy, setMBusy] = React.useState(false);
 			const [mError, setMError] = React.useState('');
+			const [profileAgent, setProfileAgent] = React.useState(null);
+			const [pName, setPName] = React.useState('');
+			const [pRole, setPRole] = React.useState('');
+			const [pPersonality, setPPersonality] = React.useState('');
+			const [pBusy, setPBusy] = React.useState(false);
+			const [pError, setPError] = React.useState('');
 			const [replyBase, setReplyBase] = React.useState(null);
 			const rightRef = React.useRef(null);
 			const replyRef = React.useRef(null);
@@ -1976,6 +2029,81 @@ window.__ModuleLoader__.load({
 					setMBusy(false);
 				}
 			}
+			function openProfile(agent) {
+				setProfileAgent(agent);
+				setPName(agent.name ?? '');
+				setPRole(agent.role ?? '');
+				setPPersonality(agent.personality ?? '');
+				setPError('');
+			}
+			async function saveProfile() {
+				if (!profileAgent || pBusy) return;
+				setPBusy(true);
+				setPError('');
+				try {
+					await runCommand('member.profile.update', {
+						memberId: profileAgent.id,
+						name: pName.trim(),
+						role: pRole.trim(),
+						personality: pPersonality,
+						reason: 'workbench profile',
+					});
+					setProfileAgent(null);
+					say(t('profileSaved'));
+					await reloadData();
+				} catch (error) {
+					setPError(error?.message ?? String(error));
+				} finally {
+					setPBusy(false);
+				}
+			}
+			async function distillProfile() {
+				if (!profileAgent || pBusy) return;
+				setPBusy(true);
+				setPError('');
+				try {
+					await runCommand('member.distill', {
+						memberId: profileAgent.id,
+						personality: pPersonality,
+						reason: 'workbench re-distill',
+					});
+					say(t('profileDistilled'));
+					await reloadData();
+				} catch (error) {
+					setPError(error?.message ?? String(error));
+				} finally {
+					setPBusy(false);
+				}
+			}
+			async function leaveProfile() {
+				if (!profileAgent || pBusy) return;
+				if (typeof window.confirm === 'function' && !window.confirm(t('leaveConfirm'))) return;
+				setPBusy(true);
+				setPError('');
+				try {
+					const result = await runCommand('member.leave', { memberId: profileAgent.id, reason: 'workbench leave' });
+					setProfileAgent(null);
+					say(tf(t, 'leftTeam', { n: result.unfinishedTasks?.length ?? 0 }));
+					await reloadData();
+				} catch (error) {
+					setPError(error?.message ?? String(error));
+				} finally {
+					setPBusy(false);
+				}
+			}
+			async function recruit(agent) {
+				try {
+					await runCommand('member.rejoin', { memberId: agent.id, reason: 'workbench recruit' });
+					await runCommand('member.activate', {
+						memberId: agent.id,
+						prompt: '你从人才库回到团队。先读 tasks/inbox；若有遗留工作，由 Human/新 owner 决定是否接手。不要修改无关文件。',
+					});
+					say(t('recruited'));
+					await reloadData();
+				} catch (error) {
+					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
+			}
 			async function send() {
 				const text = draft.trim();
 				if (!text) return;
@@ -2060,8 +2188,9 @@ window.__ModuleLoader__.load({
 				onBoard: switchBoard,
 				onProject: switchProject,
 				onNewProject: () => { closeMobile(); say(t('newProjectMock')); },
-				onAgent: () => { closeMobile(); say(t('agentMock')); },
+				onAgent: (agent) => { closeMobile(); openProfile(agent); },
 				onAddAgent: () => { closeMobile(); openAddAgent(); },
+				onRecruit: (agent) => { closeMobile(); recruit(agent); },
 			};
 
 			const body = inInbox
@@ -2238,7 +2367,34 @@ window.__ModuleLoader__.load({
 							mError ? h('div', { className: 'at-modalerror', role: 'alert' }, mError) : null,
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setAddOpen(false), disabled: mBusy }, t('cancel')),
-								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: mBusy || !mName.trim() }, mBusy ? t('memberAdding') : t('memberCreate'))))) : null));
+								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: mBusy || !mName.trim() }, mBusy ? t('memberAdding') : t('memberCreate'))))) : null,
+					profileAgent ? h('div', { className: 'at-modalback' },
+						h('form', {
+							className: 'at-modal',
+							role: 'dialog',
+							'aria-modal': 'true',
+							'aria-label': t('memberProfileTitle'),
+							onSubmit: (event) => { event.preventDefault(); saveProfile(); },
+						},
+							h('h2', { className: 'at-modaltitle' }, tf(t, 'memberProfileTitleName', { name: profileAgent.name })),
+							h('div', { className: 'at-modalmeta' },
+							tf(t, 'memberProfileMeta', {
+								status: t(AGENT_STATUS[profileAgent.status] ?? 'agentIdle'),
+								version: profileAgent.profileVersion ?? 1,
+								distill: profileAgent.distillVersion ?? 0,
+							})),
+							h('label', { className: 'at-field' }, h('span', null, t('memberName')),
+								h('input', { value: pName, onChange: (event) => setPName(event.target.value), autoFocus: true })),
+							h('label', { className: 'at-field' }, h('span', null, t('memberRole')),
+								h('input', { value: pRole, onChange: (event) => setPRole(event.target.value) })),
+							h('label', { className: 'at-field' }, h('span', null, t('memberPersonality')),
+								h('textarea', { value: pPersonality, onChange: (event) => setPPersonality(event.target.value) })),
+							pError ? h('div', { className: 'at-modalerror', role: 'alert' }, pError) : null,
+							h('div', { className: 'at-modalactions' },
+								h('button', { className: 'at-btn', type: 'button', onClick: () => setProfileAgent(null), disabled: pBusy }, t('cancel')),
+								h('button', { className: 'at-btn', type: 'button', onClick: leaveProfile, disabled: pBusy }, t('leaveTeam')),
+								h('button', { className: 'at-btn', type: 'button', onClick: distillProfile, disabled: pBusy }, t('redistill')),
+								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: pBusy || !pName.trim() }, pBusy ? t('saving') : t('save'))))) : null));
 		}
 
 		function PanelIcon() {

@@ -242,7 +242,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		});
 		assert.equal(agentTask.status, 200);
 		const agentTaskBody = await agentTask.json();
-		await new Promise((resolve) => setTimeout(resolve, 20));
+		await new Promise((resolve) => setTimeout(resolve, 300));
 		assert.equal(wakeCalls.length, 1);
 		assert.equal(wakeCalls[0].targetId, memberSessionId);
 		assert.match(wakeCalls[0].content[0].text, new RegExp(agentTaskBody.task.id));

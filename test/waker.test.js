@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { planWakes } from '../lib/host/waker.js';
+import { describeWake, planWakes } from '../lib/host/waker.js';
 
 const state = {
 	members: {
@@ -28,9 +28,26 @@ test('assignment and submission wake the responsible Agent', () => {
 	const assigned = planWakes(state, { event: { type: 'task/assigned', seq: 4, payload: { taskId: 't1', assigneeId: 'a2' } } }, {});
 	assert.deepEqual(assigned.map((item) => [item.memberId, item.reason]), [['a2', 'task_assigned']]);
 	const submitted = planWakes(state, { event: { type: 'task/submitted', seq: 5, payload: { taskId: 't2' } } }, {});
-	assert.deepEqual(submitted.map((item) => [item.memberId, item.reason]), [['a1', 'task_submitted']]);
+	assert.deepEqual(submitted.map((item) => [item.memberId, item.reason]), [['a1', 'review_requested']]);
 	const changes = planWakes(state, { event: { type: 'task/changes-requested', seq: 6, payload: { taskId: 't2' } } }, {});
 	assert.deepEqual(changes.map((item) => [item.memberId, item.reason]), [['a2', 'changes_requested']]);
+});
+
+test('a QA member is preferred as the submitted reviewer', () => {
+	const qaState = {
+		...state,
+		members: {
+			...state.members,
+			a4: { id: 'a4', name: '关关', role: 'QA 质量', kind: 'agent', status: 'idle', sessionId: 's4' },
+		},
+		tasks: {
+			...state.tasks,
+			t2: { ...state.tasks.t2, assigneeId: 'a2', claimHistory: ['a1', 'a2'] },
+		},
+	};
+	const plans = planWakes(qaState, { event: { type: 'task/submitted', seq: 8, payload: { taskId: 't2' } } }, {});
+	assert.deepEqual(plans.map((item) => [item.memberId, item.reason]), [['a4', 'review_requested']]);
+	assert.match(plans[0].prompt, /QA/);
 });
 
 test('thread reply wakes owner/assignee except the author', () => {
@@ -55,7 +72,24 @@ test('a Human Main-stream message wakes the Agent Project owner', () => {
 	assert.match(plans[0].prompt, /create/);
 });
 
-test('no wake is planned for a member who authored the event', () => {
-	const plans = planWakes(state, { event: { type: 'task/assigned', seq: 8, payload: { taskId: 't1', assigneeId: 'a1' } } }, { agentId: 'a1' });
+test('wake prompt carries the customized name, role and personality', () => {
+	const customized = {
+		...state,
+		members: {
+			...state.members,
+			a1: { ...state.members.a1, name: '沈舟·二', role: 'Lead + QA', personality: '先复跑，再下结论。' },
+		},
+	};
+	const prompt = describeWake({ memberId: 'a1', taskId: 't1', prompt: 'Team event.' }, customized);
+	assert.match(prompt, /沈舟·二/);
+	assert.match(prompt, /Lead \+ QA/);
+	assert.match(prompt, /先复跑/);
+	assert.match(prompt, /QA 职责/);
+});
+
+test('no wake is planned for a member who authored a thread reply', () => {
+	const plans = planWakes(state, {
+		event: { type: 'thread/posted', seq: 8, payload: { taskId: 't1', entry: { seq: 1, authorId: 'a1' } } },
+	}, { agentId: 'a1' });
 	assert.equal(plans.length, 0);
 });

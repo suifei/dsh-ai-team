@@ -16,6 +16,7 @@ import { TeamService } from './lib/host/service.js';
 import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-runtime.js';
 import { ensureHostAgent } from './lib/runtime/host-agent.js';
 import { classifyLlmFailure, retryDecision } from './lib/runtime/failure-policy.js';
+import { memberIdentity } from './lib/domain/member-profile.js';
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeWake, planWakes } from './lib/host/waker.js';
 
@@ -207,6 +208,9 @@ export function apply(ctx) {
 				if (wakeKeys.has(plan.key)) continue;
 				const member = booted.service.state.members?.[plan.memberId];
 				if (member?.sessionId === undefined || member.sessionId === null) continue;
+				// Reserve before the async delivery: the HTTP result and the ledger
+				// event both schedule the same plan, and only one may deliver it.
+				wakeKeys.add(plan.key);
 				const runtime = new MemberRuntime({
 					subagents, sessions, permissionPresets, sandboxPolicy,
 					agents: ctx.get('agents'),
@@ -217,11 +221,11 @@ export function apply(ctx) {
 				});
 				try {
 					const delivered = await runtime.wake(member, { prompt: describeWake(plan, booted.service.state) });
-					wakeKeys.add(plan.key);
 					await booted.service.recordWake(plan.memberId, {
 						ok: true, taskId: plan.taskId, reason: plan.reason, messageId: delivered.messageId,
 					});
 				} catch (error) {
+					wakeKeys.delete(plan.key);
 					console.warn('[ai-team] wake failed:', plan.memberId, error?.code ?? error?.message ?? error);
 					try {
 						await booted.service.recordWake(plan.memberId, {
@@ -309,9 +313,9 @@ export function apply(ctx) {
 					cwd: member.workspace ?? booted.dataDir,
 				});
 				const result = await runtime.activate(activationMember, {
-					prompt: typeof body.payload?.prompt === 'string'
+					prompt: `${memberIdentity(activationMember)}\n\n${typeof body.payload?.prompt === 'string'
 						? body.payload.prompt
-						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。',
+						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}`,
 				});
 				let bound;
 				try {
@@ -348,7 +352,15 @@ export function apply(ctx) {
 			quadrants: booted.service.quadrants(PROJECT_ID),
 		});
 		ready.then((value) => {
-			if (value !== null && value !== undefined) value.ledger.onEvent = (event) => broadcast(event);
+			if (value !== null && value !== undefined) {
+				value.ledger.onEvent = (event) => {
+					broadcast(event);
+					const actorId = event?.actor?.kind === 'agent' ? event.actor.memberId : undefined;
+					void wakeFromResult({ event }, actorId === undefined ? {} : { agentId: actorId }).catch((error) => {
+						console.warn('[ai-team] event wake planner failed:', error?.message ?? error);
+					});
+				};
+			}
 		}).catch(() => {});
 		const broadcast = (event) => {
 			const payload = {

@@ -19,6 +19,9 @@ test('client source contains the situation (four-quadrant) view', async () => {
 	assert.match(source, /addAgentTitle/);
 	assert.match(source, /memberPrompt/);
 	assert.match(source, /mPrompt/);
+	assert.match(source, /member\.profile\.update/);
+	assert.match(source, /member\.leave/);
+	assert.match(source, /talentPoolCount/);
 });
 
 test('client factory registers the sidebar icon and main workbench panel', async () => {
