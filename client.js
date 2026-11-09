@@ -118,6 +118,9 @@ window.__ModuleLoader__.load({
 			decisionAdopt: '采纳',
 			decisionAdoptAll: '全部采纳建议',
 			decisionAdoptHint: '建议可直接采纳，再按需修改',
+			decisionReopen: '重新决策',
+			decisionReopenSuffix: '复核',
+			decisionReopened: '已重开一份可编辑的决策项。',
 			decisionSubmit: '提交决策',
 			decisionSubmitted: '决策已提交给团队。',
 			inboxEmptyAction: '看任务看板',
@@ -433,6 +436,9 @@ window.__ModuleLoader__.load({
 			decisionAdopt: 'Adopt',
 			decisionAdoptAll: 'Adopt all suggestions',
 			decisionAdoptHint: 'Adopt a suggestion, then edit if needed',
+			decisionReopen: 'Decide again',
+			decisionReopenSuffix: 'review',
+			decisionReopened: 'A new editable decision item is ready.',
 			decisionSubmit: 'Submit decision',
 			decisionSubmitted: 'Decision sent to the team.',
 			inboxEmptyAction: 'Open the board',
@@ -2864,6 +2870,20 @@ window.__ModuleLoader__.load({
 					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
 				}
 			}
+			async function reopenDecision(item) {
+				try {
+					await runCommand('decision.request', {
+						title: (item.ref?.title || t('inboxDecisionTitle')) + ' · ' + t('decisionReopenSuffix'),
+						questions: item.ref?.questions ?? [],
+						taskId: item.ref?.taskId ?? null,
+						source: item.ref?.source ?? 'reopen',
+					}, item.projectId ?? projectId);
+					say(t('decisionReopened'));
+					await reloadData();
+				} catch (error) {
+					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
+			}
 			async function ackInbox(item) {
 				try {
 					await runCommand('inbox.ack', { itemId: item.id, disposition: 'read' }, item.projectId ?? projectId);
@@ -3116,6 +3136,9 @@ window.__ModuleLoader__.load({
 									item.state !== 'unread' ? h('div', { className: 'at-inboxstate' }, item.state) : null),
 								h('div', { className: 'at-inboxactions' },
 									item.ref?.taskId ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => openInboxTask(item) }, t('inboxOpenTask')) : null,
+									item.type === 'decision_required' && item.state !== 'unread' && Array.isArray(item.ref?.questions) && item.ref.questions.length
+										? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => reopenDecision(item) }, t('decisionReopen'))
+										: null,
 									item.state === 'unread' && !(item.type === 'decision_required' && Array.isArray(item.ref?.questions) && item.ref.questions.length)
 										? h('button', { className: 'at-btn at-btn-small at-btn-primary', type: 'button', onClick: () => ackInbox(item) }, t('inboxAck'))
 										: null)))
