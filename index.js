@@ -15,6 +15,7 @@ import { openLedger } from './lib/ledger/writer.js';
 import { TeamService } from './lib/host/service.js';
 import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-runtime.js';
 import { ensureHostAgent } from './lib/runtime/host-agent.js';
+import { classifyLlmFailure, retryDecision } from './lib/runtime/failure-policy.js';
 
 export const name = 'ai-team';
 
@@ -131,6 +132,37 @@ export function apply(ctx) {
 
 		const sseClients = new Set();
 		const activations = new Map();
+		// DSH exposes a model-request failure waterfall. We classify the failure,
+		// record it, and only own recovery for retryable categories. No timers:
+		// a retry is the DSH loop's own decision; our fallback config applies next wake.
+		const offRequestError = typeof ctx.on === 'function'
+			? ctx.on('agent/request-error', async (payload, next) => {
+				if (booted === null) return next();
+				const member = Object.values(booted.service.state.members ?? {})
+					.find((candidate) => candidate.sessionId === payload?.agent?.id);
+				if (member === undefined) return next();
+				const failure = classifyLlmFailure(payload.failure);
+				let recorded;
+				try {
+					recorded = await booted.service.recordMemberFailure(member.id, {
+						...failure,
+						provider: payload.provider ?? null,
+						model: member.config?.model ?? null,
+					});
+				} catch {
+					return next();
+				}
+				if (!failure.retryable) return next();
+				const decision = retryDecision(failure, member.config ?? {}, recorded.member.attempts ?? 1);
+				if (decision.action === 'fallback' && decision.patch !== undefined) {
+					try {
+						await booted.service.applySystemFallback(member.id, decision.patch, 'llm-fallback');
+					} catch { /* policy/rollback failure must not turn into a retry storm */ }
+				}
+				if (decision.action === 'fail') return next();
+				return { kind: 'retry' };
+			})
+			: () => {};
 		let host = null;
 		let hostPromise = null;
 		const ensureParent = async () => {
@@ -371,6 +403,7 @@ export function apply(ctx) {
 			}
 			activations.clear();
 			if (host !== null) void host.dispose?.();
+			offRequestError();
 			dispose();
 			if (booted !== null) booted.ledger.close();
 		};

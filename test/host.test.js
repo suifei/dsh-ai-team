@@ -57,6 +57,7 @@ test('host refuses a profile without danger-full-access', async () => {
 test('host mounts the workbench routes on a real default-project ledger', async () => {
 	const routes = [];
 	const memberSessions = new Map();
+	const requestErrorListeners = [];
 	const root = await mkdtemp(join(tmpdir(), 'ai-team-host-'));
 	const previousHome = process.env.DSH_HOME;
 	const previousProfile = process.env.DSH_PROFILE;
@@ -66,6 +67,10 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 	const ctx = {
 		effect(fn) {
 			disposeEffect = fn();
+		},
+		on(event, listener) {
+			if (event === 'agent/request-error') requestErrorListeners.push(listener);
+			return () => {};
 		},
 		get(id) {
 			if (id === 'webServer') {
@@ -186,6 +191,28 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(activated.member.status, 'running');
 		assert.equal(activated.member.sessionId, 'session-member-1');
 		assert.equal(memberSessions.get('session-member-1').sandbox, 'danger-full-access');
+
+		assert.equal(requestErrorListeners.length, 1);
+		let nextCalls = 0;
+		const retry = await requestErrorListeners[0](
+			{ agent: { id: 'session-member-1' }, provider: 'p1', failure: { status: 429, code: 'RATE_LIMIT', message: 'rate limit' } },
+			async () => { nextCalls += 1; return undefined; },
+		);
+		assert.equal(retry.kind, 'retry');
+		assert.equal(nextCalls, 0);
+		const afterRate = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
+		assert.equal(afterRate.agents[0].lastFailure.category, 'rate_limit');
+		assert.equal(afterRate.agents[0].attempts, 1);
+
+		const terminal = await requestErrorListeners[0](
+			{ agent: { id: 'session-member-1' }, provider: 'p1', failure: { status: 401, code: 'INVALID_API_KEY', message: 'bad key' } },
+			async () => { nextCalls += 1; return undefined; },
+		);
+		assert.equal(terminal, undefined);
+		assert.equal(nextCalls, 1);
+		const afterAuth = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
+		assert.equal(afterAuth.agents[0].status, 'failed');
+		assert.equal(afterAuth.agents[0].lastFailure.category, 'auth');
 
 		const board = await fetch(`${base}/ai-team/api/projects/prj_main/board`);
 		assert.equal(board.status, 200);
