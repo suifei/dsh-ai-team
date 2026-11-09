@@ -102,6 +102,7 @@ window.__ModuleLoader__.load({
 			inboxEmptyBody: '成员失败、需要决策或有人提到你时，会出现在这里。',
 			inboxDecisionTitle: '需要你决策',
 			inboxItemTitle: '收件箱消息',
+			inboxCompletedTitle: 'Task 已完成：{title}',
 			inboxOpenTask: '打开 Task',
 			inboxAck: '知道了',
 			inboxAcked: '已标记处理。',
@@ -161,8 +162,8 @@ window.__ModuleLoader__.load({
 			changesNeedNote: '先把返工理由写在回复框，再点退回。',
 			changesDone: '已退回 #{n}，要求返工。',
 			changesFailed: '退回失败：{message}',
-			followMock: 'spike：已关注 #{n}（仅本地演示，不写账本）。',
-			unfollowMock: 'spike：不关注 #{n}。完成、受阻或需要你决定时仍会出现（仅本地演示）。',
+			followMock: '已关注 #{n}，写入账本。',
+			unfollowMock: '已取消关注 #{n}；完成、受阻或需要你决定时仍会出现在看板。',
 			acceptMock: 'spike：接受 #{n} 将写验收记录并标记完成（命令未接入）。',
 			changesMock: 'spike：退回需要至少 10 字原因并写账本（命令未接入）。',
 			projectSwitchMock: 'spike：项目切换只更新视图标题；按项目读取账本在 M1 接入。',
@@ -345,6 +346,7 @@ window.__ModuleLoader__.load({
 			inboxEmptyBody: 'Member failures, decisions and mentions land here.',
 			inboxDecisionTitle: 'Decision required',
 			inboxItemTitle: 'Inbox message',
+			inboxCompletedTitle: 'Task completed: {title}',
 			inboxOpenTask: 'Open Task',
 			inboxAck: 'Acknowledge',
 			inboxAcked: 'Marked handled.',
@@ -404,8 +406,8 @@ window.__ModuleLoader__.load({
 			changesNeedNote: 'Write the change request in the reply box first.',
 			changesDone: 'Changes requested on #{n}.',
 			changesFailed: 'Change request failed: {message}',
-			followMock: 'spike: following #{n} (local demo only; nothing written).',
-			unfollowMock: 'spike: not following #{n}. You will still hear about completion, blockage, or decisions (local demo only).',
+			followMock: 'Following #{n}; written to the ledger.',
+			unfollowMock: 'Unfollowed #{n}; completion, blockage or decisions still appear on the board.',
 			acceptMock: 'spike: accepting #{n} will write an acceptance record and mark it done (commands not wired).',
 			changesMock: 'spike: requesting changes needs at least 10 characters and a ledger write (commands not wired).',
 			projectSwitchMock: 'spike: switching projects only updates the header; per-project ledger reads land with M1.',
@@ -1945,12 +1947,19 @@ window.__ModuleLoader__.load({
 
 			function say(text) { setNote(text); }
 			function sayRight(text) { setRightNote(text); }
-			function toggleFollow(card) {
+			async function toggleFollow(card) {
 				if (!card) return;
 				const next = !followingOf(card);
-				setFollows((prev) => ({ ...prev, [card.id]: next }));
 				const text = next ? tf(t, 'followMock', { n: taskNo(card) }) : tf(t, 'unfollowMock', { n: taskNo(card) });
-				if (threadOpen && selectedTask && selectedTask.id === card.id) sayRight(text); else say(text);
+				try {
+					await runCommand('task.follow', { taskId: card.id, following: next });
+					setFollows((prev) => ({ ...prev, [card.id]: next }));
+					if (threadOpen && selectedTask && selectedTask.id === card.id) sayRight(text); else say(text);
+					await reloadData();
+				} catch (error) {
+					if (threadOpen && selectedTask && selectedTask.id === card.id) sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+					else say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
 			}
 			function openTask(card, event) {
 				if (!card) return;
@@ -2393,7 +2402,11 @@ window.__ModuleLoader__.load({
 							? (data.inbox ?? []).map((item) => h('div', { key: item.id, className: cx('at-inboxitem', item.state !== 'unread' && 'at-inboxdone') },
 								h('div', { className: 'at-inboxbody' },
 									h('div', { className: 'at-inboxtitle' },
-										item.type === 'decision_required' ? t('inboxDecisionTitle') : t('inboxItemTitle')),
+										item.type === 'decision_required'
+											? t('inboxDecisionTitle')
+											: item.type === 'followed_task_update'
+												? tf(t, 'inboxCompletedTitle', { title: item.ref?.title ?? item.ref?.taskId ?? '' })
+												: t('inboxItemTitle')),
 									h('div', { className: 'at-inboxmeta' },
 										item.ref?.category ? item.ref.category + ' · ' : '',
 										item.ref?.memberId ? item.ref.memberId : '',

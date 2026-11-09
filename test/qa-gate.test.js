@@ -44,10 +44,14 @@ test('qaRequired routes the reviewer to QA and rejects non-QA acceptance', async
 		() => service.dispatch({ type: 'task.accept', actor: { kind: 'agent', memberId: 'n1' }, projectId: PROJECT_ID, payload: { taskId: created.task.id, expectedRevision: submitted.task.revision } }),
 		(error) => error.code === 'E_INVALID_STATE',
 	);
+	await service.dispatch({ type: 'task.follow', actor: human, projectId: PROJECT_ID, payload: { taskId: created.task.id, following: true } });
 	const accepted = await service.dispatch({
 		type: 'task.accept', actor: qa, projectId: PROJECT_ID,
 		payload: { taskId: created.task.id, expectedRevision: submitted.task.revision, note: 'QA ok' },
 	});
 	assert.equal(accepted.task.status, 'done');
 	assert.equal(service.state.tasks[created.task.id].lastReview.reviewerId, 'q1');
+	const report = Object.values(service.state.inbox).find((item) => item.type === 'followed_task_update' && item.ref.taskId === created.task.id);
+	assert.ok(report !== undefined);
+	assert.equal(report.memberId, 'h1');
 });
