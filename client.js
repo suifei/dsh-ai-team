@@ -2158,13 +2158,11 @@ window.__ModuleLoader__.load({
 				if (key === 'q4') setDoneOpen(true);
 			}
 			function goConversation() {
-				try {
-					if (ctx?.layout && typeof ctx.layout.selectPanel === 'function') {
-						ctx.layout.selectPanel('conversation');
-						return;
-					}
-				} catch { /* host without layout */ }
-				say(t('conversationMock'));
+				closeMobile();
+				setScope('project');
+				setTab('main');
+				setThreadOpen(false);
+				setNote('');
 			}
 			function closeMobile() {
 				const node = mobileRef.current;

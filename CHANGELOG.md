@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.8 — 2026-11-09
+
+- 收件箱「对话」返回改为文渊阁内部主对话，不再依赖宿主 `layout.selectPanel(conversation)`；
+- 修复空收件箱点击返回出现 “spike：宿主没有可用的 layout…” 的错误提示。
+
 ## 0.3.7 — 2026-11-09
 
 - 侧栏 PanelIcon 真正使用文渊阁印章图标（此前后仍是 loop 占位符）；
