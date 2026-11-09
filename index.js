@@ -34,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.37';
+const VERSION = '0.3.38';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -257,6 +257,7 @@ export function apply(ctx) {
 		const wakeKeys = new Set();
 		const activationTasks = new Map();
 		const pmoLastKick = new Map();
+		const pmoLastStall = new Map();
 		let pmoTimer = null;
 		const projectCwd = (projectRuntime, member) => member?.workspace
 			|| projectRuntime?.service?.state?.projects?.[projectRuntime.id]?.workspacePath
@@ -350,8 +351,18 @@ export function apply(ctx) {
 			}
 			const active = Object.values(state.tasks ?? {}).filter((task) =>
 				task.tombstone !== true && ['pending', 'in_progress', 'pending_acceptance'].includes(task.status));
-			if (active.length > 0) return;
 			const now = Date.now();
+			for (const task of active) {
+				const updatedAt = Number.isFinite(task.updatedAt) ? task.updatedAt : 0;
+				if (updatedAt === 0 || now - updatedAt < 30 * 60_000) continue;
+				const lastPing = pmoLastStall.get(task.id) ?? 0;
+				if (now - lastPing < 30 * 60_000) continue;
+				pmoLastStall.set(task.id, now);
+				await wakeFromResult(projectRuntime, {
+					event: { type: 'pmo/stall', payload: { taskId: task.id, bucket: Math.floor(now / 1_800_000) } },
+				}, {});
+			}
+			if (active.length > 0) return;
 			const last = pmoLastKick.get(projectRuntime.id) ?? 0;
 			if (now - last < 10 * 60_000) return;
 			pmoLastKick.set(projectRuntime.id, now);

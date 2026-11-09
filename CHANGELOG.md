@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.38 — 2026-11-10
+
+- PMO 每 60s 检测 active Task 是否超过 30 分钟无更新；超时唤醒 owner + assignee，要求继续或报告卡点，避免任务静默停住；
+- bootstrap task card 增加 `updatedAt`，为停滞检测和 UI 提供真实活动时间。
+
 ## 0.3.37 — 2026-11-10
 
 - 默认团队增加编程 Agent「玄策」（mem_coder，role=编程）；新 Project 默认为 4 名 Agent；
