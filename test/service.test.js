@@ -113,6 +113,17 @@ test('TeamService drives a real ledger from project setup to accepted task and t
 		});
 		assert.equal(posted.thread.headSeq, 1);
 		assert.equal(service.state.threads[taskId].headSeq, 1);
+		const mention = await service.dispatch({
+			type: 'thread.post',
+			actor: a2,
+			projectId: 'prj_test',
+			payload: { taskId, baseSeq: 1, body: '请 Human 决定：是否继续扩大范围。' },
+		});
+		assert.equal(mention.entry.authorId, 'a2');
+		assert.equal(
+			Object.values(service.state.inbox ?? {}).some((item) => item.memberId === 'h1' && item.ref?.taskId === taskId && item.ref?.entrySeq === mention.entry.seq),
+			true,
+		);
 
 		const accepted = await service.dispatch({
 			type: 'task.accept',
@@ -129,7 +140,7 @@ test('TeamService drives a real ledger from project setup to accepted task and t
 		assert.equal(boot.projects[0].name, 'Main-Dev');
 		assert.equal(boot.tasks.length, 1);
 		assert.equal(boot.tasks[0].status, 'done');
-		assert.equal(boot.thread.headSeq, 1);
+		assert.equal(boot.thread.headSeq, 2);
 		assert.equal(boot.agents.length, 2);
 
 		const converted = await service.dispatch({

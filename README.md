@@ -87,7 +87,7 @@ dsh --profile ai-team --no-open --port 33271
 - **主对话**：Human 的一句话进入 Main stream，Project owner 拆 Task；顶部「团队动态」直接显示正在推进的 Task 和运行中的成员，点击 Task 可打开 Thread。
 - **看板**：四列；进行中的卡片显示 accountable owner 与执行者；数量只统计 active Task。
 - **态势**：四象限——需要你、团队在做、等待受阻、最近完成。点击条目打开对应 Task 的 Thread。
-- **收件箱**：跨 Project 聚合；失败决策、需要你决定、关注 Task 的完成报告都在这里。
+- **收件箱**：跨 Project 聚合；失败、需要你决定、关注 Task 的完成报告，以及 Agent 在 Thread 里明确请你拍板的消息都在这里。
 - **直接对话**：点击成员名字直接打开该 Agent 的 DSH 原生 Session；没有 session 会先激活；打不开时落到成员资料，资料里有「直接对话」按钮。
 - **成员任务**：成员资料里点「他的任务」，查看他 owner/assignee 的 Task。
 - **成员资料**：点「⋯」改名、职责、personality、provider/model、运行配方、notes、skills、re-distill、离队/人才库。
@@ -102,7 +102,7 @@ dsh --profile ai-team --no-open --port 33271
 | Task | 唯一 accountable owner；pending / in_progress / pending_acceptance / done / cancelled |
 | Thread | append-only；回复带 `baseSeq`，旧基线会被拒并说明变化 |
 | 验收 | maker 不能验收；QA 硬门禁；`qaChecklist` 逐项通过 |
-| 收件箱 | Human/Agent 各自拉取；跨 Project 聚合与项目内 ack |
+| 收件箱 | Human/Agent 各自拉取；跨 Project 聚合；Thread 中提到 Human 会自动生成决策项 |
 | 关注 | 关注 Task；完成后收到 `followed_task_update` |
 | 默认成员 | 新 Project 初始化墨渊 / 青岚 / 白砚；可改名、改职责、改个性、改模型 |
 | 成员 | 持久 session；点击名字直接对话；「⋯」资料里有任务视图与直接对话 |

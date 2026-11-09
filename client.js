@@ -1581,10 +1581,17 @@ window.__ModuleLoader__.load({
 			const running = agents.filter((agent) => agent.status === 'running');
 			const starting = active.length === 0 && tasks.length === 0 && running.length > 0;
 			if (active.length === 0 && !starting) return null;
+			const counts = { in_progress: 0, pending: 0, pending_acceptance: 0 };
+			for (const task of active) counts[task.status] += 1;
+			const summary = [
+				counts.in_progress ? `${counts.in_progress} ${t('stInProgress')}` : '',
+				counts.pending ? `${counts.pending} ${t('stPending')}` : '',
+				counts.pending_acceptance ? `${counts.pending_acceptance} ${t('stPendingAcceptance')}` : '',
+			].filter(Boolean).join(' · ');
 			return h('section', { className: 'at-teampulse', 'aria-label': t('teamPulseTitle') },
 				h('div', { className: 'at-teampulsehead' },
 					h('span', { className: 'at-teampulsetitle' }, t('teamPulseTitle')),
-					h('span', { className: 'at-teampulsecount' }, active.length ? t('teamPulseCount').replace('{n}', String(active.length)) : t('teamPulseWorking'))),
+					h('span', { className: 'at-teampulsecount' }, summary || t('teamPulseWorking'))),
 				active.length
 					? h('div', { className: 'at-teampulselist' }, active.map((task) => h('button', {
 						key: task.id,
