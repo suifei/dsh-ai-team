@@ -107,6 +107,11 @@ window.__ModuleLoader__.load({
 			inboxOpenTask: '打开 Task',
 			inboxAck: '知道了',
 			inboxAcked: '已标记处理。',
+			decisionChoose: '请选择…',
+			decisionAnswer: '填写你的决定',
+			decisionRecommend: '推荐',
+			decisionSubmit: '提交决策',
+			decisionSubmitted: '决策已提交给团队。',
 			inboxEmptyAction: '看任务看板',
 			projectEmptyTitle: '还没有项目',
 			projectEmptyBody: '创建项目属于 S-01；M1 之后接入。',
@@ -409,6 +414,11 @@ window.__ModuleLoader__.load({
 			inboxOpenTask: 'Open Task',
 			inboxAck: 'Acknowledge',
 			inboxAcked: 'Marked handled.',
+			decisionChoose: 'Choose…',
+			decisionAnswer: 'Write your decision',
+			decisionRecommend: 'Recommended',
+			decisionSubmit: 'Submit decision',
+			decisionSubmitted: 'Decision sent to the team.',
 			inboxEmptyAction: 'Open the board',
 			projectEmptyTitle: 'No projects yet',
 			projectEmptyBody: 'Project creation belongs to S-01; it lands after M1.',
@@ -955,6 +965,9 @@ window.__ModuleLoader__.load({
 			.at-inboxquestion { display: block; color: var(--dsw-alias-label-primary); }
 			.at-inboxoptions { display: block; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
 			.at-inboxrecommend { display: block; color: var(--dsw-alias-state-business-primary); font-size: 11px; }
+			.at-decision { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 4px; }
+			.at-decisionselect, .at-decisioninput { width: 100%; margin-top: 4px; padding: 4px 6px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 18px; }
+			.at-decision .at-btn { align-self: flex-start; }
 			.at-inboxtitle { color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 20px; }
 			.at-inboxmeta { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
 			.at-inboxstate { color: var(--dsw-alias-label-caption); font-size: 10.5px; }
@@ -1613,6 +1626,33 @@ window.__ModuleLoader__.load({
 						h('span', { className: 'at-teampulseowner' }, task.owner ?? ''))))
 					: h('div', { className: 'at-teampulsehint' }, t('teamPulseStarting')),
 				running.length ? h('div', { className: 'at-teampulseagents' }, t('teamPulseAgents').replace('{names}', running.map((agent) => agent.name).join('、'))) : null);
+		}
+
+		function InboxDecision({ t, item, onSubmit }) {
+			const questions = Array.isArray(item.ref?.questions) ? item.ref.questions : [];
+			const [answers, setAnswers] = React.useState(() => questions.map(() => ''));
+			const [busy, setBusy] = React.useState(false);
+			const setAnswer = (index, value) => setAnswers((prev) => prev.map((entry, i) => i === index ? value : entry));
+			const complete = questions.every((question, index) => answers[index].trim() !== '');
+			const submit = async () => {
+				if (!complete || busy) return;
+				setBusy(true);
+				try {
+					await onSubmit(item, questions.map((question, index) => ({ id: question.id, value: answers[index].trim() })));
+				} finally {
+					setBusy(false);
+				}
+			};
+			return h('div', { className: 'at-decision' },
+				h('ol', { className: 'at-inboxquestions' }, questions.map((question, index) => h('li', { key: question.id ?? index },
+					h('span', { className: 'at-inboxquestion' }, question.text),
+					Array.isArray(question.options) && question.options.length
+						? h('select', { className: 'at-decisionselect', value: answers[index], onChange: (event) => setAnswer(index, event.target.value) },
+							h('option', { value: '' }, t('decisionChoose')),
+							question.options.map((option) => h('option', { key: option, value: option }, option)))
+						: h('input', { className: 'at-decisioninput', value: answers[index], placeholder: question.recommendation ?? t('decisionAnswer'), onChange: (event) => setAnswer(index, event.target.value) }),
+					question.recommendation ? h('span', { className: 'at-inboxrecommend' }, t('decisionRecommend') + '：' + question.recommendation) : null))),
+				h('button', { className: 'at-btn at-btn-primary at-btn-small', type: 'button', disabled: !complete || busy, onClick: submit }, busy ? t('saving') : t('decisionSubmit')));
 		}
 
 		function MemberView({ t, agent, tasks, onBack, onOpenTask, onOpenChat, onOpenProfile }) {
@@ -2748,6 +2788,15 @@ window.__ModuleLoader__.load({
 				setThreadOpen(true);
 				setRightNote('');
 			}
+			async function answerDecision(item, answers) {
+				try {
+					await runCommand('decision.answer', { itemId: item.id, answers }, item.projectId ?? projectId);
+					say(t('decisionSubmitted'));
+					await reloadData();
+				} catch (error) {
+					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
+			}
 			async function ackInbox(item) {
 				try {
 					await runCommand('inbox.ack', { itemId: item.id, disposition: 'read' }, item.projectId ?? projectId);
@@ -2963,12 +3012,14 @@ window.__ModuleLoader__.load({
 												? tf(t, 'inboxCompletedTitle', { title: item.ref?.title ?? item.ref?.taskId ?? '' })
 												: t('inboxItemTitle')),
 									Array.isArray(item.ref?.questions) && item.ref.questions.length
-										? h('ol', { className: 'at-inboxquestions' }, item.ref.questions.map((question, index) => h('li', { key: question.id ?? index },
-											h('span', { className: 'at-inboxquestion' }, question.text),
-											Array.isArray(question.options) && question.options.length
-												? h('span', { className: 'at-inboxoptions' }, question.options.join(' / '))
-												: null,
-											question.recommendation ? h('span', { className: 'at-inboxrecommend' }, '推荐：' + question.recommendation) : null)))
+										? item.state === 'unread'
+											? h(InboxDecision, { t, item, onSubmit: answerDecision })
+											: h('ol', { className: 'at-inboxquestions' }, item.ref.questions.map((question, index) => h('li', { key: question.id ?? index },
+												h('span', { className: 'at-inboxquestion' }, question.text),
+												Array.isArray(question.options) && question.options.length
+													? h('span', { className: 'at-inboxoptions' }, question.options.join(' / '))
+													: null,
+												question.recommendation ? h('span', { className: 'at-inboxrecommend' }, '推荐：' + question.recommendation) : null)))
 										: null,
 									h('div', { className: 'at-inboxmeta' },
 										item.projectName ? item.projectName + ' · ' : '',
@@ -2979,7 +3030,9 @@ window.__ModuleLoader__.load({
 									item.state !== 'unread' ? h('div', { className: 'at-inboxstate' }, item.state) : null),
 								h('div', { className: 'at-inboxactions' },
 									item.ref?.taskId ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => openInboxTask(item) }, t('inboxOpenTask')) : null,
-									item.state === 'unread' ? h('button', { className: 'at-btn at-btn-small at-btn-primary', type: 'button', onClick: () => ackInbox(item) }, t('inboxAck')) : null)))
+									item.state === 'unread' && !(item.type === 'decision_required' && Array.isArray(item.ref?.questions) && item.ref.questions.length)
+										? h('button', { className: 'at-btn at-btn-small at-btn-primary', type: 'button', onClick: () => ackInbox(item) }, t('inboxAck'))
+										: null)))
 							: h(EmptyState, {
 								t,
 								icon: 'inbox',

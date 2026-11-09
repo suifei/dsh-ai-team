@@ -129,10 +129,18 @@ test('TeamService drives a real ledger from project setup to accepted task and t
 			type: 'decision.request',
 			actor: a1,
 			projectId: 'prj_test',
-			payload: { title: '需要拍板', questions: [{ text: '范围？', options: ['A', 'B'] }, '时间？'] },
+			payload: { title: '需要拍板', taskId, questions: [{ text: '范围？', options: ['A', 'B'] }, '时间？'] },
 		});
 		assert.equal(decision.item.ref.questions.length, 2);
 		assert.equal(decision.item.ref.questions[0].options.length, 2);
+		const answered = await service.dispatch({
+			type: 'decision.answer',
+			actor: human,
+			projectId: 'prj_test',
+			payload: { itemId: decision.item.id, answers: [{ id: 'q1', value: 'A' }, { id: 'q2', value: '本周' }] },
+		});
+		assert.equal(answered.item.state, 'resolved');
+		assert.match(answered.entry.body, /范围？: A/);
 
 		const accepted = await service.dispatch({
 			type: 'task.accept',
@@ -149,7 +157,7 @@ test('TeamService drives a real ledger from project setup to accepted task and t
 		assert.equal(boot.projects[0].name, 'Main-Dev');
 		assert.equal(boot.tasks.length, 1);
 		assert.equal(boot.tasks[0].status, 'done');
-		assert.equal(boot.thread.headSeq, 2);
+		assert.equal(boot.thread.headSeq, 3);
 		assert.equal(boot.agents.length, 2);
 
 		const converted = await service.dispatch({
