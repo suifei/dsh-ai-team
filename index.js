@@ -167,10 +167,21 @@ export function apply(ctx) {
 			: () => {};
 		const offSessionEvent = typeof ctx.on === 'function'
 			? ctx.on('session/event', async (session, event) => {
-				if (booted === null || event?.type !== 'turn/end' || event?.data?.reason?.kind !== 'completed') return;
+				if (booted === null || event?.type !== 'turn/end') return;
 				const member = Object.values(booted.service.state.members ?? {})
 					.find((candidate) => candidate.sessionId === session?.id);
-				if (member === undefined || member.lastFailure === undefined || member.lastFailure === null) return;
+				if (member === undefined) return;
+				// The child Agent owns a persisted session, but its live events are
+				// buffered by the JSONL writer until a session/flush checkpoint. Flush
+				// every member turn boundary so restart/memory can replay the history.
+				const sessions = ctx.get('sessions');
+				try {
+					await sessions?.flush?.(session);
+				} catch (error) {
+					console.warn('[ai-team] member session flush failed:', error?.message ?? error);
+				}
+				if (event?.data?.reason?.kind !== 'completed') return;
+				if (member.lastFailure === undefined || member.lastFailure === null) return;
 				try {
 					await booted.service.recordMemberRecovery(member.id, member.attempts ?? 0, member.config ?? null);
 					broadcast(undefined);
