@@ -1,0 +1,36 @@
+{
+  "name": "@suifei/dsh-agent-team",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI Team mode for DeepSeek Harness — projects, owned tasks, threads, inbox and an append-only team ledger",
+  "license": "MIT",
+  "icon": "./icon.svg",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./lib/*": "./lib/*",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "lib/**/*.js",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  }
+}

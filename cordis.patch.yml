@@ -1,0 +1,7 @@
+# dsh-agent-team bundle patch: mounts the Host half.
+# The Client half is discovered from this package's `dsh.client` declaration.
+# This is the spike row: a single Host entry, no Config yet. The real bundle
+# will add team-lead / team-member presets and the workbench rows.
+- insert:
+    - id: agent-team
+      name: '@suifei/dsh-agent-team'
