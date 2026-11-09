@@ -20,6 +20,7 @@ import { classifyLlmFailure, retryDecision } from './lib/runtime/failure-policy.
 import { memberIdentity } from './lib/domain/member-profile.js';
 import { loadSkillContext } from './lib/runtime/skill-loader.js';
 import { formatSkillCatalog } from './lib/runtime/skill-catalog.js';
+import { isSkillExcluded } from './lib/runtime/skill-policy.js';
 import { installFileSkillProvider } from './lib/runtime/skill-provider.js';
 import { apply as applySkillOpt } from './lib/vendor/skillopt/src/index.js';
 import { createMemberPermissionGuard } from './lib/host/permission-guard.js';
@@ -33,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.14';
+const VERSION = '0.3.15';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -126,13 +127,47 @@ export function apply(ctx) {
 			}
 			return null;
 		};
+		const workspaceForProject = async (projectRuntime) => {
+			const registry = ctx.get('workspaceRegistry');
+			const path = projectRuntime?.service?.state?.projects?.[projectRuntime.id]?.workspacePath;
+			if (registry === undefined || typeof path !== 'string' || path === '') return null;
+			try {
+				const existing = await registry.resolveByPath?.(path);
+				if (existing !== undefined && existing !== null) return existing;
+				const created = await registry.create?.(path, projectRuntime.service.state.projects[projectRuntime.id]?.name ?? '文渊阁');
+				return created ?? null;
+			} catch (error) {
+				console.warn('[ai-team] workspace unavailable:', error?.message ?? error);
+				return null;
+			}
+		};
+		const attachMemberWorkspace = async (projectRuntime, sessionId) => {
+			if (typeof sessionId !== 'string' || sessionId === '') return;
+			const workspace = await workspaceForProject(projectRuntime);
+			if (workspace === null || workspace === undefined || typeof workspace.attachSession !== 'function') return;
+			try {
+				await workspace.attachSession(sessionId);
+			} catch (error) {
+				console.warn('[ai-team] member session workspace attach failed:', error?.message ?? error);
+			}
+		};
 		const access = validatePermissionProfile({
 			permissionPresets: ctx.get('permissionPresets'),
 			sandboxPolicy: ctx.get('sandboxPolicy'),
 		});
 		const ready = access.ok
 			? boot()
-				.then((value) => { booted = value; return value; })
+				.then(async (value) => {
+					booted = value;
+					for (const runtime of value.runtimes.values()) {
+						for (const member of Object.values(runtime.service.state.members ?? {})) {
+							if (member.kind === 'agent' && typeof member.sessionId === 'string') {
+								await attachMemberWorkspace(runtime, member.sessionId);
+							}
+						}
+					}
+					return value;
+				})
 				.catch((error) => {
 					bootError = error;
 					console.error('[ai-team] ledger boot failed:', error?.message ?? error);
@@ -479,6 +514,7 @@ export function apply(ctx) {
 					throw error;
 				}
 				activations.set(result.childId, result.activation);
+				await attachMemberWorkspace(projectRuntime, result.childId);
 				return {
 					ok: true,
 					member: bound.member,
@@ -660,7 +696,7 @@ export function apply(ctx) {
 								teamTool: ctx.get('tools')?.definitions?.().some((definition) => definition.name === 'team') ?? null,
 								skillsService: skillsService !== null && skillsService !== undefined,
 								skillNames: skillsService?.list
-									? await Promise.resolve(skillsService.list({})).then((rows) => rows.map((skill) => skill.name)).catch(() => [])
+									? await Promise.resolve(skillsService.list({})).then((rows) => rows.map((skill) => skill.name).filter((skillName) => !isSkillExcluded(skillName))).catch(() => [])
 									: [],
 								skilloptTools: tools?.definitions?.().map((definition) => definition.name).filter((name) => name.startsWith('skillopt_')) ?? [],
 								presets: await Promise.resolve(ctx.get('agentPresets')?.list?.()).catch(() => []),

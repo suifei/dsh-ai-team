@@ -42,6 +42,7 @@ window.__ModuleLoader__.load({
 			enterHint: 'Ctrl/⌘ + Enter 发送',
 			thread: '讨论',
 			closeThread: '关闭讨论',
+			threadChat: '对话',
 			follow: '关注',
 			unfollow: '取消关注',
 			convert: '转为 Task',
@@ -342,6 +343,7 @@ window.__ModuleLoader__.load({
 			enterHint: 'Ctrl/⌘ + Enter to send',
 			thread: 'Discussion',
 			closeThread: 'Close discussion',
+			threadChat: 'Chat',
 			follow: 'Follow',
 			unfollow: 'Unfollow',
 			convert: 'Turn into task',
@@ -956,8 +958,9 @@ window.__ModuleLoader__.load({
 			.at-btn-small { min-height: 24px; padding: 0 8px; font-size: 11px; }
 			.at-agentconfig { min-width: 0; display: flex; gap: 4px; align-items: center; color: var(--dsw-alias-label-tertiary); font-size: 10.5px; line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 			.at-agentfail { flex: none; color: var(--dsw-alias-state-warn-primary); }
-			.at-agentmore { flex: 0 0 auto; width: 28px; height: 28px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 13px; cursor: pointer; }
-			.at-agentmore:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+			.at-agentmore, .at-agentchat { flex: 0 0 auto; width: 28px; height: 28px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 13px; cursor: pointer; }
+			.at-agentmore:hover, .at-agentchat:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+			.at-agentchat { display: inline-flex; align-items: center; justify-content: center; }
 			.at-teampulse { width: 100%; max-width: 760px; margin: 4px auto 10px; padding: 10px 12px; border: 1px solid var(--dsw-alias-state-business-primary); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-module-platform); }
 			.at-teampulsehead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
 			.at-teampulsetitle { font-size: 12px; font-weight: 600; color: var(--dsw-alias-label-primary); }
@@ -1534,7 +1537,7 @@ window.__ModuleLoader__.load({
 			h('span', { className: 'at-prowtitle' }, project.name));
 		}
 
-		function AgentRow({ t, agent, onAgent, onAgentMore }) {
+		function AgentRow({ t, agent, onAgent, onAgentMore, onAgentChat }) {
 			const statusText = t(AGENT_STATUS[agent.status] ?? 'agentIdle');
 			const config = agent.config ?? null;
 			const model = config?.model ? config.model : t('agentDefaultModel');
@@ -1558,6 +1561,13 @@ window.__ModuleLoader__.load({
 				),
 				h('span', { className: 'at-sr' }, statusText),
 				h('button', {
+					className: 'at-agentchat',
+					type: 'button',
+					'aria-label': tf(t, 'agentOpen', { name: agent.name }),
+					title: t('agentChat'),
+					onClick: () => onAgentChat(agent),
+				}, h(Ico, { name: 'reply', size: 13 })),
+				h('button', {
 					className: 'at-agentmore',
 					type: 'button',
 					'aria-label': tf(t, 'agentOpen', { name: agent.name }),
@@ -1569,7 +1579,8 @@ window.__ModuleLoader__.load({
 		function TeamPulse({ t, agents, tasks, onOpen }) {
 			const active = tasks.filter((task) => ['pending', 'in_progress', 'pending_acceptance'].includes(task.status)).slice(-5);
 			const running = agents.filter((agent) => agent.status === 'running');
-			if (active.length === 0 && running.length === 0) return null;
+			const starting = active.length === 0 && tasks.length === 0 && running.length > 0;
+			if (active.length === 0 && !starting) return null;
 			return h('section', { className: 'at-teampulse', 'aria-label': t('teamPulseTitle') },
 				h('div', { className: 'at-teampulsehead' },
 					h('span', { className: 'at-teampulsetitle' }, t('teamPulseTitle')),
@@ -1616,7 +1627,7 @@ window.__ModuleLoader__.load({
 						: h(EmptyState, { t, title: t('memberNoTasks'), body: t('memberNoTasksBody'), compact: true })));
 		}
 
-		function LeftPanel({ t, data, projectId, scope, tab, inboxUnread, onBack, onInbox, onBoard, onProject, onNewProject, onAgent, onAgentMore, onAddAgent, onRecruit }) {
+		function LeftPanel({ t, data, projectId, scope, tab, inboxUnread, onBack, onInbox, onBoard, onProject, onNewProject, onAgent, onAgentMore, onAgentChat, onAddAgent, onRecruit }) {
 			const projects = data.projects.filter((project) => !project.archived);
 			const activeAgents = data.agents.filter((agent) => agent.status !== 'retired');
 			const talentAgents = data.agents.filter((agent) => agent.status === 'retired');
@@ -1666,7 +1677,7 @@ window.__ModuleLoader__.load({
 					h('button', { className: 'at-mini', type: 'button', 'aria-label': t('addAgent'), title: t('addAgent'), onClick: onAddAgent }, h(Ico, { name: 'plus', size: 12 })),
 				),
 				activeAgents.length
-					? h('div', { role: 'list', 'aria-label': t('agentsAria') }, activeAgents.map((agent) => h(AgentRow, { key: agent.id, t, agent, onAgent, onAgentMore })))
+					? h('div', { role: 'list', 'aria-label': t('agentsAria') }, activeAgents.map((agent) => h(AgentRow, { key: agent.id, t, agent, onAgent, onAgentMore, onAgentChat })))
 					: h('div', { className: 'at-colempty' }, t('emptyColumn')),
 				talentAgents.length ? h('details', { className: 'at-archived' },
 					h('summary', null, tf(t, 'talentPoolCount', { n: talentAgents.length })),
@@ -1780,7 +1791,7 @@ window.__ModuleLoader__.load({
 				task.submission?.summary ? h('p', { className: 'at-donetext' }, task.submission.summary) : null);
 		}
 
-		function ThreadPanel({ t, task, thread, project, following, onToggleFollow, onClose, converting, convert, reply, onReplyChange, onReplySend, replyBase, onContinue, onContext, note, onDismissNote, acceptChecked, onAcceptChecked, qaChecks, onQaCheck, onAccept, onChanges, actions, panelRef, replyRef }) {
+		function ThreadPanel({ t, task, thread, project, following, onToggleFollow, onClose, onChat, converting, convert, reply, onReplyChange, onReplySend, replyBase, onContinue, onContext, note, onDismissNote, acceptChecked, onAcceptChecked, qaChecks, onQaCheck, onAccept, onChanges, actions, panelRef, replyRef }) {
 			const headSeq = thread?.headSeq ?? thread?.entries?.length ?? 0;
 			const stale = replyBase !== null && replyBase !== undefined && headSeq > replyBase;
 			const entries = Array.isArray(thread?.entries) ? thread.entries : [];
@@ -1790,6 +1801,7 @@ window.__ModuleLoader__.load({
 						h('div', { className: 'at-rhmeta', title: t('thread') + ' · #' + taskNo(task) }, t('thread') + ' · #' + taskNo(task)),
 						h('div', { className: 'at-rhtitle', title: task.title }, task.title)),
 					h(FollowToggle, { t, taskNo: taskNo(task), following, onToggle: onToggleFollow }),
+					onChat ? h('button', { className: 'at-rbtn', type: 'button', onClick: onChat }, t('threadChat')) : null,
 					h('button', { className: 'at-rbtn', type: 'button', 'aria-expanded': Boolean(converting), onClick: convert.onOpen }, t('convert')),
 					h('button', { className: 'at-rbtn at-iconbtn', type: 'button', 'aria-label': t('closeThread'), title: t('closeThread'), onClick: onClose }, h(Ico, { name: 'close', size: 14 }))),
 				note ? h('div', { className: 'at-rnote', role: 'status' },
@@ -2536,6 +2548,15 @@ window.__ModuleLoader__.load({
 					openProfile(agent);
 				}
 			}
+			function openTaskAgentChat(task) {
+				const memberId = task?.assigneeId ?? task?.ownerId;
+				const agent = data.agents.find((candidate) => candidate.id === memberId) ?? null;
+				if (agent === null) {
+					say(t('agentChatUnavailable'));
+					return;
+				}
+				void openAgentChat(agent);
+			}
 			function openProfile(agent) {
 				setProfileAgent(agent);
 				setPName(agent.name ?? '');
@@ -2904,6 +2925,7 @@ window.__ModuleLoader__.load({
 				onNewProject: () => { closeMobile(); openNewProject(); },
 				onAgent: (agent) => { closeMobile(); openMemberView(agent); },
 				onAgentMore: (agent) => { closeMobile(); openProfile(agent); },
+				onAgentChat: (agent) => { closeMobile(); void openAgentChat(agent); },
 				onAddAgent: () => { closeMobile(); openAddAgent(); },
 				onRecruit: (agent) => { closeMobile(); recruit(agent); },
 			};
@@ -3063,6 +3085,7 @@ window.__ModuleLoader__.load({
 						following: followingOf(selectedTask),
 						onToggleFollow: () => toggleFollow(selectedTask),
 						onClose: closeThread,
+						onChat: () => openTaskAgentChat(selectedTask),
 						converting,
 						convert: {
 							onOpen: openConvert,

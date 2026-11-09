@@ -11,8 +11,10 @@ test('file skill provider discovers user and project skills', async (t) => {
 	const home = join(root, 'home');
 	const cwd = join(root, 'project');
 	mkdirSync(join(home, 'skills', 'alpha'), { recursive: true });
+	mkdirSync(join(home, 'skills', 'huashu-nuwa'), { recursive: true });
 	mkdirSync(join(cwd, '.dsh', 'skills', 'beta'), { recursive: true });
 	writeFileSync(join(home, 'skills', 'alpha', 'SKILL.md'), '---\nname: alpha\ndescription: Alpha skill\nwhenToUse: use alpha\n---\n# alpha\n');
+	writeFileSync(join(home, 'skills', 'huashu-nuwa', 'SKILL.md'), '---\nname: huashu-nuwa\ndescription: excluded\n---\n');
 	writeFileSync(join(cwd, '.dsh', 'skills', 'beta', 'SKILL.md'), '---\nname: beta\ndescription: Beta skill\n---\n# beta\n');
 	const provider = createFileSkillProvider({ dshHome: home, projectCwd: cwd });
 	const list = await provider.list({ cwd });

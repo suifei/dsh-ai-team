@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.15 — 2026-11-10
+
+- 成员 Session 自动挂到 Project workspace，不再散落在 DSH「未分组」；
+- Task Thread 增加「对话」按钮，直接打开 assignee/owner 的真实 Session；
+- 成员行增加直接对话按钮；点名字进入成员任务视图；
+- 团队动态只在有 active Task 时显示（或全新项目刚唤醒时），已完成不再显示“正在拆解”；
+- `huashu-nuwa` 从 Team 技能目录、prompt catalog 与 notes 加载中排除。
+
 ## 0.3.14 — 2026-11-10
 
 - 主对话顶部增加「团队动态」：显示正在推进的 Task、owner 和运行中的成员；

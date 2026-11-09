@@ -215,7 +215,7 @@ round-19  DeepSeek + Zhipu 双 provider
 - 单机、单 Human；不支持多 Human 共享 Team；
 - billing/网络注入是测试 adapter，不是物理断网；
 - SSE 分桶用两个真实 provider 的独立订阅端验证，不是两个浏览器窗口；
-- nuwa / distilly / darwin 不内置，有则用、无则不用；
+- distilly / darwin 不内置，有则用、无则不用；`huashu-nuwa` 已被 Team 技能目录排除。
 - desktop profile 由插件 patch 固定为 `danger-full-access / never`，只应在可信机器使用。
 
 ---

@@ -57,6 +57,7 @@ test('host refuses a profile without danger-full-access', async () => {
 test('host mounts the workbench routes on a real default-project ledger', async () => {
 	const routes = [];
 	const memberSessions = new Map();
+	const workspaceAttachments = [];
 	const requestErrorListeners = [];
 	const sessionEventListeners = [];
 	const wakeCalls = [];
@@ -129,7 +130,12 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 						: [{ id: 'm2', name: 'Model Two' }],
 				};
 			}
-			if (id === 'workspaceRegistry') return { archiveSession: async () => {} };
+			if (id === 'workspaceRegistry') {
+				return {
+					resolveByPath: async () => ({ attachSession: async (sessionId) => { workspaceAttachments.push(sessionId); } }),
+					archiveSession: async () => {},
+				};
+			}
 			if (id === 'subagents') {
 				return {
 					list: () => ['local'],
@@ -264,11 +270,12 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({ type: 'member.activate', payload: { memberId: 'a1' } }),
 		});
-		assert.equal(activate.status, 200);
+		assert.equal(activate.status, 200, await activate.clone().text());
 		const activated = await activate.json();
 		assert.equal(activated.member.status, 'running');
 		const memberSessionId = activated.member.sessionId;
 		assert.equal(typeof memberSessionId, 'string');
+		assert.equal(workspaceAttachments.includes(memberSessionId), true);
 		assert.equal(memberSessions.get(memberSessionId).sandbox, 'danger-full-access');
 		assert.ok(toolRegistration !== null);
 		assert.equal(toolRegistration.options.when({ agent: { id: memberSessionId } }), true);
