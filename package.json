@@ -1,9 +1,9 @@
 {
   "name": "@suifei/dsh-ai-team",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "type": "module",
-  "description": "AI Team mode for DeepSeek Harness — projects, owned tasks, threads, inbox and an append-only team ledger",
+  "description": "三省 (Three Departments) — AI Team mode for DeepSeek Harness: projects, owned tasks, threads, inbox and an append-only team ledger",
   "license": "MIT",
   "icon": "./icon.svg",
   "exports": {

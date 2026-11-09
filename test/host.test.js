@@ -156,7 +156,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 	try {
 		apply(ctx);
 		assert.equal(name, 'ai-team');
-		assert.deepEqual(inject, ['webServer']);
+		assert.deepEqual(inject, ['webServer', 'permissionPresets', 'sandboxPolicy']);
 		assert.equal(routes.length, 1);
 		const route = routes[0];
 		assert.equal(route.kind, 'prefix');

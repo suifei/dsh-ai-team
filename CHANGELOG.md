@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2 — 2026-11-09
+
+- 产品显示名改为「三省」（Three Departments），副标「三省六部」；
+- 修复热加载时 permission 服务尚未就绪导致 `BOOT_FAILED / permission services are unavailable`，Host 显式 inject `permissionPresets` 与 `sandboxPolicy`；
+- 四象限空 items / null taskNumber / 无 taskId 的决策项做健壮处理，避免点击异常与 `#null` 文案。
+
 ## 0.3.1 — 2026-11-09
 
 - SkillOpt 完全内置：7 个 `skillopt_*` 工具、Python engine bootstrap、`skillopt-sleep` 技能随插件分发，不再装到用户 DSH；

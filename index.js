@@ -30,9 +30,9 @@ import { describeWake, planWakes } from './lib/host/waker.js';
 export const name = 'ai-team';
 
 /** The workbench only makes sense where the Web carrier exists. */
-export const inject = ['webServer'];
+export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.1';
+const VERSION = '0.3.2';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 

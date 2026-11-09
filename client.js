@@ -23,7 +23,7 @@ window.__ModuleLoader__.load({
 		const PKG = '@suifei/dsh-ai-team';
 
 		const zh = {
-			panel: '班组',
+			panel: '三省',
 			back: '对话',
 			inbox: '收件箱',
 			board: '任务看板',
@@ -75,8 +75,8 @@ window.__ModuleLoader__.load({
 			loading: '加载中…',
 			fallbackTitle: '演示数据',
 			fallbackBody: 'bootstrap 接口（/ai-team）不可达，已使用内置样例；发送、关注、验收只做本地反馈，不写账本。',
-			spike: 'M2.5',
-			spikeTitle: 'AI Team 工作台：发送、关注、验收、任务动作都写账本。',
+			spike: '三省六部',
+			spikeTitle: '三省六部：中书决策、门下审核、尚书执行；AI Team 工作台。',
 			navAria: '页面导航',
 			menu: '目录',
 			menuAria: '打开项目与成员目录',
@@ -291,7 +291,7 @@ window.__ModuleLoader__.load({
 			doneNoInfo: '完成信息未记录',
 		};
 		const en = {
-			panel: 'Agent Team',
+			panel: 'Three Departments',
 			back: 'Chat',
 			inbox: 'Inbox',
 			board: 'All tasks',
@@ -343,8 +343,8 @@ window.__ModuleLoader__.load({
 			loading: 'Loading…',
 			fallbackTitle: 'Demo data',
 			fallbackBody: 'The bootstrap endpoint (/ai-team) is unreachable, so the embedded sample is shown. Sending, following and acceptance only give local feedback; nothing is written to the ledger.',
-			spike: 'M2.5',
-			spikeTitle: 'AI Team workbench: sending, following, acceptance and task actions write to the ledger.',
+			spike: 'Three Departments',
+			spikeTitle: 'Three Departments and Six Ministries: decision, review and execution for the AI Team workbench.',
 			navAria: 'Page navigation',
 			menu: 'Menu',
 			menuAria: 'Open the project and member menu',
@@ -1634,7 +1634,7 @@ window.__ModuleLoader__.load({
 				task.submission?.summary ? h('p', { className: 'at-donetext' }, task.submission.summary) : null);
 		}
 
-		function ThreadPanel({ t, task, thread, project, following, onToggleFollow, onClose, converting, convert, reply, onReplyChange, onReplySend, replyBase, onContinue, onContext, note, onDismissNote, acceptChecked, onAcceptChecked, onAccept, onChanges, actions, panelRef, replyRef }) {
+		function ThreadPanel({ t, task, thread, project, following, onToggleFollow, onClose, converting, convert, reply, onReplyChange, onReplySend, replyBase, onContinue, onContext, note, onDismissNote, acceptChecked, onAcceptChecked, qaChecks, onQaCheck, onAccept, onChanges, actions, panelRef, replyRef }) {
 			const headSeq = thread?.headSeq ?? thread?.entries?.length ?? 0;
 			const stale = replyBase !== null && replyBase !== undefined && headSeq > replyBase;
 			const entries = Array.isArray(thread?.entries) ? thread.entries : [];
@@ -1668,7 +1668,7 @@ window.__ModuleLoader__.load({
 							checked: acceptChecked,
 							onChecked: onAcceptChecked,
 							checks: qaChecks,
-							onCheck: (index, passed) => setQaChecks((prev) => prev.map((entry, i) => i === index ? { ...entry, passed } : entry)),
+							onCheck: onQaCheck,
 							onAccept,
 							onChanges,
 						}) : null,
@@ -1733,7 +1733,7 @@ window.__ModuleLoader__.load({
 		}
 
 		function QuadrantCard({ t, meta, quadrant, tasks, items, count, onItem, onViewAll }) {
-			const shown = items.slice(0, 5);
+			const shown = (Array.isArray(items) ? items : []).slice(0, 5);
 			const title = t(quadrant.name);
 			return h('section', { className: cx('at-quad', 'at-quad-' + quadrant.key), role: 'group', 'aria-label': title + '，' + tf(t, 'itemCount', { n: count }) },
 				h('div', { className: 'at-quadhead' },
@@ -1761,7 +1761,8 @@ window.__ModuleLoader__.load({
 						} else if (item.ownerName) {
 							parts.push(item.ownerName);
 						}
-						const itemTitle = (item.taskNumber !== undefined ? '#' + item.taskNumber + ' ' : '') + item.title;
+						const hasNumber = Number.isFinite(item.taskNumber);
+						const itemTitle = (hasNumber ? '#' + item.taskNumber + ' ' : '') + (item.title ?? '');
 						const onKeyDown = (event) => {
 							if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
 							event.preventDefault();
@@ -2038,7 +2039,8 @@ window.__ModuleLoader__.load({
 				setRightNote('');
 			}
 			function openTaskById(taskId, event) {
-				const card = tasks.find((item) => item.id === taskId);
+				if (typeof taskId !== 'string' || taskId === '') { say(t('quadrantMissing')); return; }
+				const card = (Array.isArray(tasks) ? tasks : []).find((item) => item.id === taskId);
 				if (!card) { say(t('quadrantMissing')); return; }
 				triggerRef.current = event?.currentTarget ?? null;
 				setSelected(card.id);
@@ -2046,9 +2048,19 @@ window.__ModuleLoader__.load({
 				setRightNote('');
 			}
 			function openQuadrantItem(item, event) {
-				if (item?.taskId) openTaskById(item.taskId, event);
-				else if (item?.kind === 'inbox') say(t('decisionMock'));
-				else say(t('quadrantMissing'));
+				if (!item) return;
+				if (item.taskId) {
+					openTaskById(item.taskId, event);
+					return;
+				}
+				if (item.kind === 'inbox') {
+					closeMobile();
+					setScope('inbox');
+					setThreadOpen(false);
+					setNote(t('inboxTitle'));
+					return;
+				}
+				say(t('quadrantMissing'));
 			}
 			function viewQuadrant(key) {
 				setBoardFilter(key);
@@ -2740,6 +2752,8 @@ window.__ModuleLoader__.load({
 						onDismissNote: () => setRightNote(''),
 						acceptChecked,
 						onAcceptChecked: setAcceptChecked,
+						qaChecks,
+						onQaCheck: (index, passed) => setQaChecks((prev) => prev.map((entry, i) => i === index ? { ...entry, passed } : entry)),
 						onAccept: acceptTask,
 						onChanges: requestChanges,
 						actions,
