@@ -3024,7 +3024,7 @@ window.__ModuleLoader__.load({
 									h('div', { className: 'at-inboxmeta' },
 										item.projectName ? item.projectName + ' · ' : '',
 										item.ref?.category ? item.ref.category + ' · ' : '',
-										item.ref?.memberId ? item.ref.memberId : '',
+										item.ref?.memberName ?? (item.ref?.memberId ? item.ref.memberId : ''),
 										' · ',
 										fmtTime(item.createdAt)),
 									item.state !== 'unread' ? h('div', { className: 'at-inboxstate' }, item.state) : null),

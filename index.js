@@ -34,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.24';
+const VERSION = '0.3.25';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -748,7 +748,7 @@ export function apply(ctx) {
 						return send(res, {
 							...bootstrap,
 							inbox,
-							inboxUnread: inbox.filter((item) => item.read !== true).length,
+							inboxUnread: inbox.filter((item) => item.state === 'unread').length,
 							projects: booted.registry.list().map((project) => {
 								const active = bootstrap.projects?.find((entry) => entry.id === project.id);
 								return {

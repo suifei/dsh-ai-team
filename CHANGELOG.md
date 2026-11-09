@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.25 — 2026-11-10
+
+- 收件箱未读数按 `state=unread` 统计，决策提交后「待你处理」立即消失；
+- 已答/已 dismiss 的报告六问不会在重启后再次导入；
+- 收件箱决策项显示提问成员名字，不再显示 `mem_*`。
+
 ## 0.3.24 — 2026-11-10
 
 - 修复 member `team` 工具 accept 未透传 `checks` 的缺口：agent QA 带 checklist 验收不再 E_INVALID_STATE；
