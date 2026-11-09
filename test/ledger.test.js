@@ -253,6 +253,25 @@ test('尾部半行被识别并修复，修复后 seq 从最后完整事件继续
 	repairedWriter.close();
 });
 
+test('readAll 在未 open 的只读句柄上也默认修复尾部半行', async (t) => {
+	const { dir, track } = tempLedger(t);
+	const writer = track(new LedgerWriter({ dir, projectId: PROJECT_ID }));
+	writer.open();
+	await writer.append(draft('project/created', { name: 'P' }));
+	await writer.append(draft('project/member-added', { memberId: 'mem_a', name: 'A' }));
+	writer.close();
+
+	const file = path.join(dir, 'ledger-000001.jsonl');
+	const buffer = fs.readFileSync(file);
+	fs.writeFileSync(file, buffer.subarray(0, buffer.length - 5));
+
+	const reader = track(new LedgerWriter({ dir, projectId: PROJECT_ID }));
+	const events = reader.readAll();
+	assert.equal(events.length, 1);
+	assert.ok(fs.readFileSync(file, 'utf8').endsWith('\n'));
+	reader.close();
+});
+
 test('单写者锁生效；陈旧锁可被接管并记录修复', async (t) => {
 	const { dir, track } = tempLedger(t);
 	const first = track(new LedgerWriter({ dir, projectId: PROJECT_ID }));
@@ -559,7 +578,8 @@ test('fold：Task 全生命周期（含 delete tombstone 与失效 assignee reop
 	assert.equal(state.tasks.tsk_2.status, TASK_STATUS.PENDING);
 	state = applyEvent(state, next());
 	assert.equal(state.tasks.tsk_2.tombstone, true);
-	assert.equal(state.tasks.tsk_2.status, TASK_STATUS.DELETED);
+	assert.equal(state.tasks.tsk_2.status, TASK_STATUS.PENDING);
+	assert.equal(state.tasks.tsk_2.tombstone, true);
 	assert.ok(state.tasks.tsk_2.deletedAt !== null);
 
 	state = applyEvent(state, next());
@@ -788,6 +808,24 @@ test('checkpoint lastHash 与账本不一致时被拒绝并触发全量重放', 
 	await writer.append(draft('project/member-added', { memberId: 'mem_a', name: 'A' }));
 	const full = fold(writer.readAll());
 
+	assert.throws(
+		() =>
+			saveCheckpoint(
+				dir,
+				{
+					stateVersion: FOLD_STATE_VERSION,
+					lastSeq: writer.head.seq,
+					lastHash: 'f'.repeat(64),
+					state: full,
+				},
+				{ hashAt: (seq) => writer.hashAt(seq) },
+			),
+		(error) => {
+			assert.equal(error.code, 'E_CHECKPOINT_HASH');
+			return true;
+		},
+	);
+	// 不传 hashAt 时只做结构校验（用于构造“被外部写坏”的样本）。
 	saveCheckpoint(dir, {
 		stateVersion: FOLD_STATE_VERSION,
 		lastSeq: writer.head.seq,
@@ -1000,12 +1038,40 @@ test('fold 可直接重放 host service/domain 写入的快照事件', async (t)
 		projectId: PROJECT_ID,
 		payload: { taskId: doomed.task.id, expectedRevision: 1 },
 	});
-	assert.equal(ledger.state.tasks[doomed.task.id].status, TASK_STATUS.DELETED);
+	assert.equal(ledger.state.tasks[doomed.task.id].status, TASK_STATUS.PENDING);
+	assert.equal(ledger.state.tasks[doomed.task.id].tombstone, true);
 	assert.equal(ledger.state.tasks[doomed.task.id].tombstone, true);
 
 	const bootstrap = service.bootstrap(PROJECT_ID);
 	assert.ok(bootstrap.tasks.every((entry) => entry.id !== doomed.task.id));
 	assert.ok(bootstrap.tasks.some((entry) => entry.id === created.task.id));
 	assert.ok(bootstrap.members.some((member) => member.id === 'a1' && member.kind === 'agent'));
+
+	// 检查点必须能保存/恢复同一份快照投影（含 JSON 往返）。
+	const snapshot = ledger.state;
+	saveCheckpoint(
+		dir,
+		{
+			stateVersion: FOLD_STATE_VERSION,
+			lastSeq: ledger.head.seq,
+			lastHash: ledger.head.hash,
+			state: snapshot,
+		},
+		{ hashAt: (seq) => ledger.writer.hashAt(seq) },
+	);
 	ledger.close();
+
+	const checkpointWriter = new LedgerWriter({ dir, projectId: PROJECT_ID });
+	checkpointWriter.open();
+	const recovered = recoverCheckpoint({
+		dir,
+		writer: checkpointWriter,
+		stateVersion: FOLD_STATE_VERSION,
+		apply: applyEvent,
+		initialState: initialState(),
+	});
+	assert.equal(recovered.source, 'primary');
+	assert.equal(recovered.replayed, 0);
+	assert.deepEqual(recovered.state, snapshot);
+	checkpointWriter.close();
 });

@@ -1,8 +1,8 @@
-# @suifei/dsh-agent-team
+# @suifei/dsh-ai-team
 
 AI Team mode for DeepSeek Harness: **projects, owned tasks, threads, inbox and an append-only team ledger** — one Human sentence, a team of named persistent agents keeps going, and only direction / trust / irreversible steps come back.
 
-> M1 spike status: this package currently mounts a **three-pane workbench** (left projects + agents, center main stream / board, right thread) with a mock bootstrap payload. The real ledger/domain/member runtime lands in the M1 tasks described in `docs/05-项目启动与执行计划.md`; the UI is a contract spike, not the final client.
+> M1 status: the package mounts a **three-pane workbench** (left projects + agents, center `主对话 / 看板 / 态势`, right thread). The app ledger, task/thread/inbox domain and `TeamService` are implemented and covered by `node --test` (34 tests); the HTTP bootstrap is still the spike mock, and the real member runtime lands in M2. The UI is a contract spike, not the final client; see `docs/05-项目启动与执行计划.md` and `docs/reports/M1-验收矩阵.md`.
 
 ## Install (dedicated profile)
 
@@ -16,11 +16,11 @@ The plugin is **not** installed in the normal `desktop`/`web` profiles; ordinary
 
 ## Layout
 
-- `index.js` — Host entry: same-origin `/agent-team/api/health` and `/agent-team/api/bootstrap` (mock in the spike).
+- `index.js` — Host entry: same-origin `/ai-team/api/health` and `/ai-team/api/bootstrap` (mock in the spike).
 - `client.js` — Client entry: `sidebar.panellist` icon + `main` key `ai-team` three-pane workbench.
 - `cordis.patch.yml` — bundle row.
-- `lib/` — ledger/domain/service (M1; not part of the spike yet).
-- `test/` — `node --test` smoke tests for the bundle and the Host/Client entries.
+- `lib/` — append-only ledger (`ledger/*`), task/thread/inbox domain (`domain/*`) and the host `TeamService` (`host/service.js`).
+- `test/` — `node --test`: bundle smoke, ledger/fold/checkpoint, domain rules, and a real-ledger service integration.
 
 ## Rules
 

@@ -38,7 +38,7 @@ test('client factory registers the sidebar icon and main workbench panel', async
 	};
 	vm.runInNewContext(source, sandbox, { filename: 'client.js' });
 
-	assert.equal(captured.id, '@suifei/dsh-agent-team');
+	assert.equal(captured.id, '@suifei/dsh-ai-team');
 	assert.equal(typeof captured.factory, 'function');
 
 	class Component {}

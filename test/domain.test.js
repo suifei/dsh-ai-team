@@ -132,6 +132,7 @@ test('owner/Human can cancel, reopen, reassign and delete under the stated bound
 	done = claimTask(done, a1, {}).task;
 	done = submitTask(done, a1, { summary: 's', evidence: [{ kind: 'path', value: 'p' }] }).task;
 	done = acceptTask(done, a2, { note: 'ok' }).task;
+	expectCode(() => cancelTask(done, human, { reason: 'x' }), 'E_INVALID_STATE');
 	const reopened = reopenTask(done, human, { reason: '回归' }, { expectedRevision: done.revision });
 	assert.equal(reopened.task.status, 'in_progress');
 
@@ -139,7 +140,22 @@ test('owner/Human can cancel, reopen, reassign and delete under the stated bound
 	assert.equal(reassigned.task.ownerId, 'a2');
 	expectCode(() => deleteTask(make({ blockedBy: [] }), a2), 'E_UNAUTHORIZED');
 	const deleted = deleteTask(make(), a1, { expectedRevision: 1 });
-	assert.equal(deleted.task.status, 'deleted');
+	assert.equal(deleted.task.status, 'pending');
+	assert.equal(deleted.task.tombstone, true);
+});
+
+test('reopen with a retired assignee returns to pending and clears the assignee', () => {
+	let task = make();
+	task = claimTask(task, a1, {}).task;
+	const submitted = submitTask(task, a1, { summary: 's', evidence: [{ kind: 'path', value: 'p' }] }).task;
+	const reopened = reopenTask(submitted, human, {
+		reason: '原执行者已退役',
+		expectedRevision: submitted.revision,
+		members: { a1: { id: 'a1', status: 'retired' } },
+	});
+	assert.equal(reopened.task.status, 'pending');
+	assert.equal(reopened.task.assigneeId, null);
+	assert.equal(reopened.event.payload.status, 'pending');
 });
 
 test('pre-assignment does not enter claimHistory; only claim does', () => {

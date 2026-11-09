@@ -1,5 +1,5 @@
 /**
- * dsh-agent-team — Host half (M1 spike).
+ * dsh-ai-team — Host half (M1 spike).
  *
  * Serves the workbench bootstrap payload over the same-origin web carrier.
  * The real Team service (ledger + domain + member runtime) will replace the
@@ -7,7 +7,7 @@
  * bundle installs, the Host route is reachable, and the Client workbench can
  * render against it.
  */
-export const name = 'agent-team';
+export const name = 'ai-team';
 
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer'];
@@ -72,18 +72,18 @@ export function apply(ctx) {
 		if (webServer === undefined) return () => {};
 		const dispose = webServer.register({
 			kind: 'prefix',
-			path: '/agent-team',
+			path: '/ai-team',
 			resource: async (request) => {
 				const url = new URL(request.url, 'http://local');
-				if (request.method === 'GET' && url.pathname === '/agent-team/api/health') {
+				if (request.method === 'GET' && url.pathname === '/ai-team/api/health') {
 					return json({ ok: true, plugin: name, version: '0.1.0' });
 				}
-				if (request.method === 'GET' && url.pathname === '/agent-team/api/bootstrap') {
+				if (request.method === 'GET' && url.pathname === '/ai-team/api/bootstrap') {
 					return json(MOCK);
 				}
 				return json({ error: { code: 'NOT_FOUND', message: 'not found' } }, 404);
 			},
 		});
 		return () => dispose();
-	}, 'agent-team: spike routes');
+	}, 'ai-team: spike routes');
 }

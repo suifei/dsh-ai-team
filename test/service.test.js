@@ -11,7 +11,7 @@ const a1 = { kind: 'agent', memberId: 'a1' };
 const a2 = { kind: 'agent', memberId: 'a2' };
 
 test('TeamService drives a real ledger from project setup to accepted task and thread', async () => {
-	const root = await mkdtemp(join(tmpdir(), 'agent-team-service-'));
+	const root = await mkdtemp(join(tmpdir(), 'ai-team-service-'));
 	const ledger = openLedger({ dir: join(root, 'ledger'), projectId: 'prj_test', fsync: false });
 	const service = new TeamService({ ledger });
 	try {

@@ -1,5 +1,5 @@
 /**
- * dsh-agent-team — Client half (M1 spike, 04/D refined).
+ * dsh-ai-team — Client half (M1 spike, 04/D refined).
  *
  * A three-pane project workbench rendered inside the DSH `main` slot:
  *   left  = page nav + Project tree + Agents
@@ -8,19 +8,19 @@
  *
  * UI references: docs/04 §4–§7/§10, docs/appendix/D §2–§3, docs/07 §4–§6.
  * This is a read-only visual/contract spike: it reads
- * `/agent-team/api/bootstrap`, falls back to embedded demo data, and every
+ * `/ai-team/api/bootstrap`, falls back to embedded demo data, and every
  * write action only produces local feedback. The registration contract
  * (`sidebar.panellist` id `ai-team`, `main` key `ai-team`) is unchanged.
  *
  * Colors come from `--dsw-alias-*` only; radii/font steps from host tokens.
  */
 window.__ModuleLoader__.load({
-	id: '@suifei/dsh-agent-team',
+	id: '@suifei/dsh-ai-team',
 	factory(require) {
 		const React = require('react');
 		const h = React.createElement;
 		const NS = 'agentTeam';
-		const PKG = '@suifei/dsh-agent-team';
+		const PKG = '@suifei/dsh-ai-team';
 
 		const zh = {
 			panel: '班组',
@@ -71,7 +71,7 @@ window.__ModuleLoader__.load({
 			fromDiscussion: '由讨论升格',
 			loading: '加载中…',
 			fallbackTitle: '演示数据',
-			fallbackBody: '/agent-team/api/bootstrap 不可达，已使用内置样例；发送、关注、验收只做本地反馈，不写账本。',
+			fallbackBody: '/ai-team/api/bootstrap 不可达，已使用内置样例；发送、关注、验收只做本地反馈，不写账本。',
 			spike: 'M1 spike',
 			spikeTitle: '只读界面演示：发送、关注、验收只产生本地反馈，不写账本。',
 			navAria: '页面导航',
@@ -254,7 +254,7 @@ window.__ModuleLoader__.load({
 			fromDiscussion: 'Promoted from discussion',
 			loading: 'Loading…',
 			fallbackTitle: 'Demo data',
-			fallbackBody: '/agent-team/api/bootstrap is unreachable, so the embedded sample is shown. Sending, following and acceptance only give local feedback; nothing is written to the ledger.',
+			fallbackBody: '/ai-team/api/bootstrap is unreachable, so the embedded sample is shown. Sending, following and acceptance only give local feedback; nothing is written to the ledger.',
 			spike: 'M1 spike',
 			spikeTitle: 'Read-only UI demo: sending, following and acceptance only give local feedback; nothing is written to the ledger.',
 			navAria: 'Page navigation',
@@ -672,7 +672,7 @@ window.__ModuleLoader__.load({
 			.at-mobile { display: none; position: relative; min-width: 0; }
 			.at-mobilesummary { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-secondary); font-size: 11px; cursor: pointer; list-style: none; }
 			.at-mobilesummary::-webkit-details-marker { display: none; }
-			.at-mobilepop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: min(320px, calc(100vw - 32px)); max-height: 70vh; overflow-y: auto; overflow-x: hidden; padding: 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); box-shadow: var(--dsw-elevation-panel, 0 8px 24px var(--dsw-alias-bg-mask-2)); }
+			.at-mobilepop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: min(320px, calc(100vw - 32px)); width: min(320px, calc(100cqw - 16px)); max-height: 70vh; overflow-y: auto; overflow-x: hidden; padding: 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); box-shadow: var(--dsw-elevation-panel, 0 8px 24px var(--dsw-alias-bg-mask-2)); }
 			.at-grid { flex: 1; min-height: 0; min-width: 0; position: relative; display: grid; grid-template-columns: 248px minmax(0, 1fr); }
 			.at-grid.at-withthread { grid-template-columns: 248px minmax(0, 1fr) 384px; }
 			.at-left { min-width: 0; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 8px 12px; border-right: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-base); scrollbar-width: thin; scrollbar-color: var(--dsw-alias-scrollbar-bg-l1) transparent; }
@@ -688,16 +688,16 @@ window.__ModuleLoader__.load({
 			.at-mini { margin-left: auto; width: 28px; height: 28px; display: grid; place-items: center; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
 			.at-mini:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 			.at-tree { display: flex; flex-direction: column; gap: 1px; }
-			.at-prow { min-height: 32px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: 6px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; cursor: pointer; }
+			.at-prow { min-height: 32px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; cursor: pointer; }
 			.at-prow:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 			.at-prow.at-on { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-interactive-bg-hover); box-shadow: inset 2px 0 0 var(--dsw-alias-state-business-primary); }
 			.at-hash { flex: 0 0 auto; color: var(--dsw-alias-label-tertiary); }
 			.at-prowtitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.at-archived { margin-top: 4px; }
-			.at-archived > summary { min-height: 28px; display: flex; align-items: center; padding: 0 8px; border-radius: 6px; color: var(--dsw-alias-label-caption); font-size: 11px; cursor: pointer; list-style: none; }
+			.at-archived > summary { min-height: 28px; display: flex; align-items: center; padding: 0 8px; border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-caption); font-size: 11px; cursor: pointer; list-style: none; }
 			.at-archived > summary::-webkit-details-marker { display: none; }
 			.at-archived > summary:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-secondary); }
-			.at-agent { min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; }
+			.at-agent { min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: var(--dsw-radius-sm); }
 			.at-agent:hover { background: var(--dsw-alias-interactive-bg-hover); }
 			.at-dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 999px; background: var(--dsw-alias-state-idle-primary); }
 			.at-dot-running { background: var(--dsw-alias-state-business-primary); }
@@ -708,7 +708,7 @@ window.__ModuleLoader__.load({
 			.at-agentname { align-self: flex-start; max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; line-height: 18px; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.at-agentname:hover { text-decoration: underline; }
 			.at-agentrole { min-width: 0; color: var(--dsw-alias-label-caption); font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-			.at-agentmore { flex: 0 0 auto; width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 13px; cursor: pointer; }
+			.at-agentmore { flex: 0 0 auto; width: 28px; height: 28px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 13px; cursor: pointer; }
 			.at-agentmore:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 			.at-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
 			.at-chead { flex: 0 0 auto; padding: 14px 18px 0; }
@@ -722,7 +722,7 @@ window.__ModuleLoader__.load({
 			.at-notewrap { flex: 0 0 auto; width: 100%; max-width: 760px; margin: 0 auto; padding: 8px 18px 0; }
 			.at-note { display: flex; align-items: flex-start; gap: 8px; padding: 6px 8px; border-left: 2px solid var(--dsw-alias-state-business-primary); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; }
 			.at-notetext { min-width: 0; flex: 1; overflow-wrap: anywhere; }
-			.at-noteclose { flex: 0 0 auto; width: 24px; height: 24px; display: grid; place-items: center; margin: -4px -4px -4px 0; border: 0; border-radius: 6px; background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
+			.at-noteclose { flex: 0 0 auto; width: 24px; height: 24px; display: grid; place-items: center; margin: -4px -4px -4px 0; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
 			.at-noteclose:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 			.at-banner { flex: 0 0 auto; margin: 8px 18px 0; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; }
 			.at-banner b { color: var(--dsw-alias-state-warn-label); font-weight: 500; }
@@ -770,7 +770,7 @@ window.__ModuleLoader__.load({
 			.at-owner, .at-exec { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 			.at-sep { color: var(--dsw-alias-label-caption); }
 			.at-miniavatar { width: 16px; height: 16px; display: inline-grid; place-items: center; margin-right: 4px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; background: var(--dsw-alias-bg-layer-3); color: var(--dsw-alias-label-secondary); font-size: 10px; vertical-align: -3px; }
-			.at-follow { flex: 0 0 auto; min-height: 24px; display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 0 6px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; }
+			.at-follow { flex: 0 0 auto; min-height: 24px; display: inline-flex; align-items: center; gap: 4px; margin-left: auto; padding: 0 6px; border: 1px solid transparent; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; }
 			.at-follow:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 			.at-follow.at-follow-on { color: var(--dsw-alias-state-business-primary); }
 			.at-follow.at-follow-compact { padding: 0; width: 24px; justify-content: center; }
@@ -822,7 +822,7 @@ window.__ModuleLoader__.load({
 			.at-qdef { color: var(--dsw-alias-label-caption); font-size: 11px; line-height: 16px; }
 			.at-qtotal { color: var(--dsw-alias-label-caption); font-size: 10px; line-height: 16px; }
 			.at-qlist { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-			.at-qitem { width: 100%; min-width: 0; display: flex; align-items: flex-start; gap: 6px; margin: 0 -4px; padding: 5px 4px; border: 0; border-radius: 6px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; text-align: left; cursor: pointer; }
+			.at-qitem { width: 100%; min-width: 0; display: flex; align-items: flex-start; gap: 6px; margin: 0 -4px; padding: 5px 4px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; text-align: left; cursor: pointer; }
 			.at-qitem:hover { background: var(--dsw-alias-interactive-bg-hover); }
 			.at-qitem:focus-visible { outline-offset: -2px; }
 			.at-qitemicon { flex: 0 0 auto; display: inline-flex; margin-top: 2px; color: var(--at-qaccent); }
@@ -854,7 +854,7 @@ window.__ModuleLoader__.load({
 			.at-rhmeta { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 			.at-rhtitle { color: var(--dsw-alias-label-primary); font-size: 12px; font-weight: 500; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 			.at-rhead .at-follow { margin-left: 0; }
-			.at-rbtn { min-height: 28px; display: inline-flex; align-items: center; justify-content: center; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11px; line-height: 16px; white-space: nowrap; cursor: pointer; }
+			.at-rbtn { min-height: 28px; display: inline-flex; align-items: center; justify-content: center; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11px; line-height: 16px; white-space: nowrap; cursor: pointer; }
 			.at-rbtn:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 			.at-iconbtn { width: 28px; padding: 0; }
 			.at-rnote { flex: 0 0 auto; display: flex; align-items: flex-start; gap: 8px; margin: 8px 10px 0; padding: 6px 8px; border-left: 2px solid var(--dsw-alias-state-business-primary); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; }
@@ -882,7 +882,7 @@ window.__ModuleLoader__.load({
 			.at-kvbody { min-width: 0; flex: 1 1 180px; }
 			.at-evidence { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
 			.at-evidence li { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; font-size: 12px; line-height: 18px; }
-			.at-evidence code, .at-context code { padding: 1px 4px; border-radius: 4px; background: var(--dsw-alias-markdown-code-block); color: var(--dsw-alias-label-secondary); font-family: var(--dsw-font-family); font-size: 11px; }
+			.at-evidence code, .at-context code { padding: 1px 4px; border-radius: var(--dsw-radius-xs); background: var(--dsw-alias-markdown-code-block); color: var(--dsw-alias-label-secondary); font-family: var(--dsw-font-family); font-size: 11px; }
 			.at-elig, .at-steward { margin: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
 			.at-steward { color: var(--dsw-alias-label-tertiary); font-size: 11px; }
 			.at-irrev { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-state-warn-tertiary); color: var(--dsw-alias-state-warn-label); font-size: 11px; line-height: 16px; }
@@ -902,10 +902,10 @@ window.__ModuleLoader__.load({
 			.at-convert { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
 			.at-converthead { color: var(--dsw-alias-label-primary); font-size: 14px; font-weight: 500; line-height: 22px; }
 			.at-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
-			.at-field input, .at-field textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 18px; }
+			.at-field input, .at-field textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 18px; }
 			.at-field textarea { min-height: 64px; resize: vertical; }
 			.at-fieldrow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-			.at-fieldrow .at-staticfield { min-width: 0; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 6px; background: var(--dsw-alias-bg-module-platform); color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+			.at-fieldrow .at-staticfield { min-width: 0; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-module-platform); color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 			.at-context { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
 			.at-convertfoot { display: flex; justify-content: flex-end; gap: 8px; }
 			.at-skel { background: var(--dsw-alias-bg-skeleton); border-radius: var(--dsw-radius-sm); }
@@ -1408,7 +1408,7 @@ window.__ModuleLoader__.load({
 				task.submission?.summary ? h('p', { className: 'at-donetext' }, task.submission.summary) : null);
 		}
 
-		function ThreadPanel({ t, task, thread, project, following, onToggleFollow, onClose, converting, convert, reply, onReplyChange, onReplySend, replyBase, onContinue, onContext, note, onDismissNote, acceptChecked, onAcceptChecked, onAccept, onChanges, actions, panelRef }) {
+		function ThreadPanel({ t, task, thread, project, following, onToggleFollow, onClose, converting, convert, reply, onReplyChange, onReplySend, replyBase, onContinue, onContext, note, onDismissNote, acceptChecked, onAcceptChecked, onAccept, onChanges, actions, panelRef, replyRef }) {
 			const headSeq = thread?.headSeq ?? thread?.entries?.length ?? 0;
 			const stale = replyBase !== null && replyBase !== undefined && headSeq > replyBase;
 			const entries = Array.isArray(thread?.entries) ? thread.entries : [];
@@ -1459,6 +1459,7 @@ window.__ModuleLoader__.load({
 						h('textarea', {
 							value: reply,
 							rows: 2,
+							ref: replyRef,
 							placeholder: t('reply'),
 							'aria-label': t('reply'),
 							onChange: (event) => onReplyChange(event.target.value),
@@ -1545,7 +1546,7 @@ window.__ModuleLoader__.load({
 							type: 'button',
 							'data-qitem': 'true',
 							title: itemTitle,
-							onClick: () => onItem(item),
+							onClick: (event) => onItem(item, event),
 							onKeyDown,
 						},
 						h('span', { className: 'at-qitemicon', 'aria-hidden': 'true' }, h(Ico, { name: quadrant.icon, size: 12 })),
@@ -1632,13 +1633,14 @@ window.__ModuleLoader__.load({
 			const [acceptChecked, setAcceptChecked] = React.useState(false);
 			const [replyBase, setReplyBase] = React.useState(null);
 			const rightRef = React.useRef(null);
+			const replyRef = React.useRef(null);
 			const triggerRef = React.useRef(null);
 			const mobileRef = React.useRef(null);
 
 			React.useEffect(() => {
 				let alive = true;
 				const controller = typeof AbortController === 'function' ? new AbortController() : null;
-				fetch('/agent-team/api/bootstrap', {
+				fetch('/ai-team/api/bootstrap', {
 					headers: { accept: 'application/json' },
 					signal: controller ? controller.signal : undefined,
 				})
@@ -1683,7 +1685,7 @@ window.__ModuleLoader__.load({
 
 			React.useEffect(() => {
 				if (!threadOpen) return;
-				const node = rightRef.current;
+				const node = replyRef.current ?? rightRef.current;
 				if (node && typeof node.focus === 'function') node.focus({ preventScroll: true });
 			}, [threadOpen, selected]);
 
@@ -1739,16 +1741,16 @@ window.__ModuleLoader__.load({
 				setThreadOpen(true);
 				setRightNote('');
 			}
-			function openTaskById(taskId) {
+			function openTaskById(taskId, event) {
 				const card = tasks.find((item) => item.id === taskId);
 				if (!card) { say(t('quadrantMissing')); return; }
-				triggerRef.current = null;
+				triggerRef.current = event?.currentTarget ?? null;
 				setSelected(card.id);
 				setThreadOpen(true);
 				setRightNote('');
 			}
-			function openQuadrantItem(item) {
-				if (item?.taskId) openTaskById(item.taskId);
+			function openQuadrantItem(item, event) {
+				if (item?.taskId) openTaskById(item.taskId, event);
 				else if (item?.kind === 'inbox') say(t('decisionMock'));
 				else say(t('quadrantMissing'));
 			}
@@ -1883,13 +1885,13 @@ window.__ModuleLoader__.load({
 				scope,
 				tab,
 				inboxUnread,
-				onBack: goConversation,
+				onBack: () => { closeMobile(); goConversation(); },
 				onInbox: switchInbox,
 				onBoard: switchBoard,
 				onProject: switchProject,
-				onNewProject: () => say(t('newProjectMock')),
-				onAgent: () => say(t('agentMock')),
-				onAddAgent: () => say(t('addAgentMock')),
+				onNewProject: () => { closeMobile(); say(t('newProjectMock')); },
+				onAgent: () => { closeMobile(); say(t('agentMock')); },
+				onAddAgent: () => { closeMobile(); say(t('addAgentMock')); },
 			};
 
 			const body = inInbox
@@ -1909,7 +1911,7 @@ window.__ModuleLoader__.load({
 						follows: followingOf,
 						doneOpen,
 						onToggleDone: () => setDoneOpen((value) => !value),
-						onOpen: (card) => { if (card) openTask(card); },
+						onOpen: openTask,
 						onToggleFollow: toggleFollow,
 						filter: boardFilter,
 						onClearFilter: () => setBoardFilter('all'),
@@ -2033,6 +2035,7 @@ window.__ModuleLoader__.load({
 						onChanges: requestChanges,
 						actions,
 						panelRef: rightRef,
+						replyRef,
 					}) : null));
 		}
 
