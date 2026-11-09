@@ -12,6 +12,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { ProjectRuntime } from './lib/host/project-runtime.js';
 import { ProjectRegistry } from './lib/host/project-registry.js';
+import { ids } from './lib/domain/ids.js';
 import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-runtime.js';
 import { ensureHostAgent } from './lib/runtime/host-agent.js';
 import { classifyLlmFailure, retryDecision } from './lib/runtime/failure-policy.js';
@@ -25,7 +26,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer'];
 
-const VERSION = '0.2.1';
+const VERSION = '0.2.2';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -80,6 +81,7 @@ async function boot() {
 	const runtime = await ProjectRuntime.open({ rootDir: dataDir, projectId: activeProjectId });
 	return {
 		...runtime,
+		runtime,
 		registry,
 		activeProjectId,
 		ledger: runtime.ledger,
@@ -278,7 +280,7 @@ export function apply(ctx) {
 				type: 'member.distill',
 				payload: { memberId: member.id, personality: personality.trim(), reason: payload.reason ?? 'model re-distill' },
 				actor: { kind: 'human', memberId: HUMAN_ID },
-				projectId: PROJECT_ID,
+				projectId: booted.activeProjectId,
 			});
 			return { ok: true, member: result.member, distilled: { provider: selection.provider, model: selection.model } };
 		};
@@ -368,7 +370,7 @@ export function apply(ctx) {
 				let bound;
 				try {
 					bound = await booted.service.bindMemberSession(
-						{ actor: { kind: 'human', memberId: HUMAN_ID }, projectId: PROJECT_ID },
+						{ actor: { kind: 'human', memberId: HUMAN_ID }, projectId: booted.activeProjectId },
 						{ memberId: member.id, sessionId: result.childId },
 					);
 				} catch (error) {
@@ -386,28 +388,32 @@ export function apply(ctx) {
 			} catch (error) {
 				try {
 					await booted.service.failMember(
-						{ actor: { kind: 'human', memberId: HUMAN_ID }, projectId: PROJECT_ID },
+						{ actor: { kind: 'human', memberId: HUMAN_ID }, projectId: booted.activeProjectId },
 						{ memberId: member.id, reason: `${error.code ?? 'E_RUNTIME'}: ${error.message ?? error}` },
 					);
 				} catch { /* member may already be gone */ }
 				return { error: { code: error.code ?? 'E_RUNTIME', message: error.message ?? String(error) }, status: 409 };
 			}
 		};
+		let attachRuntime = null;
 		const snapshot = () => ({
 			rev: booted.ledger.head.seq,
 			generatedAt: Date.now(),
-			board: booted.service.board(PROJECT_ID),
-			quadrants: booted.service.quadrants(PROJECT_ID),
+			board: booted.service.board(booted.activeProjectId),
+			quadrants: booted.service.quadrants(booted.activeProjectId),
 		});
+		attachRuntime = (runtime) => {
+			runtime.ledger.onEvent = (event) => {
+				broadcast(event);
+				const actorId = event?.actor?.kind === 'agent' ? event.actor.memberId : undefined;
+				void wakeFromResult({ event }, actorId === undefined ? {} : { agentId: actorId }).catch((error) => {
+					console.warn('[ai-team] event wake planner failed:', error?.message ?? error);
+				});
+			};
+		};
 		ready.then((value) => {
 			if (value !== null && value !== undefined) {
-				value.ledger.onEvent = (event) => {
-					broadcast(event);
-					const actorId = event?.actor?.kind === 'agent' ? event.actor.memberId : undefined;
-					void wakeFromResult({ event }, actorId === undefined ? {} : { agentId: actorId }).catch((error) => {
-						console.warn('[ai-team] event wake planner failed:', error?.message ?? error);
-					});
-				};
+				attachRuntime(value);
 				// A restart is an explicit lifecycle event: resume unfinished Tasks
 				// once, without timers or periodic polling.
 				void wakeFromResult({ event: { type: 'team/startup' } }, {}).catch((error) => {
@@ -434,6 +440,34 @@ export function apply(ctx) {
 				}
 			}
 		};
+
+		async function switchRuntime(nextProjectId, projectName, projectGoal) {
+			await ready;
+			if (booted === null) throw new Error('team ledger is unavailable');
+			if (booted.activeProjectId === nextProjectId) return booted;
+			const next = await ProjectRuntime.open({
+				rootDir: booted.dataDir,
+				projectId: nextProjectId,
+				projectName,
+				projectGoal,
+			});
+			attachRuntime(next);
+			const previous = booted;
+			booted = {
+				...next,
+				runtime: next,
+				registry: previous.registry,
+				activeProjectId: nextProjectId,
+				dataDir: previous.dataDir,
+			};
+			previous.registry.setActive(nextProjectId);
+			previous.runtime?.close?.() ?? previous.ledger?.close?.();
+			broadcast(undefined);
+			void wakeFromResult({ event: { type: 'team/startup' } }, {}).catch((error) => {
+				console.warn('[ai-team] project switch startup wake failed:', error?.message ?? error);
+			});
+			return booted;
+		}
 
 		const dispose = webServer.register({
 			kind: 'prefix',
@@ -505,8 +539,19 @@ export function apply(ctx) {
 						});
 					}
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/bootstrap') {
+						const bootstrap = booted.service.bootstrap(booted.activeProjectId);
 						return send(res, {
-							...booted.service.bootstrap(PROJECT_ID),
+							...bootstrap,
+							projects: booted.registry.list().map((project) => {
+								const active = bootstrap.projects?.find((entry) => entry.id === project.id);
+								return {
+									...project,
+									owner: active?.owner ?? null,
+									goal: active?.goal ?? '',
+									archived: false,
+									active: project.id === booted.activeProjectId,
+								};
+							}),
 							runtime: {
 								defaultModel: ctx.get('agentDefaultModel')?.currentSelection?.() ?? null,
 								providers: ctx.get('subagents')?.list?.() ?? [],
@@ -517,7 +562,7 @@ export function apply(ctx) {
 					const events = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/events$/);
 					if (req.method === 'GET' && events !== null) {
 						const projectId = decodeURIComponent(events[1]);
-						if (projectId !== PROJECT_ID) {
+						if (projectId !== booted.activeProjectId) {
 							return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
 						}
 						res.writeHead(200, {
@@ -537,12 +582,12 @@ export function apply(ctx) {
 					const board = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/board$/);
 					if (req.method === 'GET' && board !== null) {
 						const projectId = decodeURIComponent(board[1]);
-						if (projectId !== PROJECT_ID) {
+						if (projectId !== booted.activeProjectId) {
 							return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
 						}
 						try {
 							const doneLimit = Number.parseInt(url.searchParams.get('doneLimit') ?? '', 10);
-							return send(res, booted.service.board(PROJECT_ID, {
+							return send(res, booted.service.board(booted.activeProjectId, {
 								doneLimit: Number.isSafeInteger(doneLimit) ? doneLimit : undefined,
 							}));
 						} catch (error) {
@@ -553,13 +598,13 @@ export function apply(ctx) {
 					const quadrants = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/quadrants$/);
 					if (req.method === 'GET' && quadrants !== null) {
 						const projectId = decodeURIComponent(quadrants[1]);
-						if (projectId !== PROJECT_ID) {
+						if (projectId !== booted.activeProjectId) {
 							return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
 						}
 						try {
 							const q4Limit = Number.parseInt(url.searchParams.get('q4Limit') ?? '', 10);
 							const q4Days = Number.parseFloat(url.searchParams.get('q4Days') ?? '');
-							return send(res, booted.service.quadrants(PROJECT_ID, {
+							return send(res, booted.service.quadrants(booted.activeProjectId, {
 								q4Limit: Number.isSafeInteger(q4Limit) ? q4Limit : undefined,
 								q4Days: Number.isFinite(q4Days) ? q4Days : undefined,
 							}));
@@ -571,7 +616,7 @@ export function apply(ctx) {
 					const commands = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/commands$/);
 					if (req.method === 'POST' && commands !== null) {
 						const projectId = decodeURIComponent(commands[1]);
-						if (projectId !== PROJECT_ID) {
+						if (projectId !== booted.activeProjectId) {
 							return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
 						}
 						let body;
@@ -592,6 +637,24 @@ export function apply(ctx) {
 							if (distilled.error !== undefined) return send(res, { error: distilled.error }, distilled.status ?? 502);
 							return send(res, distilled);
 						}
+						if (body.type === 'project.create') {
+							const name = typeof body.payload?.name === 'string' ? body.payload.name.trim() : '';
+							const goal = typeof body.payload?.goal === 'string' ? body.payload.goal.trim() : '';
+							if (name === '') return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'project name is required' } }, 400);
+							const id = ids.project();
+							booted.registry.add({ id, name, goal });
+							const next = await switchRuntime(id, name, goal);
+							return send(res, { ok: true, project: next.service.state.projects[id] ?? { id, name } });
+						}
+						if (body.type === 'project.activate') {
+							const target = body.payload?.projectId;
+							if (typeof target !== 'string' || !booted.registry.list().some((project) => project.id === target)) {
+								return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
+							}
+							const record = booted.registry.list().find((project) => project.id === target);
+							const next = await switchRuntime(target, record?.name, record?.goal);
+							return send(res, { ok: true, project: next.service.state.projects[target] ?? record });
+						}
 						if (body.type === 'member.activate') {
 							const activated = await activateMember(body);
 							if (activated.error !== undefined) return send(res, { error: activated.error }, activated.status ?? 409);
@@ -603,7 +666,7 @@ export function apply(ctx) {
 								type: body.type,
 								payload: body.payload ?? {},
 								actor: { kind: 'human', memberId: HUMAN_ID },
-								projectId: PROJECT_ID,
+								projectId: booted.activeProjectId,
 								correlationId: typeof body.correlationId === 'string' ? body.correlationId : undefined,
 							});
 							send(res, { ok: true, ...result });

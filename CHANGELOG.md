@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 — 2026-11-09
+
+- 多 Project 单活动切换：每 Project 独立 ledger，`projects.json` 索引；
+- Host `project.create` / `project.activate`；
+- UI 新建项目弹窗 + 项目列表切换；
+- 切换后重拉 bootstrap、重连 SSE，未完成 Task 由 `team/startup` 恢复；
+- 已知限制：同一时刻只开一个 Project runtime，非活动项目不并发唤醒。
+
 ## 0.2.1 — 2026-11-09
 
 - QA checklist 硬门禁：`qaRequired` + `qaChecklist`，全部通过才能 accept。

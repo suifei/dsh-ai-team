@@ -183,6 +183,12 @@ window.__ModuleLoader__.load({
 			newProject: '新建项目',
 			addAgent: '添加成员',
 			newProjectMock: 'spike：新建项目属于 S-01 流程，M1 之后接入。',
+			newProjectTitle: '新建项目',
+			projectName: '项目名',
+			projectGoal: '目标',
+			projectCreate: '创建项目',
+			projectCreated: '已创建项目 {name}。',
+			projectSwitched: '已切换项目。',
 			addAgentMock: 'spike：添加成员在 M1 之后接入。',
 			addAgentTitle: '添加成员',
 			memberName: '名字',
@@ -440,6 +446,12 @@ window.__ModuleLoader__.load({
 			newProject: 'New project',
 			addAgent: 'Add member',
 			newProjectMock: 'spike: project creation belongs to S-01 and lands after M1.',
+			newProjectTitle: 'New project',
+			projectName: 'Project name',
+			projectGoal: 'Goal',
+			projectCreate: 'Create project',
+			projectCreated: 'Created project {name}.',
+			projectSwitched: 'Switched project.',
 			addAgentMock: 'spike: adding members lands after M1.',
 			addAgentTitle: 'Add member',
 			memberName: 'Name',
@@ -1860,6 +1872,11 @@ window.__ModuleLoader__.load({
 			const [pNote, setPNote] = React.useState('');
 			const [pSkill, setPSkill] = React.useState('');
 			const [pMessage, setPMessage] = React.useState('');
+			const [newOpen, setNewOpen] = React.useState(false);
+			const [nName, setNName] = React.useState('');
+			const [nGoal, setNGoal] = React.useState('');
+			const [nBusy, setNBusy] = React.useState(false);
+			const [nError, setNError] = React.useState('');
 			const [pSuccessor, setPSuccessor] = React.useState('');
 			const [pBusy, setPBusy] = React.useState(false);
 			const [pError, setPError] = React.useState('');
@@ -1873,7 +1890,8 @@ window.__ModuleLoader__.load({
 				let alive = true;
 				const controller = typeof AbortController === 'function' ? new AbortController() : null;
 				// The package is @suifei/dsh-ai-team; the Host prefix is /ai-team.
-				const paths = ['/ai-team/api/bootstrap'];
+				const query = projectId ? '?project=' + encodeURIComponent(projectId) : '';
+				const paths = ['/ai-team/api/bootstrap' + query];
 				async function load() {
 					let lastError = null;
 					for (const path of paths) {
@@ -1909,7 +1927,7 @@ window.__ModuleLoader__.load({
 				// Event-driven refresh only; the Host sends one frame per command and
 				// no heartbeat/timer. EventSource reconnects on its own.
 				const source = typeof EventSource === 'function'
-					? new EventSource('/ai-team/api/projects/prj_main/events')
+					? new EventSource('/ai-team/api/projects/' + encodeURIComponent(projectId || 'prj_main') + '/events')
 					: null;
 				if (source) source.addEventListener('change', () => { if (alive) load(); });
 				return () => {
@@ -1917,7 +1935,7 @@ window.__ModuleLoader__.load({
 					if (controller) controller.abort();
 					if (source) source.close();
 				};
-			}, []);
+			}, [projectId]);
 
 			React.useEffect(() => {
 				if (!data) return;
@@ -2053,16 +2071,47 @@ window.__ModuleLoader__.load({
 				setBoardFilter('all');
 				setNote('');
 			}
-			function switchProject(next) {
+			async function switchProject(next) {
 				closeMobile();
 				if (next.id === projectId && scope === 'project') return;
-				setProjectId(next.id);
-				setScope('project');
-				setTab('main');
-				setBoardFilter('all');
-				setThreadOpen(false);
-				setReply('');
-				say(next.archived ? t('archivedMock') : t('projectSwitchMock'));
+				try {
+					await runCommand('project.activate', { projectId: next.id });
+					setScope('project');
+					setTab('main');
+					setBoardFilter('all');
+					setThreadOpen(false);
+					setReply('');
+					await reloadData(next.id);
+					setProjectId(next.id);
+					say(next.archived ? t('archivedMock') : t('projectSwitched'));
+				} catch (error) {
+					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
+			}
+			function openNewProject() {
+				setNName('');
+				setNGoal('');
+				setNError('');
+				setNewOpen(true);
+			}
+			async function createProject() {
+				if (!nName.trim() || nBusy) return;
+				setNBusy(true);
+				setNError('');
+				try {
+					const result = await runCommand('project.create', { name: nName.trim(), goal: nGoal.trim() });
+					const next = result.project;
+					setNewOpen(false);
+					setScope('project');
+					setTab('main');
+					await reloadData(next.id);
+					setProjectId(next.id);
+					say(tf(t, 'projectCreated', { name: next.name }));
+				} catch (error) {
+					setNError(error?.message ?? String(error));
+				} finally {
+					setNBusy(false);
+				}
 			}
 			function selectTab(next) {
 				setTab(next);
@@ -2083,8 +2132,9 @@ window.__ModuleLoader__.load({
 				const buttons = event.currentTarget.querySelectorAll('[role="tab"]');
 				buttons.forEach((button) => { if (button.dataset.tab === next) button.focus(); });
 			}
-			async function reloadData() {
-				const response = await fetch('/ai-team/api/bootstrap', { headers: { accept: 'application/json' } });
+			async function reloadData(forProject = projectId) {
+				const query = forProject ? '?project=' + encodeURIComponent(forProject) : '';
+				const response = await fetch('/ai-team/api/bootstrap' + query, { headers: { accept: 'application/json' } });
 				if (!response.ok) throw new Error('HTTP ' + response.status);
 				const next = normalizePayload(await response.json());
 				if (next) setData(next);
@@ -2502,7 +2552,7 @@ window.__ModuleLoader__.load({
 				onInbox: switchInbox,
 				onBoard: switchBoard,
 				onProject: switchProject,
-				onNewProject: () => { closeMobile(); say(t('newProjectMock')); },
+				onNewProject: () => { closeMobile(); openNewProject(); },
 				onAgent: (agent) => { closeMobile(); openProfile(agent); },
 				onAddAgent: () => { closeMobile(); openAddAgent(); },
 				onRecruit: (agent) => { closeMobile(); recruit(agent); },
@@ -2761,7 +2811,24 @@ window.__ModuleLoader__.load({
 								h('button', { className: 'at-btn', type: 'button', onClick: leaveProfile, disabled: pBusy }, t('leaveTeam')),
 								profileAgent.status === 'failed' ? h('button', { className: 'at-btn', type: 'button', onClick: retryProfile, disabled: pBusy }, t('retry')) : null,
 								h('button', { className: 'at-btn', type: 'button', onClick: distillProfile, disabled: pBusy }, t('redistill')),
-								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: pBusy || !pName.trim() }, pBusy ? t('saving') : t('save'))))) : null));
+								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: pBusy || !pName.trim() }, pBusy ? t('saving') : t('save'))))) : null,
+					newOpen ? h('div', { className: 'at-modalback' },
+						h('form', {
+							className: 'at-modal',
+							role: 'dialog',
+							'aria-modal': 'true',
+							'aria-label': t('newProjectTitle'),
+							onSubmit: (event) => { event.preventDefault(); createProject(); },
+						},
+							h('h2', { className: 'at-modaltitle' }, t('newProjectTitle')),
+							h('label', { className: 'at-field' }, h('span', null, t('projectName')),
+								h('input', { value: nName, onChange: (event) => setNName(event.target.value), autoFocus: true })),
+							h('label', { className: 'at-field' }, h('span', null, t('projectGoal')),
+								h('textarea', { value: nGoal, onChange: (event) => setNGoal(event.target.value) })),
+							nError ? h('div', { className: 'at-modalerror', role: 'alert' }, nError) : null,
+							h('div', { className: 'at-modalactions' },
+								h('button', { className: 'at-btn', type: 'button', onClick: () => setNewOpen(false), disabled: nBusy }, t('cancel')),
+								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: nBusy || !nName.trim() }, nBusy ? t('saving') : t('projectCreate'))))) : null));
 		}
 
 		function PanelIcon() {
