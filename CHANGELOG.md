@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 — 2026-11-09
+
+- QA checklist 硬门禁：`qaRequired` + `qaChecklist`，全部通过才能 accept。
+- 启动恢复：`team/startup` 恢复未完成 Task，无定时器；真实重启 E2E 跑通。
+- 抽出 `ProjectRuntime`（默认项目行为不变），为多 Project 做准备。
+- 修复资料抽屉白屏（early-return 前引用 selectedTask / data null）。
+- 真实浏览器验证 DM：`member.message` + wake，成员 session 前进。
+
 ## 0.2.0 — 2026-11-09
 
 M2.5「团队进化」迭代。
