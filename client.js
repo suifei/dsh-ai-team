@@ -1515,7 +1515,9 @@ window.__ModuleLoader__.load({
 		}
 
 		function Board({ t, tasks, selected, follows, doneOpen, onToggleDone, onOpen, onToggleFollow, filter, onClearFilter, q1Extra, onBackMain }) {
-			const filtered = filter === 'all' ? tasks : tasks.filter((task) => matchesFilter(task, filter));
+			const filtered = (filter === 'all' ? tasks : tasks.filter((task) => matchesFilter(task, filter)))
+				.slice()
+				.sort((left, right) => (right.number ?? 0) - (left.number ?? 0));
 			const filterName = filter === 'all' ? '' : t(filter === 'q1' ? 'q1Title' : filter === 'q2' ? 'q2Title' : filter === 'q3' ? 'q3Title' : 'q4Title');
 			const bar = filter === 'all' ? null : h('div', { className: 'at-boardbar', role: 'status' },
 				h('span', { className: 'at-filterchip' }, tf(t, 'filterLabel', { name: filterName }) + ' · ' + tf(t, 'itemCount', { n: filtered.length })),
@@ -2180,7 +2182,7 @@ window.__ModuleLoader__.load({
 			const [rightNote, setRightNote] = React.useState('');
 			const [reply, setReply] = React.useState('');
 			const [follows, setFollows] = React.useState({});
-			const [doneOpen, setDoneOpen] = React.useState(false);
+			const [doneOpen, setDoneOpen] = React.useState(true);
 			const [boardFilter, setBoardFilter] = React.useState('all');
 			const [converting, setConverting] = React.useState(false);
 			const [cTitle, setCTitle] = React.useState('');
