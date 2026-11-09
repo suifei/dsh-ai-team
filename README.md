@@ -85,6 +85,7 @@ dsh --profile ai-team --no-open --port 33271
 ```
 
 - **主对话**：Human 的一句话进入 Main stream，Project owner 拆 Task；顶部「团队动态」直接显示正在推进的 Task 和运行中的成员，点击 Task 可打开 Thread。
+- **PMO 全自动**：Project header 的「PMO 自动」默认开启；每 60s 按最高价值建议自动处理 Human 决策，无 active Task 时自动唤醒 owner 续派下一批 Task；关闭后决策回到收件箱。
 - **看板**：四列；进行中的卡片显示 accountable owner 与执行者；数量只统计 active Task。
 - **态势**：四象限——需要你、团队在做、等待受阻、最近完成。点击条目打开对应 Task 的 Thread。
 - **收件箱**：跨 Project 聚合；顶部「待你处理 · N」一键进入；只放真正需要 Human 的决策/失败，Agent 的进度汇报留在 Thread/动态，不制造“打开 Task 后无事可做”。

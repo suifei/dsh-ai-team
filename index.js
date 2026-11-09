@@ -34,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.33';
+const VERSION = '0.3.34';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -166,6 +166,17 @@ export function apply(ctx) {
 							}
 						}
 					}
+					for (const runtime of value.runtimes.values()) {
+						void pmoTick(runtime).catch((error) => console.warn('[ai-team] PMO tick failed:', error?.message ?? error));
+					}
+					if (pmoTimer === null) {
+						pmoTimer = setInterval(() => {
+							for (const runtime of booted?.runtimes?.values() ?? []) {
+								void pmoTick(runtime).catch((error) => console.warn('[ai-team] PMO tick failed:', error?.message ?? error));
+							}
+						}, 60_000);
+						pmoTimer.unref?.();
+					}
 					return value;
 				})
 				.catch((error) => {
@@ -245,6 +256,8 @@ export function apply(ctx) {
 		let hostPromise = null;
 		const wakeKeys = new Set();
 		const activationTasks = new Map();
+		const pmoLastKick = new Map();
+		let pmoTimer = null;
 		const projectCwd = (projectRuntime, member) => member?.workspace
 			|| projectRuntime?.service?.state?.projects?.[projectRuntime.id]?.workspacePath
 			|| projectRuntime?.dir
@@ -321,6 +334,32 @@ export function apply(ctx) {
 				}
 			}
 		};
+		const pmoTick = async (projectRuntime) => {
+			if (projectRuntime === null || projectRuntime === undefined) return;
+			const state = projectRuntime.service.state;
+			const project = state.projects?.[projectRuntime.id];
+			if (project === undefined || project.pmoAuto === false || project.status === 'archived') return;
+			const results = await projectRuntime.service.autoAnswerDecisions();
+			for (const result of results) {
+				const taskId = result?.item?.ref?.taskId;
+				if (typeof taskId === 'string' && result.entry !== null && result.entry !== undefined) {
+					await wakeFromResult(projectRuntime, {
+						event: { type: 'thread/posted', payload: { taskId, entry: result.entry } },
+					}, { agentId: 'mem_pmo' });
+				}
+			}
+			const active = Object.values(state.tasks ?? {}).filter((task) =>
+				task.tombstone !== true && ['pending', 'in_progress', 'pending_acceptance'].includes(task.status));
+			if (active.length > 0) return;
+			const now = Date.now();
+			const last = pmoLastKick.get(projectRuntime.id) ?? 0;
+			if (now - last < 10 * 60_000) return;
+			pmoLastKick.set(projectRuntime.id, now);
+			await wakeFromResult(projectRuntime, {
+				event: { type: 'pmo/continue', payload: { bucket: Math.floor(now / 600_000) } },
+			}, {});
+		};
+
 		const distillMemberWithModel = async (projectRuntime, payload) => {
 			const member = projectRuntime?.service.state.members?.[payload.memberId];
 			if (member === undefined || member.kind !== 'agent') {
@@ -948,6 +987,7 @@ export function apply(ctx) {
 				try { client.res.end(); } catch { /* socket already gone */ }
 			}
 			sseClients.clear();
+			if (pmoTimer !== null) { clearInterval(pmoTimer); pmoTimer = null; }
 			for (const activation of activations.values()) {
 				try { activation.dispose?.().catch?.(() => {}); } catch { /* already gone */ }
 			}

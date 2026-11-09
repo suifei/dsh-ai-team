@@ -221,6 +221,21 @@ window.__ModuleLoader__.load({
 			workspaceHint: '先选择代码目录再开工；每个 Project 使用独立目录。',
 			workspaceChoose: '选择目录',
 			workspaceChange: '更换目录',
+			pmoOn: 'PMO 自动 · 开',
+			pmoOff: 'PMO 自动 · 关',
+			pmoHint: 'PMO 自动处理 Human 决策并续派下一批 Task；默认开启',
+			pmoEnabled: 'PMO 自动已开启。',
+			pmoDisabled: 'PMO 自动已关闭，决策回到收件箱。',
+			notifyTaskCreated: '新 Task 已创建',
+			notifyTaskClaimed: '成员已认领 Task',
+			notifyTaskSubmitted: 'Task 已提交待验收',
+			notifyTaskAccepted: 'Task 已验收完成',
+			notifyTaskChanges: 'Task 被退回修改',
+			notifyThread: 'Thread 有新消息',
+			notifyInbox: '新的待办已进入收件箱',
+			notifyWake: 'Agent 已唤醒',
+			notifyStream: '主对话有新消息',
+			notifyClose: '关闭通知',
 			workspaceRequired: '请先设置项目工作目录。',
 			workspaceSaved: '项目工作目录已保存。',
 			workspaceDialogTitle: '设置项目工作目录',
@@ -542,6 +557,21 @@ window.__ModuleLoader__.load({
 			workspaceHint: 'Choose a code directory before starting; each Project uses its own directory.',
 			workspaceChoose: 'Choose directory',
 			workspaceChange: 'Change directory',
+			pmoOn: 'PMO auto · on',
+			pmoOff: 'PMO auto · off',
+			pmoHint: 'PMO answers Human decisions and dispatches the next Tasks; on by default',
+			pmoEnabled: 'PMO auto enabled.',
+			pmoDisabled: 'PMO auto disabled; decisions go back to the inbox.',
+			notifyTaskCreated: 'New Task created',
+			notifyTaskClaimed: 'Member claimed a Task',
+			notifyTaskSubmitted: 'Task submitted for acceptance',
+			notifyTaskAccepted: 'Task accepted',
+			notifyTaskChanges: 'Task returned for changes',
+			notifyThread: 'New Thread message',
+			notifyInbox: 'New inbox item',
+			notifyWake: 'Agent woken',
+			notifyStream: 'New main-stream message',
+			notifyClose: 'Dismiss notification',
 			workspaceRequired: 'Set the Project workspace first.',
 			workspaceSaved: 'Project workspace saved.',
 			workspaceDialogTitle: 'Set Project workspace',
@@ -954,6 +984,11 @@ window.__ModuleLoader__.load({
 		const CSS = `
 			.at-root { height: 100%; min-height: 0; display: flex; flex-direction: column; position: relative; overflow: hidden; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); font-family: var(--dsw-font-family); font-size: 13px; line-height: 21px; container-type: inline-size; container-name: at-wb; }
 			.at-root *, .at-root *::before, .at-root *::after { box-sizing: border-box; }
+			.at-toaststack { position: fixed; right: 18px; bottom: 18px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 7px; max-width: min(360px, calc(100vw - 36px)); pointer-events: none; }
+			.at-toast { pointer-events: auto; display: flex; align-items: center; gap: 8px; max-width: 100%; padding: 7px 9px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); box-shadow: 0 8px 24px rgba(0,0,0,.16); color: var(--dsw-alias-label-primary); font-size: 12px; line-height: 18px; }
+			.at-toasticon { display: inline-flex; color: var(--dsw-alias-state-business-primary); flex: 0 0 auto; }
+			.at-toasttext { min-width: 0; overflow-wrap: anywhere; }
+			.at-toastclose { border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 14px; line-height: 16px; cursor: pointer; padding: 0 2px; }
 			.at-root :focus-visible { outline: 2px solid var(--dsw-focus-ring-color, var(--dsw-alias-state-business-primary)); outline-offset: 2px; }
 			.at-top { height: 40px; flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 12px; border-bottom: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-layer-1); }
 			.at-brand { color: var(--dsw-alias-label-primary); font-size: 12px; font-weight: 500; white-space: nowrap; }
@@ -1044,6 +1079,11 @@ window.__ModuleLoader__.load({
 			.at-teampulsehint { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
 			.at-teampulseagents { margin-top: 6px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
 			.at-memberview { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 18px; }
+			.at-agentbubbles { display: flex; flex-direction: column; gap: 6px; max-width: 620px; margin: 10px 0 4px 40px; }
+			.at-agentbubble { display: flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; padding: 7px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 12px 12px 12px 3px; background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); font: inherit; text-align: left; cursor: pointer; }
+			.at-agentbubble:hover { border-color: var(--dsw-alias-state-business-primary); }
+			.at-agentbubbleno { flex: 0 0 auto; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+			.at-agentbubbletext { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 			.at-memberviewhead { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--dsw-alias-border-l1); }
 			.at-memberviewid { display: flex; flex-direction: column; min-width: 0; flex: 1 1 180px; }
 			.at-memberviewid strong { font-size: 15px; line-height: 22px; }
@@ -1065,6 +1105,8 @@ window.__ModuleLoader__.load({
 			.at-workspacepath { flex: 1 1 auto; min-width: 0; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 			.at-workspacebtn { flex: 0 0 auto; padding: 2px 7px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; }
 			.at-workspacebtn:hover { color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-label-tertiary); }
+			.at-pmobtn { flex: 0 0 auto; padding: 2px 7px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; white-space: nowrap; }
+			.at-pmobtn.at-pmo-on { color: var(--dsw-alias-state-success-primary); border-color: var(--dsw-alias-state-success-primary); }
 			.at-tabs { display: flex; gap: 4px; margin-top: 8px; border-bottom: 1px solid var(--dsw-alias-border-l1); }
 			.at-tab { min-height: 36px; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
 			.at-tab:hover { color: var(--dsw-alias-label-primary); }
@@ -1504,6 +1546,15 @@ window.__ModuleLoader__.load({
 				));
 		}
 
+		function ToastStack({ t, toasts, onClose }) {
+			if (toasts.length === 0) return null;
+			return h('div', { className: 'at-toaststack', role: 'status', 'aria-live': 'polite' },
+				toasts.map((toast) => h('div', { className: 'at-toast', key: toast.id },
+					h('span', { className: 'at-toasticon', 'aria-hidden': 'true' }, h(Ico, { name: 'inbox', size: 13 })),
+					h('span', { className: 'at-toasttext' }, toast.text),
+					h('button', { className: 'at-toastclose', type: 'button', 'aria-label': t('notifyClose'), onClick: () => onClose(toast.id) }, '×'))));
+		}
+
 		function EmptyState({ t, icon, title, body, action, compact }) {
 			return h('div', { className: cx('at-empty', compact && 'at-empty-compact'), role: 'status' },
 				icon ? h('span', { className: 'at-emptyicon', 'aria-hidden': 'true' }, h(Ico, { name: icon, size: 28 })) : null,
@@ -1723,6 +1774,7 @@ window.__ModuleLoader__.load({
 		}
 
 		function MemberView({ t, agent, tasks, onBack, onOpenTask, onOpenChat, onOpenProfile }) {
+			const recentTasks = tasks.slice().sort((left, right) => (right.number ?? 0) - (left.number ?? 0)).slice(0, 3);
 			return h('div', { className: 'at-memberview' },
 				h('div', { className: 'at-memberviewhead' },
 					h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: onBack }, '← ' + t('back')),
@@ -1733,6 +1785,13 @@ window.__ModuleLoader__.load({
 					h('div', { className: 'at-memberviewactions' },
 						h('button', { className: 'at-btn at-btn-small at-btn-primary', type: 'button', onClick: () => onOpenChat(agent) }, t('agentChat')),
 						h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => onOpenProfile(agent) }, t('memberProfileTitle')))),
+				recentTasks.length ? h('div', { className: 'at-agentbubbles', role: 'status', 'aria-label': t('memberTasks') },
+					recentTasks.map((task) => h('button', {
+						key: task.id,
+						className: 'at-agentbubble',
+						type: 'button',
+						onClick: () => onOpenTask(task),
+					}, h('span', { className: 'at-agentbubbleno' }, '#' + taskNo(task)), h('span', { className: 'at-agentbubbletext' }, task.title), h(StatusPill, { t, status: task.status })))) : null,
 				h('div', { className: 'at-memberviewbody' },
 					h('div', { className: 'at-memberviewsub' }, t('memberTasks') + ' · ' + tasks.length),
 					tasks.length
@@ -2209,6 +2268,7 @@ window.__ModuleLoader__.load({
 			const [qaChecklistText, setQaChecklistText] = React.useState('');
 			const [draft, setDraft] = React.useState('');
 			const [note, setNote] = React.useState('');
+			const [toasts, setToasts] = React.useState([]);
 			const [rightNote, setRightNote] = React.useState('');
 			const [reply, setReply] = React.useState('');
 			const [follows, setFollows] = React.useState({});
@@ -2304,7 +2364,14 @@ window.__ModuleLoader__.load({
 				const source = typeof EventSource === 'function'
 					? new EventSource('/ai-team/api/projects/' + encodeURIComponent(projectId || 'prj_main') + '/events')
 					: null;
-				if (source) source.addEventListener('change', () => { if (alive) load(); });
+				if (source) source.addEventListener('change', (raw) => {
+					if (!alive) return;
+					try {
+						const frame = JSON.parse(raw.data);
+						pushToast(notificationText(frame?.event));
+					} catch { /* malformed frame ignored */ }
+					load();
+				});
 				return () => {
 					alive = false;
 					if (controller) controller.abort();
@@ -2406,6 +2473,27 @@ window.__ModuleLoader__.load({
 
 			function say(text) { setNote(text); }
 			function sayRight(text) { setRightNote(text); }
+			function pushToast(text) {
+				if (!text) return;
+				const id = Date.now() + ':' + Math.random().toString(36).slice(2, 6);
+				setToasts((prev) => [...prev.slice(-3), { id, text }]);
+				setTimeout(() => setToasts((prev) => prev.filter((toast) => toast.id !== id)), 7000);
+			}
+			function notificationText(event) {
+				if (!event) return '';
+				switch (event.type) {
+					case 'task/created': return t('notifyTaskCreated');
+					case 'task/claimed': return t('notifyTaskClaimed');
+					case 'task/submitted': return t('notifyTaskSubmitted');
+					case 'task/accepted': return t('notifyTaskAccepted');
+					case 'task/changes-requested': return t('notifyTaskChanges');
+					case 'thread/posted': return t('notifyThread');
+					case 'inbox/item-created': return t('notifyInbox');
+					case 'wake/delivered': return t('notifyWake');
+					case 'stream/posted': return t('notifyStream');
+					default: return '';
+				}
+			}
 			async function toggleFollow(card) {
 				if (!card) return;
 				const next = !followingOf(card);
@@ -2507,6 +2595,16 @@ window.__ModuleLoader__.load({
 				setNWorkspace('');
 				setNError('');
 				setNewOpen(true);
+			}
+			async function togglePmo() {
+				if (!project) return;
+				try {
+					await runCommand('project.pmo.update', { pmoAuto: project.pmoAuto === false }, project.id);
+					say(project.pmoAuto === false ? t('pmoEnabled') : t('pmoDisabled'));
+					await reloadData();
+				} catch (error) {
+					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
 			}
 			async function pickWorkspacePath() {
 				const service = ctx?.get?.('uiWorkspace') ?? ctx?.uiWorkspace;
@@ -3231,6 +3329,7 @@ window.__ModuleLoader__.load({
 						h('summary', { className: 'at-mobilesummary', 'aria-label': t('menuAria') }, h(Ico, { name: 'menu', size: 14 }), h('span', null, t('menu'))),
 						h('div', { className: 'at-mobilepop' }, h(LeftPanel, leftProps))),
 					h('span', { className: 'at-topproject', title: headerTitle }, inInbox ? t('inboxTitle') + (unread ? ' · ' + unread : '') : (project?.name ?? ''))),
+				h(ToastStack, { t, toasts, onClose: (id) => setToasts((prev) => prev.filter((toast) => toast.id !== id)) }),
 				h('div', { className: cx('at-grid', threadOpen && selectedTask && 'at-withthread') },
 					h('aside', { className: 'at-left', role: 'region', 'aria-label': t('projectsAria') }, h(LeftPanel, leftProps)),
 					h('main', { className: 'at-center' },
@@ -3240,7 +3339,14 @@ window.__ModuleLoader__.load({
 							!inInbox && project ? h('div', { className: 'at-workspacebar' },
 								h('span', { className: 'at-workspacepath', title: project.workspacePath || t('workspaceHint') },
 									project.workspacePath ? t('workspace') + '：' + project.workspacePath : t('workspaceUnset')),
-								h('button', { className: 'at-workspacebtn', type: 'button', onClick: openWorkspaceEditor }, project.workspacePath ? t('workspaceChange') : t('workspaceChoose'))) : null,
+								h('button', { className: 'at-workspacebtn', type: 'button', onClick: openWorkspaceEditor }, project.workspacePath ? t('workspaceChange') : t('workspaceChoose')),
+								h('button', {
+									className: cx('at-pmobtn', project.pmoAuto !== false && 'at-pmo-on'),
+									type: 'button',
+									title: t('pmoHint'),
+									'aria-pressed': project.pmoAuto !== false,
+									onClick: togglePmo,
+								}, project.pmoAuto !== false ? t('pmoOn') : t('pmoOff'))) : null,
 							inInbox ? null : h('div', { className: 'at-tabs', role: 'tablist', 'aria-label': t('tabsAria'), onKeyDown: tabKeyDown },
 								h('button', {
 									className: cx('at-tab', tab === 'main' && 'at-on'),

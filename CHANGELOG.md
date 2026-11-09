@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.34 — 2026-11-10
+
+- 新增 Project 级 PMO 全自动开关，默认开启；关闭后决策回到收件箱；
+- PMO 每 60s 检查：未读结构化决策按最高价值建议自动决策，不需要 Human 再确认；
+- 无 active Task 时自动唤醒 Project owner 续派下一批 Task，避免「全部完成但停住」；
+- PMO 自动决策写入 Task Thread，author=mem_pmo，并唤醒 owner/assignee；
+- 插件新增状态变化 toast 气泡；成员视图新增最近 Task 状态气泡。
+
 ## 0.3.33 — 2026-11-10
 
 - 看板「需要你」的收件箱数量改为统计真实未读决策项，不再受 Q1 items 最多 5 条的限制，也不再混入进度汇报；
