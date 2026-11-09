@@ -4,6 +4,8 @@
 
 - SkillOpt 完全内置：7 个 `skillopt_*` 工具、Python engine bootstrap、`skillopt-sleep` 技能随插件分发，不再装到用户 DSH；
 - 冷恢复重新 mount member preset，修复重启后 `pwsh/read/write` 工具消失；
+- 失败决策自动带 taskId；跨 Project 收件箱可一键打开 Task；
+- 双真实 provider SSE：DeepSeek 与 Zhipu 各自项目独立分桶；
 - 测试 82 条。
 
 ## 0.3.0 — 2026-11-09

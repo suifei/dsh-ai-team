@@ -9,3 +9,6 @@ AGENTS.md
 ml-msg.txt
 .ptc/
 docs/assets/reference/
+
+__pycache__/
+*.pyc
