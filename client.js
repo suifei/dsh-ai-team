@@ -195,6 +195,11 @@ window.__ModuleLoader__.load({
 			memberRole: '职责',
 			memberPrompt: '初始指令（可选）',
 			memberPromptHint: '例如：任务 #1 已待验收，读 tasks 后独立验收。',
+			memberPreset: '运行配方',
+			presetStandard: '标准模式',
+			presetPtc: 'PTC 模式',
+			presetMinimal: '极简模式',
+			presetCordis: '创造模式',
 			memberProvider: 'Provider',
 			memberModel: '模型',
 			memberOwner: '设为 Project owner',
@@ -458,6 +463,11 @@ window.__ModuleLoader__.load({
 			memberRole: 'Role',
 			memberPrompt: 'Initial instruction (optional)',
 			memberPromptHint: 'e.g. Task #1 is awaiting acceptance; read tasks and review it independently.',
+			memberPreset: 'Recipe',
+			presetStandard: 'Standard',
+			presetPtc: 'PTC',
+			presetMinimal: 'Minimal',
+			presetCordis: 'Creative',
 			memberProvider: 'Provider',
 			memberModel: 'Model',
 			memberOwner: 'Make Project owner',
@@ -1866,6 +1876,7 @@ window.__ModuleLoader__.load({
 			const [pName, setPName] = React.useState('');
 			const [pRole, setPRole] = React.useState('');
 			const [pPersonality, setPPersonality] = React.useState('');
+			const [pPreset, setPPreset] = React.useState('standard');
 			const [pProvider, setPProvider] = React.useState('');
 			const [pModel, setPModel] = React.useState('');
 			const [pMaxTokens, setPMaxTokens] = React.useState('');
@@ -2206,6 +2217,7 @@ window.__ModuleLoader__.load({
 				setPName(agent.name ?? '');
 				setPRole(agent.role ?? '');
 				setPPersonality(agent.personality ?? '');
+				setPPreset(agent.preset ?? agent.config?.preset ?? 'standard');
 				setPProvider(agent.config?.provider ?? '');
 				setPModel(agent.config?.model ?? '');
 				setPMaxTokens(agent.config?.maxTokens ?? '');
@@ -2230,6 +2242,7 @@ window.__ModuleLoader__.load({
 					});
 					const config = profileAgent.config ?? {};
 					const patch = {};
+					if (pPreset !== (config.preset ?? profileAgent.preset ?? 'standard')) patch.preset = pPreset;
 					if (pProvider.trim() !== (config.provider ?? '')) patch.provider = pProvider.trim();
 					if (pModel.trim() !== (config.model ?? '')) patch.model = pModel.trim();
 					const maxTokens = Number(pMaxTokens);
@@ -2782,6 +2795,12 @@ window.__ModuleLoader__.load({
 							h('label', { className: 'at-field' }, h('span', null, t('memberPersonality')),
 								h('textarea', { value: pPersonality, onChange: (event) => setPPersonality(event.target.value) })),
 							h('div', { className: 'at-fieldrow' },
+								h('label', { className: 'at-field' }, h('span', null, t('memberPreset')),
+									h('select', { value: pPreset, onChange: (event) => setPPreset(event.target.value) },
+										h('option', { value: 'standard' }, t('presetStandard')),
+										h('option', { value: 'ptc' }, t('presetPtc')),
+										h('option', { value: 'minimal' }, t('presetMinimal')),
+										h('option', { value: 'cordis' }, t('presetCordis')))),
 								h('label', { className: 'at-field' }, h('span', null, t('memberProvider')),
 									h('input', { value: pProvider, onChange: (event) => setPProvider(event.target.value), placeholder: 'deepseek-account' })),
 								h('label', { className: 'at-field' }, h('span', null, t('memberModel')),

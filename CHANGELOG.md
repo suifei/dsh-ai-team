@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.5 — 2026-11-09
+
+- 成员 config 新增 `preset`：`standard / ptc / minimal / cordis`，默认 `standard`；
+- 资料抽屉可选择运行配方；
+- 激活时 mount 对应 preset，未知配方被校验拒绝。
+
 ## 0.2.4 — 2026-11-09
 
 - 修复成员工具链：`agents.create` 的 setup 里 mount `standard` preset，成员获得 pwsh/read/write/edit/skill 等完整工具；

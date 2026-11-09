@@ -49,9 +49,12 @@ test('member config validates model, context, fallback and budgets', () => {
 		fallback: [{ provider: 'deepseek', model: 'deepseek-reasoner' }],
 		retry: { maxAttempts: 3 },
 	});
+	assert.equal(config.preset, 'standard');
 	assert.equal(config.retry.maxAttempts, 3);
 	assert.equal(config.fallback.length, 1);
+	assert.equal(normalizeMemberConfig({ preset: 'ptc' }).preset, 'ptc');
 	assert.deepEqual(buildAgentOptions(config), { provider: 'deepseek', model: 'deepseek-chat', maxTokens: 8192 });
+	assert.throws(() => normalizeMemberConfig({ preset: 'turbo' }), DomainError);
 	assert.throws(() => normalizeMemberConfig({ fallback: [1, 2, 3, 4] }), DomainError);
 	assert.throws(() => normalizeMemberConfig({ contextWindow: 100 }), DomainError);
 	assert.throws(() => normalizeMemberConfig({ compactionThreshold: 1.2 }), DomainError);
