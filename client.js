@@ -2972,8 +2972,31 @@ window.__ModuleLoader__.load({
 								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: nBusy || !nName.trim() }, nBusy ? t('saving') : t('projectCreate'))))) : null));
 		}
 
+		function PavilionMark({ size = 18 }) {
+			return h('svg', {
+				width: size,
+				height: size,
+				viewBox: '0 0 64 64',
+				'aria-hidden': 'true',
+				focusable: 'false',
+			},
+				h('circle', { cx: 32, cy: 32, r: 31, fill: '#17263A' }),
+				h('circle', { cx: 32, cy: 32, r: 28, fill: 'none', stroke: '#D4AF37', strokeWidth: 1, opacity: 0.55 }),
+				h('path', { d: 'M23 21 L32 15 L41 21 Z', fill: '#D4AF37' }),
+				h('path', { d: 'M20 23 L44 23', stroke: '#D4AF37', strokeWidth: 2, strokeLinecap: 'round' }),
+				h('path', { d: 'M19 28 L32 23 L45 28 Z', fill: '#D4AF37' }),
+				h('path', { d: 'M16 30 L48 30', stroke: '#D4AF37', strokeWidth: 2, strokeLinecap: 'round' }),
+				h('path', { d: 'M22 31 V42 M28 31 V42 M36 31 V42 M42 31 V42', stroke: '#D4AF37', strokeWidth: 2, strokeLinecap: 'round' }),
+				h('path', { d: 'M19 43 H45', stroke: '#D4AF37', strokeWidth: 2, strokeLinecap: 'round' }),
+				h('path', { d: 'M17 46 H47', stroke: '#D4AF37', strokeWidth: 2, strokeLinecap: 'round' }),
+				h('path', { d: 'M21 49 H43', stroke: '#D4AF37', strokeWidth: 1.5, strokeLinecap: 'round', opacity: 0.7 }),
+				h('path', { d: 'M15 54 Q21 51 27 54 T39 54 T51 54', stroke: '#D4AF37', strokeWidth: 1.5, fill: 'none', strokeLinecap: 'round', opacity: 0.85 }),
+				h('path', { d: 'M19 57 Q25 54 31 57 T43 57', stroke: '#D4AF37', strokeWidth: 1.5, fill: 'none', strokeLinecap: 'round', opacity: 0.5 }),
+				h('rect', { x: 29, y: 33, width: 6, height: 7, rx: 1, fill: '#C0392B' }));
+		}
+
 		function PanelIcon() {
-			return h('span', { style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'inherit' } }, h(Ico, { name: 'loop' }));
+			return h('span', { style: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: 'inherit' } }, h(PavilionMark, { size: 18 }));
 		}
 
 		function apply(ctx) {
