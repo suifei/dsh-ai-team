@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.41 — 2026-11-10
+
+- Agent 切换到新 Task 时启动**任务级 session**，标题为 `#N 任务名`；同一 Task 复用同一 session；
+- 不再把旧 Task 的 session 改名复用，减少会话串线与无意义标题；
+- 启动时把 active Task 的 assignee session 标题同步为任务名。
+
 ## 0.3.40 — 2026-11-10
 
 - Agent session 标题按当前 Task 命名（`#N 任务名`），不再显示“你是 XX（执行）”这类首轮 prompt；

@@ -34,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.40';
+const VERSION = '0.3.41';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -141,6 +141,7 @@ export function apply(ctx) {
 				return null;
 			}
 		};
+		const taskSessionTitle = (task) => `#${task?.number ?? '?'} ${task?.title ?? ''}`.trim().slice(0, 120);
 		const titleMemberSession = async (projectRuntime, member, taskId) => {
 			if (member === undefined || typeof taskId !== 'string') return;
 			const task = projectRuntime?.service?.state?.tasks?.[taskId];
@@ -149,9 +150,8 @@ export function apply(ctx) {
 			const titleService = ctx.get('sessionTitle');
 			const session = sessions?.get?.(member.sessionId);
 			if (session === undefined || session === null || typeof titleService?.rename !== 'function') return;
-			const title = `#${task.number ?? '?'} ${task.title ?? taskId}`.slice(0, 120);
 			try {
-				titleService.rename(session, title);
+				titleService.rename(session, taskSessionTitle(task));
 			} catch (error) {
 				console.warn('[ai-team] session title failed:', error?.message ?? error);
 			}
@@ -331,19 +331,40 @@ export function apply(ctx) {
 						member = projectRuntime.service.state.members?.[member.id] ?? member;
 						await titleMemberSession(projectRuntime, member, plan.taskId);
 					} else {
-						await titleMemberSession(projectRuntime, member, plan.taskId);
-						const runtime = new MemberRuntime({
-							subagents, sessions, permissionPresets, sandboxPolicy,
-							agents: ctx.get('agents'),
-							agentPresets: ctx.get('agentPresets'),
-							direct: true,
-							parent: parentInfo.agent,
-							provider: providers[0],
-							preset: 'standard',
-							cwd,
-						});
-						const delivered = await runtime.wake(member, { prompt: await wakePrompt(plan, member) });
-						messageId = delivered.messageId ?? null;
+						const titleService = ctx.get('sessionTitle');
+						const liveSession = sessions.get?.(member.sessionId);
+						const task = plan.taskId === null ? undefined : projectRuntime.service.state.tasks?.[plan.taskId];
+						const targetTitle = task === undefined ? null : taskSessionTitle(task);
+						const currentTitle = targetTitle === null || liveSession === undefined || liveSession === null || typeof titleService?.get !== 'function'
+							? null
+							: titleService.get(liveSession)?.title ?? null;
+						if (targetTitle !== null && currentTitle !== null && currentTitle !== targetTitle) {
+							// The member is moving to another Task: start a task-scoped session
+							// instead of renaming/reusing the previous Task's conversation.
+							const activated = await activateMember({
+								payload: { memberId: member.id, prompt: await wakePrompt(plan, member), force: true },
+							}, projectRuntime);
+							if (activated.error !== undefined) {
+								throw Object.assign(new Error(activated.error.message), { code: activated.error.code });
+							}
+							messageId = activated.messageId ?? null;
+							member = projectRuntime.service.state.members?.[member.id] ?? member;
+							await titleMemberSession(projectRuntime, member, plan.taskId);
+						} else {
+							await titleMemberSession(projectRuntime, member, plan.taskId);
+							const runtime = new MemberRuntime({
+								subagents, sessions, permissionPresets, sandboxPolicy,
+								agents: ctx.get('agents'),
+								agentPresets: ctx.get('agentPresets'),
+								direct: true,
+								parent: parentInfo.agent,
+								provider: providers[0],
+								preset: 'standard',
+								cwd,
+							});
+							const delivered = await runtime.wake(member, { prompt: await wakePrompt(plan, member) });
+							messageId = delivered.messageId ?? null;
+						}
 					}
 					await projectRuntime.service.recordWake(plan.memberId, {
 						ok: true, taskId: plan.taskId, reason: plan.reason, messageId,
@@ -544,7 +565,7 @@ export function apply(ctx) {
 			const member = projectRuntime.service.state.members?.[body.payload?.memberId];
 			if (member === undefined) return { error: { code: 'E_NOT_FOUND', message: 'member not found' }, status: 404 };
 			if (member.status === 'retired') return { error: { code: 'E_INVALID_STATE', message: 'member is retired' }, status: 409 };
-			if (member.status === 'running') return { error: { code: 'E_INVALID_STATE', message: 'member is already running' }, status: 409 };
+			if (member.status === 'running' && body.payload?.force !== true) return { error: { code: 'E_INVALID_STATE', message: 'member is already running' }, status: 409 };
 			const subagents = ctx.get('subagents');
 			const sessions = ctx.get('sessions');
 			const permissionPresets = ctx.get('permissionPresets');
