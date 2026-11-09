@@ -124,6 +124,7 @@ test('TeamService drives a real ledger from project setup to accepted task and t
 			Object.values(service.state.inbox ?? {}).some((item) => item.memberId === 'h1' && item.ref?.taskId === taskId && item.ref?.entrySeq === mention.entry.seq),
 			true,
 		);
+		assert.equal(await service.backfillHumanMentions(), 0);
 
 		const accepted = await service.dispatch({
 			type: 'task.accept',

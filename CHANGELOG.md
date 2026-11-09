@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.18 — 2026-11-10
+
+- 打开 Project 时回填已有 Thread 中对 Human 的拍板请求到收件箱；
+- 修复升级前已有的“Thread 里等 Human 决定，但收件箱为空”。
+
 ## 0.3.17 — 2026-11-10
 
 - Thread 中 Agent 明确提到 Human / 请你拍板时，自动创建 Human 决策收件箱项；
