@@ -15,9 +15,17 @@ test('TeamService drives a real ledger from project setup to accepted task and t
 	const ledger = openLedger({ dir: join(root, 'ledger'), projectId: 'prj_test', fsync: false });
 	const service = new TeamService({ ledger });
 	try {
-		await service.dispatch({ type: 'member.add', actor: human, payload: { name: 'Human', kind: 'human' } });
-		await service.dispatch({ type: 'member.add', actor: human, payload: { name: '沈舟', kind: 'agent', role: '架构' } });
-		await service.dispatch({ type: 'member.add', actor: human, payload: { name: '林岚', kind: 'agent', role: '验收' } });
+		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'h1', name: 'Human', kind: 'human' } });
+		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'a1', name: '沈舟', kind: 'agent', role: '架构' } });
+		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'a2', name: '林岚', kind: 'agent', role: '验收' } });
+		const bound = await service.dispatch({
+			type: 'member.bind',
+			actor: human,
+			payload: { memberId: 'a1', sessionId: 'session-a1' },
+		});
+		assert.equal(bound.member.status, 'running');
+		assert.equal(service.state.members.a1.sessionId, 'session-a1');
+		assert.equal(service.state.members.a1.status, 'running');
 		await service.dispatch({
 			type: 'project.create',
 			actor: human,
@@ -93,6 +101,13 @@ test('TeamService drives a real ledger from project setup to accepted task and t
 		assert.equal(converted.task.originRefs.length, 1);
 		assert.equal(service.state.tasks[converted.task.id].originRefs.length, 1);
 		assert.deepEqual(service.state.followers, {});
+
+		const failed = await service.dispatch({ type: 'member.fail', actor: human, payload: { memberId: 'a2', reason: 'session lost' } });
+		assert.equal(failed.member.status, 'failed');
+		assert.equal(service.state.members.a2.failure, 'session lost');
+		const retired = await service.dispatch({ type: 'member.retire', actor: human, payload: { memberId: 'a2' } });
+		assert.equal(retired.member.status, 'retired');
+		assert.equal(service.state.members.a2.status, 'retired');
 	} finally {
 		ledger.close();
 		await rm(root, { recursive: true, force: true });

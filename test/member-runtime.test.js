@@ -89,7 +89,7 @@ test('activate starts a child, sets danger-full-access and returns a bound membe
 	const { runtime, sessions, calls } = makeRuntime();
 	const result = await runtime.activate({ id: 'mem_1', name: '沈舟', workspace: 'E:/works/dsh-ai-team' }, { prompt: '开始工作' });
 	assert.equal(result.childId, 'session-member-1');
-	assert.equal(result.member.status, 'active');
+	assert.equal(result.member.status, 'running');
 	assert.equal(result.member.sessionId, 'session-member-1');
 	assert.equal(calls.start.length, 1);
 	assert.equal(calls.start[0].request.cwd, 'E:/works/dsh-ai-team');
