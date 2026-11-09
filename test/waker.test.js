@@ -55,7 +55,7 @@ test('restart resumes unfinished Tasks once without timers', () => {
 test('PMO review nudge wakes every QA member for a pending Task', () => {
 	const reviewState = {
 		...state,
-		members: { ...state.members, a4: { id: 'a4', name: '白砚', kind: 'agent', status: 'idle', qa: true } },
+		members: { ...state.members, a4: { id: 'a4', name: '白砚', kind: 'agent', status: 'idle', role: '验收' } },
 	};
 	const plans = planWakes(reviewState, { event: { type: 'pmo/review', payload: { taskId: 't2', bucket: 42 } } }, {});
 	assert.deepEqual(plans.map((item) => [item.memberId, item.reason]), [['a4', 'pmo_review']]);

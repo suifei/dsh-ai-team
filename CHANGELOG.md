@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.47 — 2026-11-10
+
+- 修复 PMO review nudge 使用 `member.qa` 判断、真实账本 QA 成员用 role 表示导致永远不唤醒白砚的问题；
+- 改为统一使用 `isQaMember`，并补 role=验收 的测试。
+
 ## 0.3.46 — 2026-11-10
 
 - 验收催办时钟改用 Task 提交时间，assignee 在 Thread 继续发言不会再掩盖 QA 静默；
