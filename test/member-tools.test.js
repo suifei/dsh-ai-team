@@ -86,6 +86,9 @@ test('the team tool reads, claims, submits, threads and accepts through real Tea
 		const skill = await tool.execute({ action: 'skill', skill: 'nuwa-skill' }, exec('s1'));
 		assert.equal(skill.ok, true);
 		assert.deepEqual(skill.member.skills, ['nuwa-skill']);
+		const recall = await tool.execute({ action: 'recall', query: 'Thread' }, exec('s1'));
+		assert.equal(recall.ok, true);
+		assert.ok(recall.hits.some((hit) => hit.kind === 'note' && hit.text.includes('Thread')));
 		const distilled = await tool.execute({
 			action: 'distill', memberId: 'a2', personality: '复核证据优先，先跑门禁。', reason: 'Lead distill',
 		}, exec('s1'));
