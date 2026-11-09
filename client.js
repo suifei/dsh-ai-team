@@ -588,6 +588,10 @@ window.__ModuleLoader__.load({
 			conversationMock: 'spike: this host has no working layout.selectPanel(conversation).',
 			discussSent: 'Sent to the Project owner.',
 			taskSent: 'Task created.',
+			duplicateTask: 'An identical Task already exists (#{number}); opened it instead.',
+			qaNeedsChecklist: 'A QA Task needs at least one checklist item.',
+			duplicateTask: '相同 Task 已存在（#{number}），已为你打开它。',
+			qaNeedsChecklist: 'QA Task 至少需要一条验收清单。',
 			sendFailed: 'Send failed: {message}',
 			pendingHuman: 'Needs you',
 			inboxUnread: 'Inbox, {n} unread',
@@ -2513,7 +2517,12 @@ window.__ModuleLoader__.load({
 					body: JSON.stringify({ type, payload }),
 				});
 				const body = await response.json().catch(() => null);
-				if (!response.ok) throw new Error(body?.error?.message ?? ('HTTP ' + response.status));
+				if (!response.ok) {
+					const error = new Error(body?.error?.message ?? ('HTTP ' + response.status));
+					error.code = body?.error?.code;
+					error.details = body?.error?.details;
+					throw error;
+				}
 				return body;
 			}
 			function openAddAgent() {
@@ -2820,7 +2829,15 @@ window.__ModuleLoader__.load({
 					say(mode === 'task' ? t('taskSent') : t('discussSent'));
 					await reloadData();
 				} catch (error) {
-					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+					if (error?.code === 'E_CONFLICT' && error.details?.taskId) {
+						setSelected(error.details.taskId);
+						setThreadOpen(true);
+						say(tf(t, 'duplicateTask', { number: error.details.number ?? '' }));
+					} else if (error?.message?.includes('qaChecklist')) {
+						say(t('qaNeedsChecklist'));
+					} else {
+						say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+					}
 				}
 			}
 			async function sendReply() {

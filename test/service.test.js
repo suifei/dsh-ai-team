@@ -10,6 +10,58 @@ const human = { kind: 'human', memberId: 'h1' };
 const a1 = { kind: 'agent', memberId: 'a1' };
 const a2 = { kind: 'agent', memberId: 'a2' };
 
+test('TeamService blocks duplicate tasks and a second claim while QA is pending', async () => {
+	const root = await mkdtemp(join(tmpdir(), 'ai-team-guards-'));
+	const ledger = openLedger({ dir: join(root, 'ledger'), projectId: 'prj_guard', fsync: false });
+	const service = new TeamService({ ledger });
+	try {
+		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'h1', name: 'Human', kind: 'human' } });
+		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'a1', name: '执行', kind: 'agent' } });
+		await service.dispatch({ type: 'member.bind', actor: human, payload: { memberId: 'a1', sessionId: 's1' } });
+		await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'Guard', ownerId: 'a1' } });
+		const first = await service.dispatch({
+			type: 'task.create', actor: human, projectId: 'prj_guard',
+			payload: { title: 'T1', resultDefinition: 'done', ownerId: 'a1', assigneeId: 'a1' },
+		});
+		const claimed = await service.dispatch({
+			type: 'task.claim', actor: a1, projectId: 'prj_guard',
+			payload: { taskId: first.task.id, expectedRevision: first.task.revision },
+		});
+		await service.dispatch({
+			type: 'task.submit', actor: a1, projectId: 'prj_guard',
+			payload: { taskId: first.task.id, expectedRevision: claimed.task.revision, summary: 'ok', evidence: ['e'] },
+		});
+		const second = await service.dispatch({
+			type: 'task.create', actor: human, projectId: 'prj_guard',
+			payload: { title: 'T2', resultDefinition: 'done', ownerId: 'a1', assigneeId: 'a1' },
+		});
+		await assert.rejects(
+			() => service.dispatch({ type: 'task.claim', actor: a1, projectId: 'prj_guard', payload: { taskId: second.task.id, expectedRevision: second.task.revision } }),
+			(error) => error.code === 'E_CONFLICT' && error.message.includes('awaiting acceptance'),
+		);
+		await service.dispatch({
+			type: 'task.accept', actor: human, projectId: 'prj_guard',
+			payload: { taskId: first.task.id, expectedRevision: service.state.tasks[first.task.id].revision, note: 'accepted' },
+		});
+		const claimedSecond = await service.dispatch({
+			type: 'task.claim', actor: a1, projectId: 'prj_guard',
+			payload: { taskId: second.task.id, expectedRevision: second.task.revision },
+		});
+		assert.equal(claimedSecond.task.status, 'in_progress');
+		await assert.rejects(
+			() => service.dispatch({ type: 'task.create', actor: human, projectId: 'prj_guard', payload: { title: 'T2', resultDefinition: 'done', ownerId: 'a1' } }),
+			(error) => error.code === 'E_CONFLICT' && error.message.includes('same title'),
+		);
+		await assert.rejects(
+			() => service.dispatch({ type: 'task.create', actor: human, projectId: 'prj_guard', payload: { title: 'QA', resultDefinition: 'done', ownerId: 'a1', qaRequired: true } }),
+			(error) => error.code === 'E_INVALID_ARGUMENT' && error.message.includes('qaChecklist'),
+		);
+	} finally {
+		ledger.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
 test('TeamService drives a real ledger from project setup to accepted task and thread', async () => {
 	const root = await mkdtemp(join(tmpdir(), 'ai-team-service-'));
 	const ledger = openLedger({ dir: join(root, 'ledger'), projectId: 'prj_test', fsync: false });

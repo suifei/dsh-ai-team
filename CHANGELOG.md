@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.26 — 2026-11-10
+
+- Task 创建增加重复保护：相同 title/resultDefinition/owner 的 active Task 会被拒绝并返回已有 Task；
+- 主对话「任务」模式收到重复错误时自动打开已有 Task，不再产生 #3/#4 这类重复卡；
+- `qaRequired=true` 但没有 qaChecklist 时拒绝创建，避免产生无法验收的 #4；
+- 成员有 `pending_acceptance` Task 时不能再 claim 下一张，阻止 T2/T3 在 T1 验收前提前开工；
+- `team() accept` 现在透传 checks，QA Agent 不再需要走 Human API。
+
 ## 0.3.25 — 2026-11-10
 
 - 收件箱未读数按 `state=unread` 统计，决策提交后「待你处理」立即消失；
