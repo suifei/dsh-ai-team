@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.4 — 2026-11-09
+
+- 修复成员工具链：`agents.create` 的 setup 里 mount `standard` preset，成员获得 pwsh/read/write/edit/skill 等完整工具；
+- 真实成员用 pwsh 写文件、用 skill 加载 DSH 技能并写结果；
+- 健康检查暴露 `presets` 与 `skillsService`。
+
 ## 0.2.3 — 2026-11-09
 
 - 成员 activation/wake 注入 DSH `skills` 目录摘要（名称/描述/何时用，最多 12 条）；

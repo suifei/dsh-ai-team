@@ -27,7 +27,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer'];
 
-const VERSION = '0.2.3';
+const VERSION = '0.2.4';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -197,9 +197,11 @@ export function apply(ctx) {
 				const runtime = new MemberRuntime({
 					subagents, sessions, permissionPresets, sandboxPolicy,
 					agents: ctx.get('agents'),
+					agentPresets: ctx.get('agentPresets'),
 					direct: true,
 					parent: parentInfo.agent,
 					provider: providers[0],
+					preset: 'standard',
 					cwd: member.workspace ?? booted.dataDir,
 				});
 				try {
@@ -361,9 +363,11 @@ export function apply(ctx) {
 					permissionPresets,
 					sandboxPolicy,
 					agents: ctx.get('agents'),
+					agentPresets: ctx.get('agentPresets'),
 					direct: true,
 					parent: parentInfo.agent,
 					provider: providers[0],
+					preset: 'standard',
 					cwd: member.workspace ?? booted.dataDir,
 				});
 				const result = await runtime.activate(activationMember, {
@@ -512,6 +516,7 @@ export function apply(ctx) {
 								}),
 								teamTool: ctx.get('tools')?.definitions?.().some((definition) => definition.name === 'team') ?? null,
 								skillsService: skillsService !== null && skillsService !== undefined,
+								presets: await Promise.resolve(ctx.get('agentPresets')?.list?.()).catch(() => []),
 								members: Object.values(booted.service.state.members ?? {})
 									.filter((member) => member.kind === 'agent')
 									.map((member) => {

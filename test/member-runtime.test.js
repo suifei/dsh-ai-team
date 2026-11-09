@@ -164,10 +164,13 @@ test('direct mode creates an Agent and starts it with followup', async () => {
 		followup: (message) => { followups.push(message.content[0].text); },
 	};
 	sessions.set('direct-1', agent.session);
+	const mounted = [];
 	const runtime = new MemberRuntime({
 		agents: {
 			create: async (options) => {
 				assert.equal(options.parentAgent.id, 'session-host');
+				assert.equal(options.meta.agentPreset, 'standard');
+				await options.setup?.({ id: 'agent-ctx' });
 				agent.id = options.sessionId;
 				agent.session.id = options.sessionId;
 				sessions.set(options.sessionId, agent.session);
@@ -175,6 +178,8 @@ test('direct mode creates an Agent and starts it with followup', async () => {
 			},
 			get: (id) => (id === agent.id ? agent : undefined),
 		},
+		agentPresets: { mount: async (agentCtx, preset) => { mounted.push([agentCtx.id, preset]); } },
+		preset: 'standard',
 		sessions: { get: (id) => sessions.get(id), flush: async () => true },
 		permissionPresets: { set: (session, name) => { session.sandbox = name; } },
 		sandboxPolicy: { overrideOf: (session) => session.sandbox },
@@ -185,6 +190,7 @@ test('direct mode creates an Agent and starts it with followup', async () => {
 	const result = await runtime.activate({ id: 'm1', name: '沈舟' }, { prompt: '开始' });
 	assert.equal(result.childId, agent.id);
 	assert.equal(result.member.status, 'running');
+	assert.deepEqual(mounted, [['agent-ctx', 'standard']]);
 	assert.equal(agent.session.sandbox, 'danger-full-access');
 	assert.deepEqual(followups, ['开始']);
 	await runtime.wake({ id: 'm1', name: '沈舟', sessionId: agent.id }, { prompt: '继续' });
