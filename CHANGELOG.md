@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.9 — 2026-11-09
+
+- 图标改为极简线条：重檐 + 出檐 + 立柱 + 渊水，侧栏与市场图标统一；
+- awesome-dsh-plugin 分类改为 `agi`（AGI 架构探索）。
+
 ## 0.3.8 — 2026-11-09
 
 - 收件箱「对话」返回改为文渊阁内部主对话，不再依赖宿主 `layout.selectPanel(conversation)`；
