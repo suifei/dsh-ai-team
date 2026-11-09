@@ -18,6 +18,7 @@ import { ensureHostAgent } from './lib/runtime/host-agent.js';
 import { classifyLlmFailure, retryDecision } from './lib/runtime/failure-policy.js';
 import { memberIdentity } from './lib/domain/member-profile.js';
 import { loadSkillContext } from './lib/runtime/skill-loader.js';
+import { formatSkillCatalog } from './lib/runtime/skill-catalog.js';
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeWake, planWakes } from './lib/host/waker.js';
 
@@ -26,7 +27,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer'];
 
-const VERSION = '0.2.2';
+const VERSION = '0.2.3';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -203,7 +204,9 @@ export function apply(ctx) {
 				});
 				try {
 					const delivered = await runtime.wake(member, {
-						prompt: describeWake(plan, booted.service.state) + await loadSkillContext(member, booted.dataDir),
+						prompt: describeWake(plan, booted.service.state)
+							+ await formatSkillCatalog(skillsService, { cwd: member.workspace ?? undefined })
+							+ await loadSkillContext(member, booted.dataDir),
 					});
 					await booted.service.recordWake(plan.memberId, {
 						ok: true, taskId: plan.taskId, reason: plan.reason, messageId: delivered.messageId,
@@ -285,6 +288,7 @@ export function apply(ctx) {
 			return { ok: true, member: result.member, distilled: { provider: selection.provider, model: selection.model } };
 		};
 
+		const skillsService = ctx.get('skills');
 		const tools = ctx.get('tools');
 		const disposeTool = tools?.register
 			? tools.register(createTeamTool({
@@ -365,7 +369,7 @@ export function apply(ctx) {
 				const result = await runtime.activate(activationMember, {
 					prompt: `${memberIdentity(activationMember)}\n\n${typeof body.payload?.prompt === 'string'
 						? body.payload.prompt
-						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await loadSkillContext(activationMember, booted.dataDir)}`,
+						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: activationMember.workspace ?? undefined })}${await loadSkillContext(activationMember, booted.dataDir)}`,
 				});
 				let bound;
 				try {
@@ -507,6 +511,7 @@ export function apply(ctx) {
 									};
 								}),
 								teamTool: ctx.get('tools')?.definitions?.().some((definition) => definition.name === 'team') ?? null,
+								skillsService: skillsService !== null && skillsService !== undefined,
 								members: Object.values(booted.service.state.members ?? {})
 									.filter((member) => member.kind === 'agent')
 									.map((member) => {

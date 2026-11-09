@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.3 — 2026-11-09
+
+- 成员 activation/wake 注入 DSH `skills` 目录摘要（名称/描述/何时用，最多 12 条）；
+- 完整技能正文由成员自己的 `skill` 工具按需加载；
+- 保留 `<dataDir>/skills/<name>/SKILL.md` 有界注入。
+
 ## 0.2.2 — 2026-11-09
 
 - 多 Project 单活动切换：每 Project 独立 ledger，`projects.json` 索引；
