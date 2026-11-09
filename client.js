@@ -2532,7 +2532,12 @@ window.__ModuleLoader__.load({
 					return;
 				}
 				if (agent.sessionId) {
-					service.openSession(agent.sessionId);
+					try {
+						service.openSession(agent.sessionId);
+					} catch (error) {
+						say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+						openProfile(agent);
+					}
 					return;
 				}
 				try {
@@ -2923,7 +2928,7 @@ window.__ModuleLoader__.load({
 				onBoard: switchBoard,
 				onProject: switchProject,
 				onNewProject: () => { closeMobile(); openNewProject(); },
-				onAgent: (agent) => { closeMobile(); openMemberView(agent); },
+				onAgent: (agent) => { closeMobile(); void openAgentChat(agent); },
 				onAgentMore: (agent) => { closeMobile(); openProfile(agent); },
 				onAgentChat: (agent) => { closeMobile(); void openAgentChat(agent); },
 				onAddAgent: () => { closeMobile(); openAddAgent(); },
@@ -3214,6 +3219,7 @@ window.__ModuleLoader__.load({
 							pError ? h('div', { className: 'at-modalerror', role: 'alert' }, pError) : null,
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setProfileAgent(null), disabled: pBusy }, t('cancel')),
+								h('button', { className: 'at-btn', type: 'button', onClick: () => { const target = profileAgent; setProfileAgent(null); openMemberView(target); } }, t('memberTasks')),
 								h('button', { className: 'at-btn', type: 'button', onClick: () => { const target = profileAgent; setProfileAgent(null); void openAgentChat(target); } }, t('agentChat')),
 								h('button', { className: 'at-btn', type: 'button', onClick: leaveProfile, disabled: pBusy }, t('leaveTeam')),
 								profileAgent.status === 'failed' ? h('button', { className: 'at-btn', type: 'button', onClick: retryProfile, disabled: pBusy }, t('retry')) : null,
