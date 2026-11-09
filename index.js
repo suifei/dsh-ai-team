@@ -10,6 +10,7 @@
  */
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { ProjectRuntime } from './lib/host/project-runtime.js';
 import { ProjectRegistry } from './lib/host/project-registry.js';
 import { ids } from './lib/domain/ids.js';
@@ -20,6 +21,7 @@ import { memberIdentity } from './lib/domain/member-profile.js';
 import { loadSkillContext } from './lib/runtime/skill-loader.js';
 import { formatSkillCatalog } from './lib/runtime/skill-catalog.js';
 import { installFileSkillProvider } from './lib/runtime/skill-provider.js';
+import { apply as applySkillOpt } from './lib/vendor/skillopt/src/index.js';
 import { createMemberPermissionGuard } from './lib/host/permission-guard.js';
 import { installFaultAdapter } from './lib/host/fault-adapter.js';
 import { createTeamTool } from './lib/host/member-tools.js';
@@ -30,7 +32,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer'];
 
-const VERSION = '0.3.0';
+const VERSION = '0.3.1';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -324,8 +326,26 @@ export function apply(ctx) {
 		const disposeSkillProvider = installFileSkillProvider(skillsService, {
 			dshHome: dshHome(),
 			projectCwd: process.cwd(),
+			bundledDir: fileURLToPath(new URL('./', import.meta.url)),
 		});
 		const tools = ctx.get('tools');
+		let disposeSkillOpt = () => {};
+		try {
+			const shell = ctx.get('shell');
+			if (tools?.register && shell) {
+				disposeSkillOpt = applySkillOpt({
+					tools,
+					shell,
+					logger: console,
+				}, {
+					backend: 'mock',
+					project: process.cwd(),
+					timeoutMs: 120_000,
+				}) ?? (() => {});
+			}
+		} catch (error) {
+			console.warn('[ai-team] bundled SkillOpt tools failed:', error?.message ?? error);
+		}
 		const disposeTool = tools?.register
 			? tools.register(createTeamTool({
 				getState: (exec) => runtimeForAgent(exec?.agent?.id)?.service.state
@@ -607,6 +627,7 @@ export function apply(ctx) {
 								skillNames: skillsService?.list
 									? await Promise.resolve(skillsService.list({})).then((rows) => rows.map((skill) => skill.name)).catch(() => [])
 									: [],
+								skilloptTools: tools?.definitions?.().map((definition) => definition.name).filter((name) => name.startsWith('skillopt_')) ?? [],
 								presets: await Promise.resolve(ctx.get('agentPresets')?.list?.()).catch(() => []),
 								members: Object.values(booted.service.state.members ?? {})
 									.filter((member) => member.kind === 'agent')
@@ -861,6 +882,7 @@ export function apply(ctx) {
 			try { disposePermissionGuard(); } catch { /* already disposed */ }
 			try { offLlmFault(); } catch { /* already disposed */ }
 			try { disposeSkillProvider(); } catch { /* already disposed */ }
+			try { disposeSkillOpt(); } catch { /* already disposed */ }
 			offRequestError();
 			offSessionEvent();
 			disposeTool();

@@ -155,6 +155,35 @@ test('wake cold-resumes a member whose session is not live', async () => {
 	assert.equal(calls.set.length, 0, 'no live Session means no pre-delivery permission set');
 });
 
+test('direct cold resume mounts the member preset again', async () => {
+	const session = { id: 'cold-1', sandbox: 'workspace-write' };
+	const agent = { id: 'cold-1', session, followup: () => {} };
+	const mounted = [];
+	let resumeOptions = null;
+	const runtime = new MemberRuntime({
+		agents: {
+			get: () => undefined,
+			resume: async (options) => {
+				resumeOptions = options;
+				await options.setup?.({ id: 'cold-ctx' });
+				return { agent, dispose: async () => {} };
+			},
+		},
+		agentPresets: { mount: async (agentCtx, preset) => { mounted.push([agentCtx.id, preset]); } },
+		preset: 'standard',
+		sessions: { get: () => session, flush: async () => true },
+		permissionPresets: { set: (target, name) => { target.sandbox = name; } },
+		sandboxPolicy: { overrideOf: (target) => target.sandbox },
+		parent: { id: 'session-host' },
+		cwd: 'E:/works/dsh-ai-team',
+		direct: true,
+	});
+	await runtime.wake({ id: 'm1', name: '沈舟', sessionId: 'cold-1', config: { preset: 'standard' } }, { prompt: '继续' });
+	assert.equal(resumeOptions.parentAgent.id, 'session-host');
+	assert.deepEqual(mounted, [['cold-ctx', 'standard']]);
+	assert.equal(session.sandbox, 'danger-full-access');
+});
+
 test('direct mode creates an Agent and starts it with followup', async () => {
 	const sessions = new Map();
 	const followups = [];

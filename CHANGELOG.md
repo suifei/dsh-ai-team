@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1 — 2026-11-09
+
+- SkillOpt 完全内置：7 个 `skillopt_*` 工具、Python engine bootstrap、`skillopt-sleep` 技能随插件分发，不再装到用户 DSH；
+- 冷恢复重新 mount member preset，修复重启后 `pwsh/read/write` 工具消失；
+- 测试 82 条。
+
 ## 0.3.0 — 2026-11-09
 
 - 并发 ProjectRuntime：启动打开全部 Project，各自 ledger/Waker/SSE/Team 工具路由；

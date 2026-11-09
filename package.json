@@ -1,6 +1,6 @@
 {
   "name": "@suifei/dsh-ai-team",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "description": "AI Team mode for DeepSeek Harness — projects, owned tasks, threads, inbox and an append-only team ledger",
@@ -18,6 +18,11 @@
     "cordis.patch.yml",
     "icon.svg",
     "lib/**/*.js",
+    "lib/vendor/skillopt/scripts/**/*",
+    "lib/vendor/skillopt/skillopt_sleep/**/*",
+    "lib/vendor/skillopt/requirements.txt",
+    "lib/vendor/skillopt/LICENSE",
+    "skills/**/*",
     "README.md"
   ],
   "scripts": {
