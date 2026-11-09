@@ -8,11 +8,9 @@
  * The member runtime (real Agent sessions) lands in M2. Until then the
  * ledger/domain service is the only writer and the Host never fakes work.
  */
-import { mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { openLedger } from './lib/ledger/writer.js';
-import { TeamService } from './lib/host/service.js';
+import { ProjectRuntime } from './lib/host/project-runtime.js';
 import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-runtime.js';
 import { ensureHostAgent } from './lib/runtime/host-agent.js';
 import { classifyLlmFailure, retryDecision } from './lib/runtime/failure-policy.js';
@@ -76,37 +74,13 @@ function errorResponse(res, error) {
  */
 async function boot() {
 	const dataDir = join(dshHome(), 'ai-team', profileName());
-	const projectDir = join(dataDir, 'projects', PROJECT_ID);
-	mkdirSync(projectDir, { recursive: true });
-	const ledger = openLedger({ dir: projectDir, projectId: PROJECT_ID, fsync: true });
-	const service = new TeamService({ ledger });
-
-	const repairs = ledger.opened?.repairs ?? (ledger.opened?.repair ? [ledger.opened.repair] : []);
-	if (repairs.length > 0) {
-		await ledger.append({
-			type: 'ledger/repaired',
-			payload: { repairs },
-			actor: { kind: 'system' },
-			projectId: PROJECT_ID,
-		});
-	}
-
-	const state = service.state;
-	if (state.members?.[HUMAN_ID] === undefined) {
-		await service.dispatch({
-			type: 'member.add',
-			actor: { kind: 'human', memberId: HUMAN_ID },
-			payload: { id: HUMAN_ID, name: '你', kind: 'human', role: 'Human' },
-		});
-	}
-	if (state.projects?.[PROJECT_ID] === undefined) {
-		await service.dispatch({
-			type: 'project.create',
-			actor: { kind: 'human', memberId: HUMAN_ID },
-			payload: { name: '我的项目', goal: '把事交给团队', ownerId: HUMAN_ID },
-		});
-	}
-	return { ledger, service, dataDir };
+	const runtime = await ProjectRuntime.open({ rootDir: dataDir, projectId: PROJECT_ID });
+	return {
+		...runtime,
+		ledger: runtime.ledger,
+		service: runtime.service,
+		dataDir,
+	};
 }
 
 export function apply(ctx) {
