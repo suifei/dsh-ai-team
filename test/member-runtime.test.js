@@ -129,6 +129,15 @@ test('wake re-checks permission before sendMessage', async () => {
 	assert.equal(sessions.get('session-member-1').sandbox, TEAM_PRESET);
 });
 
+test('wake cold-resumes a member whose session is not live', async () => {
+	const { runtime, calls } = makeRuntime();
+	const result = await runtime.wake({ id: 'mem_1', name: '沈舟', sessionId: 'session-cold' }, { prompt: '继续' });
+	assert.equal(result.cold, true);
+	assert.equal(calls.send.length, 1);
+	assert.equal(calls.send[0].targetId, 'session-cold');
+	assert.equal(calls.set.length, 0, 'no live Session means no pre-delivery permission set');
+});
+
 test('missing parent/provider or session is rejected explicitly', async () => {
 	const { runtime } = makeRuntime();
 	await assert.rejects(

@@ -17,6 +17,7 @@ import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-r
 import { ensureHostAgent } from './lib/runtime/host-agent.js';
 import { classifyLlmFailure, retryDecision } from './lib/runtime/failure-policy.js';
 import { createTeamTool } from './lib/host/member-tools.js';
+import { describeWake, planWakes } from './lib/host/waker.js';
 
 export const name = 'ai-team';
 
@@ -178,6 +179,45 @@ export function apply(ctx) {
 			: () => {};
 		let host = null;
 		let hostPromise = null;
+		const wakeKeys = new Set();
+		const wakeFromResult = async (result, actor = {}) => {
+			if (booted === null) return;
+			const plans = planWakes(booted.service.state, result, actor);
+			if (plans.length === 0) return;
+			const subagents = ctx.get('subagents');
+			const sessions = ctx.get('sessions');
+			const permissionPresets = ctx.get('permissionPresets');
+			const sandboxPolicy = ctx.get('sandboxPolicy');
+			if (subagents === undefined || sessions === undefined || permissionPresets === undefined || sandboxPolicy === undefined) return;
+			const providers = typeof subagents.list === 'function' ? subagents.list() : [];
+			if (providers.length === 0) return;
+			const parentInfo = await ensureParent();
+			for (const plan of plans) {
+				if (wakeKeys.has(plan.key)) continue;
+				const member = booted.service.state.members?.[plan.memberId];
+				if (member?.sessionId === undefined || member.sessionId === null) continue;
+				const runtime = new MemberRuntime({
+					subagents, sessions, permissionPresets, sandboxPolicy,
+					parent: parentInfo.agent,
+					provider: providers[0],
+					cwd: member.workspace ?? booted.dataDir,
+				});
+				try {
+					const delivered = await runtime.wake(member, { prompt: describeWake(plan, booted.service.state) });
+					wakeKeys.add(plan.key);
+					await booted.service.recordWake(plan.memberId, {
+						ok: true, taskId: plan.taskId, reason: plan.reason, messageId: delivered.messageId,
+					});
+				} catch (error) {
+					console.warn('[ai-team] wake failed:', plan.memberId, error?.code ?? error?.message ?? error);
+					try {
+						await booted.service.recordWake(plan.memberId, {
+							ok: false, taskId: plan.taskId, reason: plan.reason, error: error?.code ?? error?.message ?? String(error),
+						});
+					} catch { /* ledger may be closed */ }
+				}
+			}
+		};
 		const tools = ctx.get('tools');
 		const disposeTool = tools?.register
 			? tools.register(createTeamTool({
@@ -192,12 +232,20 @@ export function apply(ctx) {
 		const ensureParent = async () => {
 			if (host !== null) return host;
 			if (hostPromise === null) {
+				const existingHost = booted?.service.state.hostSessionId;
 				hostPromise = ensureHostAgent({
 					agents: ctx.get('agents'),
 					agentDefaultModel: ctx.get('agentDefaultModel'),
 					workspaceRegistry: ctx.get('workspaceRegistry'),
 					cwd: booted?.dataDir ?? process.cwd(),
-				}).then((value) => { host = value; return value; }).catch((error) => {
+					resumeSessionId: existingHost,
+				}).then(async (value) => {
+					if (value.created === true && existingHost === undefined) {
+						await booted.service.bindHostSession(value.sessionId);
+					}
+					host = value;
+					return value;
+				}).catch((error) => {
 					hostPromise = null;
 					throw error;
 				});
@@ -405,6 +453,9 @@ export function apply(ctx) {
 							});
 							send(res, { ok: true, ...result });
 							broadcast(result.event);
+							void wakeFromResult(result, { agentId: HUMAN_ID }).catch((error) => {
+								console.warn('[ai-team] wake planner failed:', error?.message ?? error);
+							});
 							return;
 						} catch (error) {
 							return errorResponse(res, error);

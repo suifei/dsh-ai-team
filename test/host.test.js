@@ -59,6 +59,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 	const memberSessions = new Map();
 	const requestErrorListeners = [];
 	const sessionEventListeners = [];
+	const wakeCalls = [];
 	let toolRegistration = null;
 	const root = await mkdtemp(join(tmpdir(), 'ai-team-host-'));
 	const previousHome = process.env.DSH_HOME;
@@ -116,6 +117,10 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 							result: Promise.resolve({ output: [], stopReason: 'completed' }),
 							dispose: async () => {},
 						};
+					},
+					sendMessage: async (parent, targetId, content) => {
+						wakeCalls.push({ parent, targetId, content });
+						return 'msg-wake-1';
 					},
 				};
 			}
@@ -208,6 +213,21 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		const toolTasks = await toolRegistration.definition.execute({ action: 'tasks' }, { agent: { id: 'session-member-1' } });
 		assert.equal(toolTasks.ok, true);
 
+		const agentTask = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				type: 'task.create',
+				payload: { title: 'Agent 的任务', resultDefinition: 'agent 完成', ownerId: 'a1' },
+			}),
+		});
+		assert.equal(agentTask.status, 200);
+		const agentTaskBody = await agentTask.json();
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		assert.equal(wakeCalls.length, 1);
+		assert.equal(wakeCalls[0].targetId, 'session-member-1');
+		assert.match(wakeCalls[0].content[0].text, new RegExp(agentTaskBody.task.id));
+
 		assert.equal(requestErrorListeners.length, 1);
 		let nextCalls = 0;
 		const retry = await requestErrorListeners[0](
@@ -243,7 +263,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		const board = await fetch(`${base}/ai-team/api/projects/prj_main/board`);
 		assert.equal(board.status, 200);
 		const boardBody = await board.json();
-		assert.equal(boardBody.counts.todo, 1);
+		assert.equal(boardBody.counts.todo, 2);
 		assert.equal(boardBody.counts.in_progress, 0);
 		assert.equal(boardBody.columns.todo[0].title, '第一条真实任务');
 
@@ -276,7 +296,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		};
 		const initial = await nextFrame();
 		assert.equal(initial.type, 'ready');
-		assert.equal(initial.board.counts.todo, 1);
+		assert.equal(initial.board.counts.todo, 2);
 
 		const createSecond = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
 			method: 'POST',
@@ -289,7 +309,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(createSecond.status, 200);
 		const changed = await nextFrame();
 		assert.equal(changed.type, 'change');
-		assert.equal(changed.board.counts.todo, 2);
+		assert.equal(changed.board.counts.todo, 3);
 		assert.equal(changed.quadrants.rev, changed.rev);
 		controller.abort();
 

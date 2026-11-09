@@ -31,6 +31,8 @@ test('TeamService drives a real ledger from project setup to accepted task and t
 			actor: human,
 			payload: { name: 'Main-Dev', goal: '把回归清干净', ownerId: 'a1' },
 		});
+		await service.bindHostSession('session-host');
+		assert.equal(service.state.hostSessionId, 'session-host');
 		const config = await service.dispatch({
 			type: 'member.config.update',
 			actor: human,

@@ -38,6 +38,27 @@ test('creates and archives a Team Host Agent when no root exists', async () => {
 	assert.deepEqual(disposed, ['session-team-host-1']);
 });
 
+test('resumes the persisted Team Host instead of creating a new parent', async () => {
+	let created = 0;
+	const result = await ensureHostAgent({
+		agents: {
+			get: () => undefined,
+			roots: () => [],
+			create: async () => { created += 1; },
+			resume: async ({ resumeSessionId }) => ({
+				agent: { id: resumeSessionId },
+				dispose: async () => {},
+			}),
+		},
+		workspaceRegistry: { archiveSession: async () => {} },
+		resumeSessionId: 'session-host-persisted',
+		cwd: 'E:/works/dsh-ai-team',
+	});
+	assert.equal(result.agent.id, 'session-host-persisted');
+	assert.equal(result.resumed, true);
+	assert.equal(created, 0);
+});
+
 test('fails explicitly without a model or when creation fails', async () => {
 	await assert.rejects(
 		() => ensureHostAgent({ agents: { roots: () => [], create: async () => {} }, cwd: '/tmp' }),
