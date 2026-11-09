@@ -97,7 +97,7 @@ window.__ModuleLoader__.load({
 			emptyBoardBody: '在讨论里说一句，或把一条消息转为 Task。',
 			emptyBoardAction: '回到主对话',
 			inboxTitle: '收件箱',
-			inboxGoal: '跨项目聚合，M1 之后接入',
+			inboxGoal: '需要你的决策与失败，都在这里',
 			inboxEmptyTitle: '没有需要你处理的事',
 			inboxEmptyBody: '成员失败、需要决策或有人提到你时，会出现在这里。',
 			inboxDecisionTitle: '需要你决策',
@@ -340,7 +340,7 @@ window.__ModuleLoader__.load({
 			emptyBoardBody: 'Say it in the discussion, or turn a message into a task.',
 			emptyBoardAction: 'Back to main',
 			inboxTitle: 'Inbox',
-			inboxGoal: 'Cross-project aggregation lands after M1',
+			inboxGoal: 'Decisions and failures that need you land here',
 			inboxEmptyTitle: 'Nothing needs you',
 			inboxEmptyBody: 'Member failures, decisions and mentions land here.',
 			inboxDecisionTitle: 'Decision required',
@@ -1394,7 +1394,7 @@ window.__ModuleLoader__.load({
 			const model = config?.model ? config.model : t('agentDefaultModel');
 			const context = Number.isFinite(config?.contextWindow) ? ' · ctx ' + Math.round(config.contextWindow / 1000) + 'k' : '';
 			const version = Number.isFinite(agent.configVersion) && agent.configVersion > 0 ? ' · v' + agent.configVersion : '';
-			const failure = agent.lastFailure ?? null;
+			const failure = agent.status === 'failed' ? (agent.lastFailure ?? null) : null;
 			return h('div', { className: 'at-agent', role: 'listitem' },
 				h('span', { className: 'at-dot at-dot-' + (agent.status ?? 'idle'), 'aria-hidden': 'true' }),
 				h('div', { className: 'at-agentmeta' },
