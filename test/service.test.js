@@ -31,6 +31,35 @@ test('TeamService drives a real ledger from project setup to accepted task and t
 			actor: human,
 			payload: { name: 'Main-Dev', goal: '把回归清干净', ownerId: 'a1' },
 		});
+		const config = await service.dispatch({
+			type: 'member.config.update',
+			actor: human,
+			projectId: 'prj_test',
+			payload: { memberId: 'a1', patch: { provider: 'p1', model: 'm1', maxTokens: 4096 }, reason: 'default model' },
+		});
+		assert.equal(config.config.model, 'm1');
+		assert.equal(config.config.configVersion, 1);
+		assert.equal(service.state.members.a1.config.model, 'm1');
+		await assert.rejects(
+			() => service.dispatch({ type: 'member.config.update', actor: a1, projectId: 'prj_test', payload: { memberId: 'a1', patch: { model: 'm2' } } }),
+			(error) => error.code === 'E_UNAUTHORIZED',
+		);
+		const leadUpdate = await service.dispatch({
+			type: 'member.config.update',
+			actor: a1,
+			projectId: 'prj_test',
+			payload: { memberId: 'a2', patch: { provider: 'p2', model: 'm2' }, reason: 'Lead fallback' },
+		});
+		assert.equal(leadUpdate.config.model, 'm2');
+
+		const failure = await service.recordMemberFailure('a2', {
+			category: 'rate_limit', attempt: 1, retryable: true, provider: 'p2', model: 'm2', nextAction: 'retry',
+		});
+		assert.equal(failure.member.status, 'idle');
+		assert.equal(service.state.members.a2.lastFailure.category, 'rate_limit');
+		const recovered = await service.recordMemberRecovery('a2', 2, { model: 'm2' });
+		assert.equal(recovered.member.status, 'running');
+		assert.equal(service.state.members.a2.status, 'running');
 
 		const created = await service.dispatch({
 			type: 'task.create',
