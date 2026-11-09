@@ -203,6 +203,8 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		const afterBody = await after.json();
 		assert.equal(afterBody.tasks.length, 1);
 		assert.equal(afterBody.tasks[0].title, '第一条真实任务');
+		assert.equal(afterBody.runtime.defaultModel.provider, 'p1');
+		assert.deepEqual(afterBody.runtime.providers, ['local']);
 
 		const addMember = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
 			method: 'POST',

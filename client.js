@@ -161,6 +161,16 @@ window.__ModuleLoader__.load({
 			addAgent: '添加成员',
 			newProjectMock: 'spike：新建项目属于 S-01 流程，M1 之后接入。',
 			addAgentMock: 'spike：添加成员在 M1 之后接入。',
+			addAgentTitle: '添加成员',
+			memberName: '名字',
+			memberRole: '职责',
+			memberProvider: 'Provider',
+			memberModel: '模型',
+			memberOwner: '设为 Project owner',
+			memberCreate: '创建并激活',
+			memberAdding: '正在创建…',
+			memberAdded: '成员已创建并激活。',
+			cancel: '取消',
 			conversationMock: 'spike：宿主没有可用的 layout.selectPanel(conversation)。',
 			discussSent: '已发送给 Project owner。',
 			taskSent: '已创建 Task。',
@@ -350,6 +360,16 @@ window.__ModuleLoader__.load({
 			addAgent: 'Add member',
 			newProjectMock: 'spike: project creation belongs to S-01 and lands after M1.',
 			addAgentMock: 'spike: adding members lands after M1.',
+			addAgentTitle: 'Add member',
+			memberName: 'Name',
+			memberRole: 'Role',
+			memberProvider: 'Provider',
+			memberModel: 'Model',
+			memberOwner: 'Make Project owner',
+			memberCreate: 'Create and activate',
+			memberAdding: 'Creating…',
+			memberAdded: 'Member created and activated.',
+			cancel: 'Cancel',
 			conversationMock: 'spike: this host has no working layout.selectPanel(conversation).',
 			discussSent: 'Sent to the Project owner.',
 			taskSent: 'Task created.',
@@ -919,6 +939,13 @@ window.__ModuleLoader__.load({
 			.at-field input, .at-field textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 18px; }
 			.at-field textarea { min-height: 64px; resize: vertical; }
 			.at-fieldrow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+			.at-modalback { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 20px; background: color-mix(in srgb, var(--dsw-alias-bg-base) 72%, transparent); }
+			.at-modal { width: min(420px, 100%); max-height: 86vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; background: var(--dsw-alias-bg-layer-2); }
+			.at-modaltitle { margin: 0 0 2px; font-size: 15px; font-weight: 600; color: var(--dsw-alias-label-primary); }
+			.at-check { display: flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+			.at-check input { accent-color: var(--dsw-alias-state-business-primary); }
+			.at-modalerror { color: var(--dsw-alias-state-error-primary); font-size: 11.5px; line-height: 16px; }
+			.at-modalactions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
 			.at-fieldrow .at-staticfield { min-width: 0; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-module-platform); color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 			.at-context { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
 			.at-convertfoot { display: flex; justify-content: flex-end; gap: 8px; }
@@ -1657,6 +1684,14 @@ window.__ModuleLoader__.load({
 			const [cTitle, setCTitle] = React.useState('');
 			const [cDod, setCDod] = React.useState('');
 			const [acceptChecked, setAcceptChecked] = React.useState(false);
+			const [addOpen, setAddOpen] = React.useState(false);
+			const [mName, setMName] = React.useState('');
+			const [mRole, setMRole] = React.useState('');
+			const [mProvider, setMProvider] = React.useState('');
+			const [mModel, setMModel] = React.useState('');
+			const [mOwner, setMOwner] = React.useState(false);
+			const [mBusy, setMBusy] = React.useState(false);
+			const [mError, setMError] = React.useState('');
 			const [replyBase, setReplyBase] = React.useState(null);
 			const rightRef = React.useRef(null);
 			const replyRef = React.useRef(null);
@@ -1885,6 +1920,56 @@ window.__ModuleLoader__.load({
 				if (!response.ok) throw new Error(body?.error?.message ?? ('HTTP ' + response.status));
 				return body;
 			}
+			function openAddAgent() {
+				const defaults = data?.runtime?.defaultModel ?? {};
+				setMName('');
+				setMRole('');
+				setMProvider(defaults.provider ?? '');
+				setMModel(defaults.model ?? '');
+				setMOwner((data?.agents ?? []).length === 0);
+				setMError('');
+				setAddOpen(true);
+			}
+			async function createAgent() {
+				if (!mName.trim() || mBusy) return;
+				setMBusy(true);
+				setMError('');
+				try {
+					const added = await runCommand('member.add', {
+						name: mName.trim(),
+						role: mRole.trim(),
+						kind: 'agent',
+						status: 'provisioning',
+					});
+					const memberId = added.member.id;
+					if (mProvider.trim() || mModel.trim()) {
+						await runCommand('member.config.update', {
+							memberId,
+							patch: {
+								...(mProvider.trim() ? { provider: mProvider.trim() } : {}),
+								...(mModel.trim() ? { model: mModel.trim() } : {}),
+							},
+							reason: 'workbench add member',
+						});
+					}
+					await runCommand('member.activate', {
+						memberId,
+						prompt: mOwner
+							? '你是 Project owner。等待 Human 的 Main stream 消息；收到后用 team 工具 create 开卡并推进。不要修改无关文件。'
+							: '你已加入 AI Team。等待 Team event；先读 tasks/inbox，再行动。不要修改无关文件。',
+					});
+					if (mOwner) {
+						await runCommand('project.owner.update', { ownerMemberId: memberId, reason: 'workbench add member' });
+					}
+					setAddOpen(false);
+					say(t('memberAdded'));
+					await reloadData();
+				} catch (error) {
+					setMError(error?.message ?? String(error));
+				} finally {
+					setMBusy(false);
+				}
+			}
 			async function send() {
 				const text = draft.trim();
 				if (!text) return;
@@ -1970,7 +2055,7 @@ window.__ModuleLoader__.load({
 				onProject: switchProject,
 				onNewProject: () => { closeMobile(); say(t('newProjectMock')); },
 				onAgent: () => { closeMobile(); say(t('agentMock')); },
-				onAddAgent: () => { closeMobile(); say(t('addAgentMock')); },
+				onAddAgent: () => { closeMobile(); openAddAgent(); },
 			};
 
 			const body = inInbox
@@ -2116,7 +2201,32 @@ window.__ModuleLoader__.load({
 						actions,
 						panelRef: rightRef,
 						replyRef,
-					}) : null));
+					}) : null,
+					addOpen ? h('div', { className: 'at-modalback' },
+						h('form', {
+							className: 'at-modal',
+							role: 'dialog',
+							'aria-modal': 'true',
+							'aria-label': t('addAgentTitle'),
+							onSubmit: (event) => { event.preventDefault(); createAgent(); },
+						},
+							h('h2', { className: 'at-modaltitle' }, t('addAgentTitle')),
+							h('label', { className: 'at-field' }, h('span', null, t('memberName')),
+								h('input', { value: mName, onChange: (event) => setMName(event.target.value), autoFocus: true })),
+							h('label', { className: 'at-field' }, h('span', null, t('memberRole')),
+								h('input', { value: mRole, onChange: (event) => setMRole(event.target.value) })),
+							h('div', { className: 'at-fieldrow' },
+								h('label', { className: 'at-field' }, h('span', null, t('memberProvider')),
+									h('input', { value: mProvider, onChange: (event) => setMProvider(event.target.value), placeholder: 'deepseek-account' })),
+								h('label', { className: 'at-field' }, h('span', null, t('memberModel')),
+									h('input', { value: mModel, onChange: (event) => setMModel(event.target.value), placeholder: 'deepseek-flash' }))),
+							h('label', { className: 'at-check' },
+								h('input', { type: 'checkbox', checked: mOwner, onChange: (event) => setMOwner(event.target.checked) }),
+								h('span', null, t('memberOwner'))),
+							mError ? h('div', { className: 'at-modalerror', role: 'alert' }, mError) : null,
+							h('div', { className: 'at-modalactions' },
+								h('button', { className: 'at-btn', type: 'button', onClick: () => setAddOpen(false), disabled: mBusy }, t('cancel')),
+								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: mBusy || !mName.trim() }, mBusy ? t('memberAdding') : t('memberCreate'))))) : null));
 		}
 
 		function PanelIcon() {

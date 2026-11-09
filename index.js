@@ -425,7 +425,13 @@ export function apply(ctx) {
 						});
 					}
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/bootstrap') {
-						return send(res, booted.service.bootstrap(PROJECT_ID));
+						return send(res, {
+							...booted.service.bootstrap(PROJECT_ID),
+							runtime: {
+								defaultModel: ctx.get('agentDefaultModel')?.currentSelection?.() ?? null,
+								providers: ctx.get('subagents')?.list?.() ?? [],
+							},
+						});
 					}
 
 					const events = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/events$/);

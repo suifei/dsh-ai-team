@@ -14,6 +14,9 @@ test('client source contains the situation (four-quadrant) view', async () => {
 	assert.match(source, /runCommand/);
 	assert.match(source, /stream\.post/);
 	assert.match(source, /task\.create/);
+	assert.match(source, /openAddAgent/);
+	assert.match(source, /at-modalback/);
+	assert.match(source, /addAgentTitle/);
 });
 
 test('client factory registers the sidebar icon and main workbench panel', async () => {
