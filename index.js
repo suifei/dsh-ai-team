@@ -336,6 +336,9 @@ export function apply(ctx) {
 			board: booted.service.board(PROJECT_ID),
 			quadrants: booted.service.quadrants(PROJECT_ID),
 		});
+		ready.then((value) => {
+			if (value !== null && value !== undefined) value.ledger.onEvent = (event) => broadcast(event);
+		}).catch(() => {});
 		const broadcast = (event) => {
 			const payload = {
 				...snapshot(),
@@ -522,7 +525,6 @@ export function apply(ctx) {
 								correlationId: typeof body.correlationId === 'string' ? body.correlationId : undefined,
 							});
 							send(res, { ok: true, ...result });
-							broadcast(result.event);
 							void wakeFromResult(result, { agentId: HUMAN_ID }).catch((error) => {
 								console.warn('[ai-team] wake planner failed:', error?.message ?? error);
 							});

@@ -164,6 +164,8 @@ window.__ModuleLoader__.load({
 			addAgentTitle: '添加成员',
 			memberName: '名字',
 			memberRole: '职责',
+			memberPrompt: '初始指令（可选）',
+			memberPromptHint: '例如：任务 #1 已待验收，读 tasks 后独立验收。',
 			memberProvider: 'Provider',
 			memberModel: '模型',
 			memberOwner: '设为 Project owner',
@@ -363,6 +365,8 @@ window.__ModuleLoader__.load({
 			addAgentTitle: 'Add member',
 			memberName: 'Name',
 			memberRole: 'Role',
+			memberPrompt: 'Initial instruction (optional)',
+			memberPromptHint: 'e.g. Task #1 is awaiting acceptance; read tasks and review it independently.',
 			memberProvider: 'Provider',
 			memberModel: 'Model',
 			memberOwner: 'Make Project owner',
@@ -1687,6 +1691,7 @@ window.__ModuleLoader__.load({
 			const [addOpen, setAddOpen] = React.useState(false);
 			const [mName, setMName] = React.useState('');
 			const [mRole, setMRole] = React.useState('');
+			const [mPrompt, setMPrompt] = React.useState('');
 			const [mProvider, setMProvider] = React.useState('');
 			const [mModel, setMModel] = React.useState('');
 			const [mOwner, setMOwner] = React.useState(false);
@@ -1924,6 +1929,7 @@ window.__ModuleLoader__.load({
 				const defaults = data?.runtime?.defaultModel ?? {};
 				setMName('');
 				setMRole('');
+				setMPrompt('');
 				setMProvider(defaults.provider ?? '');
 				setMModel(defaults.model ?? '');
 				setMOwner((data?.agents ?? []).length === 0);
@@ -1954,9 +1960,9 @@ window.__ModuleLoader__.load({
 					}
 					await runCommand('member.activate', {
 						memberId,
-						prompt: mOwner
+						prompt: mPrompt.trim() || (mOwner
 							? '你是 Project owner。等待 Human 的 Main stream 消息；收到后用 team 工具 create 开卡并推进。不要修改无关文件。'
-							: '你已加入 AI Team。等待 Team event；先读 tasks/inbox，再行动。不要修改无关文件。',
+							: '你已加入 AI Team。等待 Team event；先读 tasks/inbox，再行动。不要修改无关文件。'),
 					});
 					if (mOwner) {
 						await runCommand('project.owner.update', { ownerMemberId: memberId, reason: 'workbench add member' });
@@ -2215,6 +2221,12 @@ window.__ModuleLoader__.load({
 								h('input', { value: mName, onChange: (event) => setMName(event.target.value), autoFocus: true })),
 							h('label', { className: 'at-field' }, h('span', null, t('memberRole')),
 								h('input', { value: mRole, onChange: (event) => setMRole(event.target.value) })),
+							h('label', { className: 'at-field' }, h('span', null, t('memberPrompt')),
+								h('textarea', {
+									value: mPrompt,
+									onChange: (event) => setMPrompt(event.target.value),
+									placeholder: t('memberPromptHint'),
+								})),
 							h('div', { className: 'at-fieldrow' },
 								h('label', { className: 'at-field' }, h('span', null, t('memberProvider')),
 									h('input', { value: mProvider, onChange: (event) => setMProvider(event.target.value), placeholder: 'deepseek-account' })),

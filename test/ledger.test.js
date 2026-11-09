@@ -924,6 +924,21 @@ test('fold：stream / inbox 投影与 ack 终态幂等', () => {
 	assert.equal(state.inbox.inb_1.ackedAt, events[4].at);
 });
 
+test('ledger.onEvent fires after state is updated', async (t) => {
+	const { dir } = tempLedger(t);
+	const ledger = openLedger({ dir, projectId: PROJECT_ID });
+	const seen = [];
+	ledger.onEvent = (event) => seen.push({ seq: event.seq, hasState: ledger.state.stream?.length ?? 0 });
+	await ledger.append({
+		type: 'stream/posted',
+		payload: { kind: 'human_message', authorId: 'h1', body: 'hello', at: BASE_AT },
+		actor: { kind: 'human', memberId: 'h1' },
+		projectId: PROJECT_ID,
+		at: BASE_AT,
+	});
+	assert.deepEqual(seen, [{ seq: 1, hasState: 1 }]);
+});
+
 test('fold 可直接重放 host service/domain 写入的快照事件', async (t) => {
 	const { dir } = tempLedger(t);
 	const ledger = openLedger({ dir, projectId: PROJECT_ID });
