@@ -34,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.35';
+const VERSION = '0.3.36';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -795,6 +795,7 @@ export function apply(ctx) {
 									owner: active?.owner ?? null,
 									goal: active?.goal ?? '',
 									workspacePath: active?.workspacePath ?? project.workspacePath ?? '',
+									pmoAuto: project.pmoAuto ?? active?.pmoAuto ?? true,
 									archived: false,
 									active: project.id === booted.activeProjectId,
 								};

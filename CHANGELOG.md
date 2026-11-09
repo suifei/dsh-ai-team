@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.36 — 2026-11-10
+
+- 修复 bootstrap route 覆盖 projects 时丢失 `pmoAuto`，导致 PMO 开关点一下又回到“开”；
+- 增加 integration 断言：projects[0].pmoAuto 默认 true；
+- 策略不变：PMO 默认开启，Project header 可关。
+
 ## 0.3.35 — 2026-11-10
 
 - 内置 `ai-team-core` skill 自动注入所有 Agent wake；

@@ -203,6 +203,8 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(data.agents.find((agent) => agent.name === '墨渊').role, '主理人');
 		assert.equal(data.agents.find((agent) => agent.name === '白砚').qa, true);
 		assert.equal(data.project?.owner, 'mem_lead');
+		assert.equal(data.project?.pmoAuto, true);
+		assert.equal(data.projects[0].pmoAuto, true);
 
 		const workspace = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
 			method: 'POST',
