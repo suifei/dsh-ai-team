@@ -2374,9 +2374,9 @@ window.__ModuleLoader__.load({
 			const selectedTask = tasks.find((task) => task.id === selected) ?? tasks[0] ?? null;
 			const thread = threadFor(data, selectedTask?.id);
 			const quadrants = deriveQuadrants(data);
-			const inboxUnread = Number.isFinite(data.inboxUnread)
-				? data.inboxUnread
-				: (data.inbox ?? []).filter((item) => !item.read).length;
+			const inboxItems = (data.inbox ?? []).filter((item) =>
+				!(item.ref?.category === 'thread_mention' && !(Array.isArray(item.ref?.questions) && item.ref.questions.length > 0)));
+			const inboxUnread = inboxItems.filter((item) => item.state === 'unread').length;
 			const q1Extra = (quadrants.q1.items ?? []).filter((item) => item.kind === 'inbox').length;
 			const threadHead = thread?.headSeq ?? thread?.entries?.length ?? 0;
 			const followingOf = (card) => (Object.prototype.hasOwnProperty.call(follows, card.id) ? follows[card.id] : Boolean(card.following));
@@ -3108,8 +3108,8 @@ window.__ModuleLoader__.load({
 			const body = inInbox
 				? h('div', { className: 'at-stream', role: 'region', 'aria-label': t('inboxTitle') },
 					h('div', { className: 'at-streaminner' },
-						(data.inbox ?? []).length
-							? (data.inbox ?? []).map((item) => h('div', { key: item.id, className: cx('at-inboxitem', item.state !== 'unread' && 'at-inboxdone') },
+						inboxItems.length
+							? inboxItems.map((item) => h('div', { key: item.id, className: cx('at-inboxitem', item.state !== 'unread' && 'at-inboxdone') },
 								h('div', { className: 'at-inboxbody' },
 									h('div', { className: 'at-inboxtitle' },
 										item.type === 'decision_required'

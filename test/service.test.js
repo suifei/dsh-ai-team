@@ -174,7 +174,7 @@ test('TeamService drives a real ledger from project setup to accepted task and t
 		assert.equal(mention.entry.authorId, 'a2');
 		assert.equal(
 			Object.values(service.state.inbox ?? {}).some((item) => item.memberId === 'h1' && item.ref?.taskId === taskId && item.ref?.entrySeq === mention.entry.seq),
-			true,
+			false,
 		);
 		assert.equal(await service.backfillHumanMentions(), 0);
 		const decision = await service.dispatch({
