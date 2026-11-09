@@ -31,6 +31,18 @@ test('the team tool reads, claims, submits, threads and accepts through real Tea
 		assert.equal(tasks.ok, true);
 		assert.equal(tasks.tasks[0].id, created.task.id);
 
+		const leadCreate = await tool.execute({
+			action: 'create', title: 'Lead 开的卡', resultDefinition: 'a2 认领并完成', ownerId: 'a2',
+		}, exec('s1'));
+		assert.equal(leadCreate.ok, true);
+		assert.equal(leadCreate.task.status, 'pending');
+		assert.equal(leadCreate.task.owner, '林岚');
+		const a2Claim = await tool.execute({
+			action: 'claim', taskId: leadCreate.task.id, expectedRevision: leadCreate.task.revision,
+		}, exec('s2'));
+		assert.equal(a2Claim.ok, true);
+		assert.equal(a2Claim.task.status, 'in_progress');
+
 		const claim = await tool.execute({
 			action: 'claim', taskId: created.task.id, expectedRevision: created.task.revision,
 		}, exec('s1'));

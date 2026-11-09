@@ -14,6 +14,7 @@ const state = {
 		t2: { id: 't2', number: 2, title: '验收', status: 'pending_acceptance', ownerId: 'a1', assigneeId: 'a2' },
 	},
 	inbox: {},
+	projects: { p1: { id: 'p1', ownerMemberId: 'a1' } },
 };
 
 test('task creation wakes the Agent owner but not Human or retired', () => {
@@ -41,6 +42,17 @@ test('thread reply wakes owner/assignee except the author', () => {
 	}, {});
 	assert.deepEqual(plans.map((item) => [item.memberId, item.reason]), [['a2', 'thread_reply']]);
 	assert.match(plans[0].prompt, /Thread/);
+});
+
+test('a Human Main-stream message wakes the Agent Project owner', () => {
+	const plans = planWakes(state, {
+		event: { type: 'stream/posted', seq: 9, payload: { kind: 'human_message', authorId: 'h1', body: '把回归清干净' } },
+	}, {});
+	assert.equal(plans.length, 1);
+	assert.equal(plans[0].memberId, 'a1');
+	assert.equal(plans[0].reason, 'human_message');
+	assert.match(plans[0].prompt, /把回归清干净/);
+	assert.match(plans[0].prompt, /create/);
 });
 
 test('no wake is planned for a member who authored the event', () => {

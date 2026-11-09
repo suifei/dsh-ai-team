@@ -33,6 +33,11 @@ test('TeamService drives a real ledger from project setup to accepted task and t
 		});
 		await service.bindHostSession('session-host');
 		assert.equal(service.state.hostSessionId, 'session-host');
+		await service.dispatch({ type: 'project.owner.update', actor: human, projectId: 'prj_test', payload: { ownerMemberId: 'a1', reason: 'Lead' } });
+		assert.equal(service.state.projects.prj_test.ownerMemberId, 'a1');
+		const stream = await service.dispatch({ type: 'stream.post', actor: human, projectId: 'prj_test', payload: { body: '把回归清干净' } });
+		assert.equal(stream.entry.body, '把回归清干净');
+		assert.equal(service.state.stream.at(-1).body, '把回归清干净');
 		const config = await service.dispatch({
 			type: 'member.config.update',
 			actor: human,
