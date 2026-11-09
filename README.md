@@ -10,11 +10,13 @@ AI Team mode for DeepSeek Harness: **projects, owned tasks, threads, inbox and a
 
 ```sh
 dsh --profile ai-team --from-default-profile web --dump-config   # create the profile from the web template
-dsh plugin --profile ai-team add E:/works/dsh-ai-team            # install this package
-dsh --profile ai-team --no-open --port 0                         # boot the test server
+dsh plugin --profile ai-team add @suifei/dsh-ai-team             # install from npm
+# or from a checkout:
+# dsh plugin --profile ai-team add E:/works/dsh-ai-team
+dsh --profile ai-team --no-open --port 0                         # boot
 ```
 
-The plugin is **not** installed in the normal `desktop`/`web` profiles; ordinary sessions keep their preset roster (R-01/R-02). Multi-Project is concurrent: every Project owns its ledger and runtime, each has its own Waker/SSE/tool routing, and `activeProjectId` only selects the UI default. Verified on 2026-11-09: `desktop` dump has no `@suifei/dsh-ai-team`; `ai-team` does. Full install / uninstall / upgrade steps, data locations and profile-isolation checks: [docs/10-安装卸载升级.md](docs/10-安装卸载升级.md).
+The plugin is designed for a dedicated `ai-team` profile; normal `desktop`/`web` sessions keep their preset roster unless explicitly installed. This machine also has it in `desktop` for UI preview. Multi-Project is concurrent: every Project owns its ledger and runtime, each has its own Waker/SSE/tool routing, and `activeProjectId` only selects the UI default. Full install / uninstall / upgrade steps, data locations and profile-isolation checks: [docs/10-安装卸载升级.md](docs/10-安装卸载升级.md).
 
 ## Layout
 

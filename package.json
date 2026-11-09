@@ -1,10 +1,31 @@
 {
   "name": "@suifei/dsh-ai-team",
   "version": "0.3.3",
-  "private": true,
   "type": "module",
-  "description": "文渊阁 (Wenyuan Pavilion) — AI Team mode for DeepSeek Harness: projects, owned tasks, threads, inbox and an append-only team ledger",
+  "description": "文渊阁 (Wenyuan Pavilion) — AI Team mode for DeepSeek Harness: concurrent projects, owned tasks, threads, inbox and an append-only team ledger",
   "license": "MIT",
+  "author": "suifei",
+  "homepage": "https://github.com/suifei/dsh-ai-team#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/suifei/dsh-ai-team.git"
+  },
+  "bugs": {
+    "url": "https://github.com/suifei/dsh-ai-team/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "ai-team",
+    "multi-agent",
+    "agent-team",
+    "task-ledger",
+    "wenyuan"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "icon": "./icon.svg",
   "exports": {
     ".": "./index.js",
@@ -23,7 +44,9 @@
     "lib/vendor/skillopt/requirements.txt",
     "lib/vendor/skillopt/LICENSE",
     "skills/**/*",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "scripts": {
     "test": "node --test"
