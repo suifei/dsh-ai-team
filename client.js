@@ -61,6 +61,9 @@ window.__ModuleLoader__.load({
 			stCancelled: '已取消',
 			agentRunning: '运行中',
 			agentIdle: '空闲',
+			agentDefaultModel: '默认模型',
+			agentFailure: 'LLM 失败：{category} · 第 {n} 次',
+			agentFailureShort: '失败',
 			agentProvisioning: '正在准备记忆',
 			agentFailed: '失败',
 			agentRetired: '已退役',
@@ -246,6 +249,9 @@ window.__ModuleLoader__.load({
 			stCancelled: 'Cancelled',
 			agentRunning: 'Running',
 			agentIdle: 'Idle',
+			agentDefaultModel: 'Default model',
+			agentFailure: 'LLM failure: {category} · attempt {n}',
+			agentFailureShort: 'failed',
 			agentProvisioning: 'Preparing memory',
 			agentFailed: 'Failed',
 			agentRetired: 'Retired',
@@ -712,6 +718,8 @@ window.__ModuleLoader__.load({
 			.at-agentname { align-self: flex-start; max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; line-height: 18px; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.at-agentname:hover { text-decoration: underline; }
 			.at-agentrole { min-width: 0; color: var(--dsw-alias-label-caption); font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+			.at-agentconfig { min-width: 0; display: flex; gap: 4px; align-items: center; color: var(--dsw-alias-label-tertiary); font-size: 10.5px; line-height: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+			.at-agentfail { flex: none; color: var(--dsw-alias-state-warn-primary); }
 			.at-agentmore { flex: 0 0 auto; width: 28px; height: 28px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 13px; cursor: pointer; }
 			.at-agentmore:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
 			.at-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
@@ -1250,11 +1258,23 @@ window.__ModuleLoader__.load({
 
 		function AgentRow({ t, agent, onAgent }) {
 			const statusText = t(AGENT_STATUS[agent.status] ?? 'agentIdle');
+			const config = agent.config ?? null;
+			const model = config?.model ? config.model : t('agentDefaultModel');
+			const context = Number.isFinite(config?.contextWindow) ? ' · ctx ' + Math.round(config.contextWindow / 1000) + 'k' : '';
+			const version = Number.isFinite(agent.configVersion) && agent.configVersion > 0 ? ' · v' + agent.configVersion : '';
+			const failure = agent.lastFailure ?? null;
 			return h('div', { className: 'at-agent', role: 'listitem' },
 				h('span', { className: 'at-dot at-dot-' + (agent.status ?? 'idle'), 'aria-hidden': 'true' }),
 				h('div', { className: 'at-agentmeta' },
 					h('button', { className: 'at-agentname', type: 'button', onClick: () => onAgent(agent), title: agent.name }, agent.name),
 					h('div', { className: 'at-agentrole', title: agent.role ?? '' }, agent.role ?? ''),
+					h('div', {
+						className: 'at-agentconfig',
+						title: [model + context + version, failure ? tf(t, 'agentFailure', { category: failure.category, n: failure.attempt }) : ''].filter(Boolean).join(' · '),
+					},
+						h('span', null, model + context + version),
+						failure ? h('span', { className: 'at-agentfail' }, t('agentFailureShort')) : null,
+					),
 				),
 				h('span', { className: 'at-sr' }, statusText),
 				h('button', {

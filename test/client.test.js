@@ -9,6 +9,8 @@ test('client source contains the situation (four-quadrant) view', async () => {
 	assert.match(source, /function Situation/);
 	assert.match(source, /function QuadrantCard/);
 	assert.match(source, /'situation'/);
+	assert.match(source, /at-agentconfig/);
+	assert.match(source, /agentDefaultModel/);
 });
 
 test('client factory registers the sidebar icon and main workbench panel', async () => {

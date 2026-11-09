@@ -58,6 +58,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 	const routes = [];
 	const memberSessions = new Map();
 	const requestErrorListeners = [];
+	const sessionEventListeners = [];
 	const root = await mkdtemp(join(tmpdir(), 'ai-team-host-'));
 	const previousHome = process.env.DSH_HOME;
 	const previousProfile = process.env.DSH_PROFILE;
@@ -70,6 +71,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		},
 		on(event, listener) {
 			if (event === 'agent/request-error') requestErrorListeners.push(listener);
+			if (event === 'session/event') sessionEventListeners.push(listener);
 			return () => {};
 		},
 		get(id) {
@@ -203,6 +205,16 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		const afterRate = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
 		assert.equal(afterRate.agents[0].lastFailure.category, 'rate_limit');
 		assert.equal(afterRate.agents[0].attempts, 1);
+
+		assert.equal(sessionEventListeners.length, 1);
+		await sessionEventListeners[0](
+			{ id: 'session-member-1' },
+			{ type: 'turn/end', data: { reason: { kind: 'completed' } } },
+		);
+		const afterRecovery = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
+		assert.equal(afterRecovery.agents[0].attempts, 0);
+		assert.equal(afterRecovery.agents[0].status, 'running');
+		assert.ok(afterRecovery.agents[0].lastRecoveredAt !== undefined);
 
 		const terminal = await requestErrorListeners[0](
 			{ agent: { id: 'session-member-1' }, provider: 'p1', failure: { status: 401, code: 'INVALID_API_KEY', message: 'bad key' } },

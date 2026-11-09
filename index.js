@@ -163,6 +163,18 @@ export function apply(ctx) {
 				return { kind: 'retry' };
 			})
 			: () => {};
+		const offSessionEvent = typeof ctx.on === 'function'
+			? ctx.on('session/event', async (session, event) => {
+				if (booted === null || event?.type !== 'turn/end' || event?.data?.reason?.kind !== 'completed') return;
+				const member = Object.values(booted.service.state.members ?? {})
+					.find((candidate) => candidate.sessionId === session?.id);
+				if (member === undefined || member.lastFailure === undefined || member.lastFailure === null) return;
+				try {
+					await booted.service.recordMemberRecovery(member.id, member.attempts ?? 0, member.config ?? null);
+					broadcast(undefined);
+				} catch { /* recovery is best-effort; the ledger still has the failure */ }
+			})
+			: () => {};
 		let host = null;
 		let hostPromise = null;
 		const ensureParent = async () => {
@@ -404,6 +416,7 @@ export function apply(ctx) {
 			activations.clear();
 			if (host !== null) void host.dispose?.();
 			offRequestError();
+			offSessionEvent();
 			dispose();
 			if (booted !== null) booted.ledger.close();
 		};
