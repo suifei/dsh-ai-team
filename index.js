@@ -117,6 +117,33 @@ export function apply(ctx) {
 				return null;
 			});
 
+		const sseClients = new Set();
+		const snapshot = () => ({
+			rev: booted.ledger.head.seq,
+			generatedAt: Date.now(),
+			board: booted.service.board(PROJECT_ID),
+			quadrants: booted.service.quadrants(PROJECT_ID),
+		});
+		const broadcast = (event) => {
+			const payload = {
+				...snapshot(),
+				type: 'change',
+				event: event === undefined ? null : { id: event.id, type: event.type, seq: event.seq },
+			};
+			const frame = `event: change\ndata: ${JSON.stringify(payload)}\n\n`;
+			for (const client of sseClients) {
+				if (client.writableEnded || client.destroyed) {
+					sseClients.delete(client);
+					continue;
+				}
+				try {
+					client.write(frame);
+				} catch {
+					sseClients.delete(client);
+				}
+			}
+		};
+
 		const dispose = webServer.register({
 			kind: 'prefix',
 			path: '/ai-team',
@@ -142,6 +169,26 @@ export function apply(ctx) {
 					}
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/bootstrap') {
 						return send(res, booted.service.bootstrap(PROJECT_ID));
+					}
+
+					const events = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/events$/);
+					if (req.method === 'GET' && events !== null) {
+						const projectId = decodeURIComponent(events[1]);
+						if (projectId !== PROJECT_ID) {
+							return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
+						}
+						res.writeHead(200, {
+							'content-type': 'text/event-stream; charset=utf-8',
+							'cache-control': 'no-cache, no-transform',
+							connection: 'keep-alive',
+							'x-accel-buffering': 'no',
+						});
+						res.write(`event: ready\ndata: ${JSON.stringify({ ...snapshot(), type: 'ready' })}\n\n`);
+						sseClients.add(res);
+						const cleanup = () => sseClients.delete(res);
+						req.on('close', cleanup);
+						res.on('close', cleanup);
+						return;
 					}
 
 					const board = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/board$/);
@@ -205,7 +252,9 @@ export function apply(ctx) {
 								projectId: PROJECT_ID,
 								correlationId: typeof body.correlationId === 'string' ? body.correlationId : undefined,
 							});
-							return send(res, { ok: true, ...result });
+							send(res, { ok: true, ...result });
+							broadcast(result.event);
+							return;
 						} catch (error) {
 							return errorResponse(res, error);
 						}
@@ -219,6 +268,10 @@ export function apply(ctx) {
 		});
 
 		return () => {
+			for (const client of sseClients) {
+				try { client.end(); } catch { /* socket already gone */ }
+			}
+			sseClients.clear();
 			dispose();
 			if (booted !== null) booted.ledger.close();
 		};

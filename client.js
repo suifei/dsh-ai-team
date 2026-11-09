@@ -1678,7 +1678,17 @@ window.__ModuleLoader__.load({
 					setPhase('fallback');
 				}
 				load();
-				return () => { alive = false; if (controller) controller.abort(); };
+				// Event-driven refresh only; the Host sends one frame per command and
+				// no heartbeat/timer. EventSource reconnects on its own.
+				const source = typeof EventSource === 'function'
+					? new EventSource('/ai-team/api/projects/prj_main/events')
+					: null;
+				if (source) source.addEventListener('change', () => { if (alive) load(); });
+				return () => {
+					alive = false;
+					if (controller) controller.abort();
+					if (source) source.close();
+				};
 			}, []);
 
 			React.useEffect(() => {

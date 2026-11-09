@@ -109,10 +109,51 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(quadrantBody.q3.count, 0);
 		assert.equal(quadrantBody.q4.count, 0);
 
+		const controller = new AbortController();
+		const events = await fetch(`${base}/ai-team/api/projects/prj_main/events`, { signal: controller.signal });
+		assert.equal(events.status, 200);
+		assert.match(events.headers.get('content-type') ?? '', /text\/event-stream/);
+		const reader = events.body.getReader();
+		const decoder = new TextDecoder();
+		let buffer = '';
+		const nextFrame = async () => {
+			while (!buffer.includes('\n\n')) {
+				const chunk = await reader.read();
+				if (chunk.done) throw new Error('SSE stream closed');
+				buffer += decoder.decode(chunk.value, { stream: true });
+			}
+			const end = buffer.indexOf('\n\n');
+			const frame = buffer.slice(0, end);
+			buffer = buffer.slice(end + 2);
+			const data = frame.split('\n').find((line) => line.startsWith('data: '));
+			return JSON.parse(data.slice(6));
+		};
+		const initial = await nextFrame();
+		assert.equal(initial.type, 'ready');
+		assert.equal(initial.board.counts.todo, 1);
+
+		const createSecond = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				type: 'task.create',
+				payload: { title: 'SSE 第二条', resultDefinition: '收到 change', ownerId: 'mem_human' },
+			}),
+		});
+		assert.equal(createSecond.status, 200);
+		const changed = await nextFrame();
+		assert.equal(changed.type, 'change');
+		assert.equal(changed.board.counts.todo, 2);
+		assert.equal(changed.quadrants.rev, changed.rev);
+		controller.abort();
+
 		const missing = await fetch(`${base}/ai-team/api/nope`);
 		assert.equal(missing.status, 404);
 	} finally {
-		if (server !== null) await new Promise((resolve) => server.close(resolve));
+		if (server !== null) {
+			server.closeAllConnections?.();
+			await new Promise((resolve) => server.close(resolve));
+		}
 		if (disposeEffect !== null) disposeEffect();
 		if (previousHome === undefined) delete process.env.DSH_HOME;
 		else process.env.DSH_HOME = previousHome;
