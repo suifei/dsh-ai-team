@@ -33,6 +33,16 @@ test('assignment and submission wake the responsible Agent', () => {
 	assert.deepEqual(changes.map((item) => [item.memberId, item.reason]), [['a2', 'changes_requested']]);
 });
 
+test('acceptance schedules a reflection wake for the executor', () => {
+	const doneState = {
+		...state,
+		tasks: { ...state.tasks, t2: { ...state.tasks.t2, status: 'done', assigneeId: 'a2', claimHistory: ['a2'] } },
+	};
+	const plans = planWakes(doneState, { event: { type: 'task/accepted', seq: 10, payload: { taskId: 't2' } } }, {});
+	assert.deepEqual(plans.map((item) => [item.memberId, item.reason]), [['a2', 'reflection_requested']]);
+	assert.match(plans[0].prompt, /evolve/);
+});
+
 test('a QA member is preferred as the submitted reviewer', () => {
 	const qaState = {
 		...state,

@@ -183,6 +183,9 @@ window.__ModuleLoader__.load({
 			leaveTeam: '离开团队',
 			leaveConfirm: '离开团队后成员会进入人才库，遗留任务会列出来等待接手。确定？',
 			leftTeam: '已进入人才库；遗留任务 {n} 张，等待接手。',
+			leftTeamHanded: '已进入人才库；{n} 张遗留任务已交给继承人。',
+			successor: '遗留工作交给',
+			noSuccessor: '暂不指定（留在看板等待接手）',
 			recruited: '已从人才库重新招募。',
 			talentPoolCount: '人才库 {n}',
 			talentPool: '人才库',
@@ -400,6 +403,9 @@ window.__ModuleLoader__.load({
 			leaveTeam: 'Leave team',
 			leaveConfirm: 'Leaving moves the member to the talent pool; unfinished tasks will be listed for takeover. Continue?',
 			leftTeam: 'Moved to the talent pool; {n} unfinished task(s) await takeover.',
+			leftTeamHanded: 'Moved to the talent pool; {n} unfinished task(s) handed to the successor.',
+			successor: 'Hand leftover work to',
+			noSuccessor: 'No successor now (leave it on the board)',
 			recruited: 'Recruited from the talent pool.',
 			talentPoolCount: 'Talent pool {n}',
 			talentPool: 'Talent pool',
@@ -975,7 +981,7 @@ window.__ModuleLoader__.load({
 			.at-convert { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
 			.at-converthead { color: var(--dsw-alias-label-primary); font-size: 14px; font-weight: 500; line-height: 22px; }
 			.at-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
-			.at-field input, .at-field textarea { width: 100%; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 18px; }
+			.at-field input, .at-field textarea, .at-field select { width: 100%; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 18px; }
 			.at-field textarea { min-height: 64px; resize: vertical; }
 			.at-fieldrow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 			.at-modalback { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 20px; background: color-mix(in srgb, var(--dsw-alias-bg-base) 72%, transparent); }
@@ -1748,6 +1754,7 @@ window.__ModuleLoader__.load({
 			const [pName, setPName] = React.useState('');
 			const [pRole, setPRole] = React.useState('');
 			const [pPersonality, setPPersonality] = React.useState('');
+			const [pSuccessor, setPSuccessor] = React.useState('');
 			const [pBusy, setPBusy] = React.useState(false);
 			const [pError, setPError] = React.useState('');
 			const [replyBase, setReplyBase] = React.useState(null);
@@ -2034,6 +2041,8 @@ window.__ModuleLoader__.load({
 				setPName(agent.name ?? '');
 				setPRole(agent.role ?? '');
 				setPPersonality(agent.personality ?? '');
+				const successor = (data?.agents ?? []).find((candidate) => candidate.id !== agent.id && candidate.status !== 'retired');
+				setPSuccessor(successor?.id ?? '');
 				setPError('');
 			}
 			async function saveProfile() {
@@ -2082,8 +2091,18 @@ window.__ModuleLoader__.load({
 				setPError('');
 				try {
 					const result = await runCommand('member.leave', { memberId: profileAgent.id, reason: 'workbench leave' });
+					const unfinished = result.unfinishedTasks ?? [];
+					let handed = 0;
+					if (pSuccessor && unfinished.length > 0) {
+						const taken = await runCommand('member.takeover', {
+							fromMemberId: profileAgent.id,
+							toMemberId: pSuccessor,
+							reason: 'workbench successor',
+						});
+						handed = taken.tasks?.length ?? 0;
+					}
 					setProfileAgent(null);
-					say(tf(t, 'leftTeam', { n: result.unfinishedTasks?.length ?? 0 }));
+					say(handed > 0 ? tf(t, 'leftTeamHanded', { n: handed }) : tf(t, 'leftTeam', { n: unfinished.length }));
 					await reloadData();
 				} catch (error) {
 					setPError(error?.message ?? String(error));
@@ -2389,6 +2408,14 @@ window.__ModuleLoader__.load({
 								h('input', { value: pRole, onChange: (event) => setPRole(event.target.value) })),
 							h('label', { className: 'at-field' }, h('span', null, t('memberPersonality')),
 								h('textarea', { value: pPersonality, onChange: (event) => setPPersonality(event.target.value) })),
+							h('label', { className: 'at-field' }, h('span', null, t('successor')),
+								h('select', {
+									value: pSuccessor,
+									onChange: (event) => setPSuccessor(event.target.value),
+								},
+									h('option', { value: '' }, t('noSuccessor')),
+									(data?.agents ?? []).filter((candidate) => candidate.id !== profileAgent.id && candidate.status !== 'retired')
+										.map((candidate) => h('option', { key: candidate.id, value: candidate.id }, candidate.name + (candidate.qa ? ' · QA' : ''))))),
 							pError ? h('div', { className: 'at-modalerror', role: 'alert' }, pError) : null,
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setProfileAgent(null), disabled: pBusy }, t('cancel')),
