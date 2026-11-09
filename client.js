@@ -23,7 +23,7 @@ window.__ModuleLoader__.load({
 		const PKG = '@suifei/dsh-ai-team';
 
 		const zh = {
-			panel: '三省',
+			panel: '文渊阁',
 			back: '对话',
 			inbox: '收件箱',
 			board: '任务看板',
@@ -75,8 +75,8 @@ window.__ModuleLoader__.load({
 			loading: '加载中…',
 			fallbackTitle: '演示数据',
 			fallbackBody: 'bootstrap 接口（/ai-team）不可达，已使用内置样例；发送、关注、验收只做本地反馈，不写账本。',
-			spike: '三省六部',
-			spikeTitle: '三省六部：中书决策、门下审核、尚书执行；AI Team 工作台。',
+			spike: 'AI Team',
+			spikeTitle: '文渊阁 AI Team 工作台：修书、校勘、纂辑；方向、验收与账本。',
 			navAria: '页面导航',
 			menu: '目录',
 			menuAria: '打开项目与成员目录',
@@ -291,7 +291,7 @@ window.__ModuleLoader__.load({
 			doneNoInfo: '完成信息未记录',
 		};
 		const en = {
-			panel: 'Three Departments',
+			panel: 'Wenyuan Pavilion',
 			back: 'Chat',
 			inbox: 'Inbox',
 			board: 'All tasks',
@@ -343,8 +343,8 @@ window.__ModuleLoader__.load({
 			loading: 'Loading…',
 			fallbackTitle: 'Demo data',
 			fallbackBody: 'The bootstrap endpoint (/ai-team) is unreachable, so the embedded sample is shown. Sending, following and acceptance only give local feedback; nothing is written to the ledger.',
-			spike: 'Three Departments',
-			spikeTitle: 'Three Departments and Six Ministries: decision, review and execution for the AI Team workbench.',
+			spike: 'AI Team',
+			spikeTitle: 'Wenyuan Pavilion AI Team workbench: compile, collate, edit; direction, acceptance and ledger.',
 			navAria: 'Page navigation',
 			menu: 'Menu',
 			menuAria: 'Open the project and member menu',

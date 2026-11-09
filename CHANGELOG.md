@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.3 — 2026-11-09
+
+- 产品显示名改为「文渊阁」（Wenyuan Pavilion），取藏修、校勘、纂辑之意；
+- 保持包名 `@suifei/dsh-ai-team` 与内部 Team 域对象不变。
+
 ## 0.3.2 — 2026-11-09
 
 - 产品显示名改为「三省」（Three Departments），副标「三省六部」；
