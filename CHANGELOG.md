@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.40 — 2026-11-10
+
+- Agent session 标题按当前 Task 命名（`#N 任务名`），不再显示“你是 XX（执行）”这类首轮 prompt；
+- 成员同一时间只执行一个 Task，session 按任务复用并改名，避免每轮新增无名会话；
+- 启动时把 active Task 的 assignee session 标题同步为任务名。
+
 ## 0.3.39 — 2026-11-10
 
 - PMO 心跳：active Task 超过 10 分钟没有 Thread 更新时唤醒 assignee，要求发一条可见进度（不要求完成）；

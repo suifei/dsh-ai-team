@@ -34,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.39';
+const VERSION = '0.3.40';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -141,6 +141,21 @@ export function apply(ctx) {
 				return null;
 			}
 		};
+		const titleMemberSession = async (projectRuntime, member, taskId) => {
+			if (member === undefined || typeof taskId !== 'string') return;
+			const task = projectRuntime?.service?.state?.tasks?.[taskId];
+			if (task === undefined) return;
+			const sessions = ctx.get('sessions');
+			const titleService = ctx.get('sessionTitle');
+			const session = sessions?.get?.(member.sessionId);
+			if (session === undefined || session === null || typeof titleService?.rename !== 'function') return;
+			const title = `#${task.number ?? '?'} ${task.title ?? taskId}`.slice(0, 120);
+			try {
+				titleService.rename(session, title);
+			} catch (error) {
+				console.warn('[ai-team] session title failed:', error?.message ?? error);
+			}
+		};
 		const attachMemberWorkspace = async (projectRuntime, sessionId) => {
 			if (typeof sessionId !== 'string' || sessionId === '') return;
 			const workspace = await workspaceForProject(projectRuntime);
@@ -167,6 +182,12 @@ export function apply(ctx) {
 						}
 					}
 					for (const runtime of value.runtimes.values()) {
+						for (const task of Object.values(runtime.service.state.tasks ?? {})) {
+							if (!['pending', 'in_progress', 'pending_acceptance'].includes(task.status)) continue;
+							const memberId = task.assigneeId ?? task.ownerId;
+							const member = runtime.service.state.members?.[memberId];
+							await titleMemberSession(runtime, member, task.id);
+						}
 						void pmoTick(runtime).catch((error) => console.warn('[ai-team] PMO tick failed:', error?.message ?? error));
 					}
 					if (pmoTimer === null) {
@@ -308,7 +329,9 @@ export function apply(ctx) {
 						}
 						messageId = activated.messageId ?? null;
 						member = projectRuntime.service.state.members?.[member.id] ?? member;
+						await titleMemberSession(projectRuntime, member, plan.taskId);
 					} else {
+						await titleMemberSession(projectRuntime, member, plan.taskId);
 						const runtime = new MemberRuntime({
 							subagents, sessions, permissionPresets, sandboxPolicy,
 							agents: ctx.get('agents'),
