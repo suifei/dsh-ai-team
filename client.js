@@ -2150,8 +2150,8 @@ window.__ModuleLoader__.load({
 				const next = normalizePayload(await response.json());
 				if (next) setData(next);
 			}
-			async function runCommand(type, payload) {
-				const target = projectId || 'prj_main';
+			async function runCommand(type, payload, targetProject = projectId) {
+				const target = targetProject || 'prj_main';
 				const response = await fetch('/ai-team/api/projects/' + encodeURIComponent(target) + '/commands', {
 					method: 'POST',
 					headers: { 'content-type': 'application/json', accept: 'application/json' },
@@ -2374,9 +2374,18 @@ window.__ModuleLoader__.load({
 					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
 				}
 			}
+			async function openInboxTask(item) {
+				if (item.projectId && item.projectId !== projectId) {
+					await switchProject({ id: item.projectId, name: item.projectName });
+				}
+				setScope('project');
+				setSelected(item.ref?.taskId ?? '');
+				setThreadOpen(true);
+				setRightNote('');
+			}
 			async function ackInbox(item) {
 				try {
-					await runCommand('inbox.ack', { itemId: item.id, disposition: 'read' });
+					await runCommand('inbox.ack', { itemId: item.id, disposition: 'read' }, item.projectId ?? projectId);
 					say(t('inboxAcked'));
 					await reloadData();
 				} catch (error) {
@@ -2584,13 +2593,14 @@ window.__ModuleLoader__.load({
 												? tf(t, 'inboxCompletedTitle', { title: item.ref?.title ?? item.ref?.taskId ?? '' })
 												: t('inboxItemTitle')),
 									h('div', { className: 'at-inboxmeta' },
+										item.projectName ? item.projectName + ' · ' : '',
 										item.ref?.category ? item.ref.category + ' · ' : '',
 										item.ref?.memberId ? item.ref.memberId : '',
 										' · ',
 										fmtTime(item.createdAt)),
 									item.state !== 'unread' ? h('div', { className: 'at-inboxstate' }, item.state) : null),
 								h('div', { className: 'at-inboxactions' },
-									item.ref?.taskId ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => openTask(item.ref.taskId) }, t('inboxOpenTask')) : null,
+									item.ref?.taskId ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => openInboxTask(item) }, t('inboxOpenTask')) : null,
 									item.state === 'unread' ? h('button', { className: 'at-btn at-btn-small at-btn-primary', type: 'button', onClick: () => ackInbox(item) }, t('inboxAck')) : null)))
 							: h(EmptyState, {
 								t,

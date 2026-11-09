@@ -19,7 +19,9 @@ import { classifyLlmFailure, retryDecision } from './lib/runtime/failure-policy.
 import { memberIdentity } from './lib/domain/member-profile.js';
 import { loadSkillContext } from './lib/runtime/skill-loader.js';
 import { formatSkillCatalog } from './lib/runtime/skill-catalog.js';
+import { installFileSkillProvider } from './lib/runtime/skill-provider.js';
 import { createMemberPermissionGuard } from './lib/host/permission-guard.js';
+import { installFaultAdapter } from './lib/host/fault-adapter.js';
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeWake, planWakes } from './lib/host/waker.js';
 
@@ -28,7 +30,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer'];
 
-const VERSION = '0.2.6';
+const VERSION = '0.3.0';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -79,11 +81,22 @@ function errorResponse(res, error) {
 async function boot() {
 	const dataDir = join(dshHome(), 'ai-team', profileName());
 	const registry = ProjectRegistry.load(dataDir);
+	const runtimes = new Map();
+	for (const project of registry.list()) {
+		const runtime = await ProjectRuntime.open({
+			rootDir: dataDir,
+			projectId: project.id,
+			projectName: project.name,
+			projectGoal: project.goal,
+		});
+		runtimes.set(project.id, runtime);
+	}
 	const activeProjectId = registry.activeProjectId;
-	const runtime = await ProjectRuntime.open({ rootDir: dataDir, projectId: activeProjectId });
+	const runtime = runtimes.get(activeProjectId) ?? runtimes.values().next().value;
 	return {
 		...runtime,
 		runtime,
+		runtimes,
 		registry,
 		activeProjectId,
 		ledger: runtime.ledger,
@@ -99,6 +112,16 @@ export function apply(ctx) {
 
 		let booted = null;
 		let bootError = null;
+		const projectRuntime = (projectId) => booted?.runtimes?.get(projectId) ?? null;
+		const runtimeForAgent = (sessionId) => {
+			if (sessionId === undefined || sessionId === null) return null;
+			for (const runtime of booted?.runtimes?.values() ?? []) {
+				const member = Object.values(runtime.service.state.members ?? {})
+					.find((entry) => entry.sessionId === sessionId);
+				if (member !== undefined) return runtime;
+			}
+			return null;
+		};
 		const access = validatePermissionProfile({
 			permissionPresets: ctx.get('permissionPresets'),
 			sandboxPolicy: ctx.get('sandboxPolicy'),
@@ -125,13 +148,14 @@ export function apply(ctx) {
 		const offRequestError = typeof ctx.on === 'function'
 			? ctx.on('agent/request-error', async (payload, next) => {
 				if (booted === null) return next();
-				const member = Object.values(booted.service.state.members ?? {})
+				const failureRuntime = runtimeForAgent(payload?.agent?.id);
+				const member = failureRuntime === null ? undefined : Object.values(failureRuntime.service.state.members ?? {})
 					.find((candidate) => candidate.sessionId === payload?.agent?.id);
-				if (member === undefined) return next();
+				if (member === undefined || failureRuntime === null) return next();
 				const failure = classifyLlmFailure(payload.failure);
 				let recorded;
 				try {
-					recorded = await booted.service.recordMemberFailure(member.id, {
+					recorded = await failureRuntime.service.recordMemberFailure(member.id, {
 						...failure,
 						provider: payload.provider ?? null,
 						model: member.config?.model ?? null,
@@ -143,7 +167,7 @@ export function apply(ctx) {
 				const decision = retryDecision(failure, member.config ?? {}, recorded.member.attempts ?? 1);
 				if (decision.action === 'fallback' && decision.patch !== undefined) {
 					try {
-						await booted.service.applySystemFallback(member.id, decision.patch, 'llm-fallback');
+						await failureRuntime.service.applySystemFallback(member.id, decision.patch, 'llm-fallback');
 					} catch { /* policy/rollback failure must not turn into a retry storm */ }
 				}
 				if (decision.action === 'fail') return next();
@@ -153,9 +177,10 @@ export function apply(ctx) {
 		const offSessionEvent = typeof ctx.on === 'function'
 			? ctx.on('session/event', async (session, event) => {
 				if (booted === null || event?.type !== 'turn/end') return;
-				const member = Object.values(booted.service.state.members ?? {})
+				const eventRuntime = runtimeForAgent(session?.id);
+				const member = eventRuntime === null ? undefined : Object.values(eventRuntime.service.state.members ?? {})
 					.find((candidate) => candidate.sessionId === session?.id);
-				if (member === undefined) return;
+				if (member === undefined || eventRuntime === null) return;
 				// The child Agent owns a persisted session, but its live events are
 				// buffered by the JSONL writer until a session/flush checkpoint. Flush
 				// every member turn boundary so restart/memory can replay the history.
@@ -168,17 +193,21 @@ export function apply(ctx) {
 				if (event?.data?.reason?.kind !== 'completed') return;
 				if (member.lastFailure === undefined || member.lastFailure === null) return;
 				try {
-					await booted.service.recordMemberRecovery(member.id, member.attempts ?? 0, member.config ?? null);
-					broadcast(undefined);
+					await eventRuntime.service.recordMemberRecovery(member.id, member.attempts ?? 0, member.config ?? null);
+					broadcast(undefined, eventRuntime);
 				} catch { /* recovery is best-effort; the ledger still has the failure */ }
 			})
+			: () => {};
+		let llmFaultMode = null;
+		const offLlmFault = process.env.DSH_AI_TEAM_TEST === '1'
+			? installFaultAdapter(ctx.get('llm'), () => llmFaultMode)
 			: () => {};
 		let host = null;
 		let hostPromise = null;
 		const wakeKeys = new Set();
-		const wakeFromResult = async (result, actor = {}) => {
-			if (booted === null) return;
-			const plans = planWakes(booted.service.state, result, actor);
+		const wakeFromResult = async (projectRuntime, result, actor = {}) => {
+			if (projectRuntime === null || projectRuntime === undefined) return;
+			const plans = planWakes(projectRuntime.service.state, result, actor);
 			if (plans.length === 0) return;
 			const subagents = ctx.get('subagents');
 			const sessions = ctx.get('sessions');
@@ -190,7 +219,7 @@ export function apply(ctx) {
 			const parentInfo = await ensureParent();
 			for (const plan of plans) {
 				if (wakeKeys.has(plan.key)) continue;
-				const member = booted.service.state.members?.[plan.memberId];
+				const member = projectRuntime.service.state.members?.[plan.memberId];
 				if (member?.sessionId === undefined || member.sessionId === null) continue;
 				// Reserve before the async delivery: the HTTP result and the ledger
 				// event both schedule the same plan, and only one may deliver it.
@@ -203,30 +232,30 @@ export function apply(ctx) {
 					parent: parentInfo.agent,
 					provider: providers[0],
 					preset: 'standard',
-					cwd: member.workspace ?? booted.dataDir,
+					cwd: member.workspace ?? projectRuntime.dataDir,
 				});
 				try {
 					const delivered = await runtime.wake(member, {
-						prompt: describeWake(plan, booted.service.state)
+						prompt: describeWake(plan, projectRuntime.service.state)
 							+ await formatSkillCatalog(skillsService, { cwd: member.workspace ?? undefined })
-							+ await loadSkillContext(member, booted.dataDir),
+							+ await loadSkillContext(member, projectRuntime.dataDir),
 					});
-					await booted.service.recordWake(plan.memberId, {
+					await projectRuntime.service.recordWake(plan.memberId, {
 						ok: true, taskId: plan.taskId, reason: plan.reason, messageId: delivered.messageId,
 					});
 				} catch (error) {
 					wakeKeys.delete(plan.key);
 					console.warn('[ai-team] wake failed:', plan.memberId, error?.code ?? error?.message ?? error);
 					try {
-						await booted.service.recordWake(plan.memberId, {
+						await projectRuntime.service.recordWake(plan.memberId, {
 							ok: false, taskId: plan.taskId, reason: plan.reason, error: error?.code ?? error?.message ?? String(error),
 						});
 					} catch { /* ledger may be closed */ }
 				}
 			}
 		};
-		const distillMemberWithModel = async (payload) => {
-			const member = booted?.service.state.members?.[payload.memberId];
+		const distillMemberWithModel = async (projectRuntime, payload) => {
+			const member = projectRuntime?.service.state.members?.[payload.memberId];
 			if (member === undefined || member.kind !== 'agent') {
 				return { error: { code: 'E_NOT_FOUND', message: 'agent not found' }, status: 404 };
 			}
@@ -240,7 +269,7 @@ export function apply(ctx) {
 			if (!selection?.provider || !selection?.model) {
 				return { error: { code: 'E_RUNTIME_UNAVAILABLE', message: 'no provider/model configured' }, status: 503 };
 			}
-			const tasks = Object.values(booted.service.state.tasks ?? {})
+			const tasks = Object.values(projectRuntime.service.state.tasks ?? {})
 				.filter((task) => task.ownerId === member.id || task.assigneeId === member.id)
 				.slice(-8)
 				.map((task) => `#${task.number ?? '?'} ${task.title} [${task.status}]`)
@@ -282,31 +311,42 @@ export function apply(ctx) {
 			if (typeof personality !== 'string' || personality.trim() === '') {
 				return { error: { code: 'E_DISTILL', message: 'model returned no personality' }, status: 502 };
 			}
-			const result = await booted.service.dispatch({
+			const result = await projectRuntime.service.dispatch({
 				type: 'member.distill',
 				payload: { memberId: member.id, personality: personality.trim(), reason: payload.reason ?? 'model re-distill' },
 				actor: { kind: 'human', memberId: HUMAN_ID },
-				projectId: booted.activeProjectId,
+				projectId: projectRuntime.id,
 			});
 			return { ok: true, member: result.member, distilled: { provider: selection.provider, model: selection.model } };
 		};
 
 		const skillsService = ctx.get('skills');
+		const disposeSkillProvider = installFileSkillProvider(skillsService, {
+			dshHome: dshHome(),
+			projectCwd: process.cwd(),
+		});
 		const tools = ctx.get('tools');
 		const disposeTool = tools?.register
 			? tools.register(createTeamTool({
-				getState: () => booted?.service.state ?? { projects: {}, members: {}, tasks: {}, threads: {}, inbox: {} },
-				dispatch: (command) => booted.service.dispatch(command),
+				getState: (exec) => runtimeForAgent(exec?.agent?.id)?.service.state
+					?? booted?.service.state
+					?? { projects: {}, members: {}, tasks: {}, threads: {}, inbox: {} },
+				dispatch: (command, exec) => {
+					const runtime = runtimeForAgent(exec?.agent?.id) ?? projectRuntime(command?.projectId) ?? null;
+					if (runtime === null) return Promise.reject(new Error('no Project runtime'));
+					return runtime.service.dispatch(command);
+				},
 			}), {
-				when: (activation) => booted !== null && Object.values(booted.service.state.members ?? {})
-					.some((member) => member.sessionId === activation?.agent?.id),
+				when: (activation) => runtimeForAgent(activation?.agent?.id) !== null,
 			})
 			: () => {};
 
 		const ensureParent = async () => {
 			if (host !== null) return host;
 			if (hostPromise === null) {
-				const existingHost = booted?.service.state.hostSessionId;
+				const existingHost = [...(booted?.runtimes?.values() ?? [])]
+					.map((runtime) => runtime.service.state.hostSessionId)
+					.find((value) => value !== undefined && value !== null);
 				hostPromise = ensureHostAgent({
 					agents: ctx.get('agents'),
 					agentDefaultModel: ctx.get('agentDefaultModel'),
@@ -315,7 +355,9 @@ export function apply(ctx) {
 					resumeSessionId: existingHost,
 				}).then(async (value) => {
 					if (value.created === true && existingHost === undefined) {
-						await booted.service.bindHostSession(value.sessionId);
+						for (const runtime of booted?.runtimes?.values() ?? []) {
+							await runtime.service.bindHostSession(value.sessionId);
+						}
 					}
 					host = value;
 					return value;
@@ -326,8 +368,8 @@ export function apply(ctx) {
 			}
 			return hostPromise;
 		};
-		const activateMember = async (body) => {
-			const member = booted.service.state.members?.[body.payload?.memberId];
+		const activateMember = async (body, projectRuntime) => {
+			const member = projectRuntime.service.state.members?.[body.payload?.memberId];
 			if (member === undefined) return { error: { code: 'E_NOT_FOUND', message: 'member not found' }, status: 404 };
 			if (member.status === 'retired') return { error: { code: 'E_INVALID_STATE', message: 'member is retired' }, status: 409 };
 			if (member.status === 'running') return { error: { code: 'E_INVALID_STATE', message: 'member is already running' }, status: 409 };
@@ -369,17 +411,17 @@ export function apply(ctx) {
 					parent: parentInfo.agent,
 					provider: providers[0],
 					preset: 'standard',
-					cwd: member.workspace ?? booted.dataDir,
+					cwd: member.workspace ?? projectRuntime.dataDir,
 				});
 				const result = await runtime.activate(activationMember, {
 					prompt: `${memberIdentity(activationMember)}\n\n${typeof body.payload?.prompt === 'string'
 						? body.payload.prompt
-						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: activationMember.workspace ?? undefined })}${await loadSkillContext(activationMember, booted.dataDir)}`,
+						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: activationMember.workspace ?? undefined })}${await loadSkillContext(activationMember, projectRuntime.dataDir)}`,
 				});
 				let bound;
 				try {
-					bound = await booted.service.bindMemberSession(
-						{ actor: { kind: 'human', memberId: HUMAN_ID }, projectId: booted.activeProjectId },
+					bound = await projectRuntime.service.bindMemberSession(
+						{ actor: { kind: 'human', memberId: HUMAN_ID }, projectId: projectRuntime.id },
 						{ memberId: member.id, sessionId: result.childId },
 					);
 				} catch (error) {
@@ -396,8 +438,8 @@ export function apply(ctx) {
 				};
 			} catch (error) {
 				try {
-					await booted.service.failMember(
-						{ actor: { kind: 'human', memberId: HUMAN_ID }, projectId: booted.activeProjectId },
+					await projectRuntime.service.failMember(
+						{ actor: { kind: 'human', memberId: HUMAN_ID }, projectId: projectRuntime.id },
 						{ memberId: member.id, reason: `${error.code ?? 'E_RUNTIME'}: ${error.message ?? error}` },
 					);
 				} catch { /* member may already be gone */ }
@@ -405,17 +447,18 @@ export function apply(ctx) {
 			}
 		};
 		let attachRuntime = null;
-		const snapshot = () => ({
-			rev: booted.ledger.head.seq,
+		const currentRuntime = () => projectRuntime(booted?.activeProjectId) ?? booted?.runtime ?? null;
+		const snapshot = (runtime = currentRuntime()) => ({
+			rev: runtime?.ledger?.head?.seq ?? 0,
 			generatedAt: Date.now(),
-			board: booted.service.board(booted.activeProjectId),
-			quadrants: booted.service.quadrants(booted.activeProjectId),
+			board: runtime?.service?.board(runtime.id),
+			quadrants: runtime?.service?.quadrants(runtime.id),
 		});
 		attachRuntime = (runtime) => {
 			runtime.ledger.onEvent = (event) => {
-				broadcast(event);
+				broadcast(event, runtime);
 				const actorId = event?.actor?.kind === 'agent' ? event.actor.memberId : undefined;
-				void wakeFromResult({ event }, actorId === undefined ? {} : { agentId: actorId }).catch((error) => {
+				void wakeFromResult(runtime, { event }, actorId === undefined ? {} : { agentId: actorId }).catch((error) => {
 					console.warn('[ai-team] event wake planner failed:', error?.message ?? error);
 				});
 			};
@@ -423,67 +466,79 @@ export function apply(ctx) {
 		let disposePermissionGuard = () => {};
 		ready.then((value) => {
 			if (value !== null && value !== undefined) {
-				attachRuntime(value);
+				for (const runtime of value.runtimes.values()) attachRuntime(runtime);
 				if (tools?.guard) {
+					const allMembers = {
+						get state() {
+							const members = {};
+							for (const runtime of booted?.runtimes?.values() ?? []) {
+								Object.assign(members, runtime.service.state.members ?? {});
+							}
+							return { members };
+						},
+					};
 					disposePermissionGuard = tools.guard(createMemberPermissionGuard({
-						service: value.service,
+						service: allMembers,
 						permissionPresets: ctx.get('permissionPresets'),
 						sandboxPolicy: ctx.get('sandboxPolicy'),
 					})) ?? (() => {});
 				}
 				// A restart is an explicit lifecycle event: resume unfinished Tasks
-				// once, without timers or periodic polling.
-				void wakeFromResult({ event: { type: 'team/startup' } }, {}).catch((error) => {
-					console.warn('[ai-team] startup wake planner failed:', error?.message ?? error);
-				});
+				// once per Project, without timers or periodic polling.
+				for (const runtime of value.runtimes.values()) {
+					void wakeFromResult(runtime, { event: { type: 'team/startup' } }, {}).catch((error) => {
+						console.warn('[ai-team] startup wake planner failed:', error?.message ?? error);
+					});
+				}
 			}
 		}).catch(() => {});
-		const broadcast = (event) => {
+		const broadcast = (event, runtime = currentRuntime()) => {
+			if (runtime === null || runtime === undefined) return;
 			const payload = {
-				...snapshot(),
+				...snapshot(runtime),
+				projectId: runtime.id,
 				type: 'change',
 				event: event === undefined ? null : { id: event.id, type: event.type, seq: event.seq },
 			};
 			const frame = `event: change\ndata: ${JSON.stringify(payload)}\n\n`;
 			for (const client of sseClients) {
-				if (client.writableEnded || client.destroyed) {
+				if (client.projectId !== runtime.id) continue;
+				if (client.res.writableEnded || client.res.destroyed) {
 					sseClients.delete(client);
 					continue;
 				}
 				try {
-					client.write(frame);
+					client.res.write(frame);
 				} catch {
 					sseClients.delete(client);
 				}
 			}
 		};
 
-		async function switchRuntime(nextProjectId, projectName, projectGoal) {
+		async function activateProject(nextProjectId, projectName, projectGoal) {
 			await ready;
 			if (booted === null) throw new Error('team ledger is unavailable');
-			if (booted.activeProjectId === nextProjectId) return booted;
-			const next = await ProjectRuntime.open({
-				rootDir: booted.dataDir,
-				projectId: nextProjectId,
-				projectName,
-				projectGoal,
-			});
-			attachRuntime(next);
-			const previous = booted;
+			let next = projectRuntime(nextProjectId);
+			if (next === null) {
+				next = await ProjectRuntime.open({
+					rootDir: booted.dataDir,
+					projectId: nextProjectId,
+					projectName,
+					projectGoal,
+				});
+				booted.runtimes.set(nextProjectId, next);
+				attachRuntime(next);
+			}
+			booted.registry.setActive(nextProjectId);
 			booted = {
-				...next,
+				...booted,
 				runtime: next,
-				registry: previous.registry,
 				activeProjectId: nextProjectId,
-				dataDir: previous.dataDir,
+				ledger: next.ledger,
+				service: next.service,
 			};
-			previous.registry.setActive(nextProjectId);
-			previous.runtime?.close?.() ?? previous.ledger?.close?.();
-			broadcast(undefined);
-			void wakeFromResult({ event: { type: 'team/startup' } }, {}).catch((error) => {
-				console.warn('[ai-team] project switch startup wake failed:', error?.message ?? error);
-			});
-			return booted;
+			broadcast(undefined, next);
+			return next;
 		}
 
 		const dispose = webServer.register({
@@ -499,6 +554,24 @@ export function apply(ctx) {
 						}, 503);
 					}
 
+					if (req.method === 'GET' && url.pathname === '/ai-team/api/skills-debug') {
+						const variants = {};
+						for (const [label, options] of [
+							['none', {}],
+							['repo', { cwd: process.cwd() }],
+							['data', { cwd: booted.dataDir }],
+						]) {
+							try {
+								variants[label] = (await skillsService.list(options)).map((skill) => skill.name);
+							} catch (error) {
+								variants[label] = [error?.message ?? String(error)];
+							}
+						}
+						return send(res, {
+							variants,
+							get: await skillsService.get('distilly', {}).then((skill) => skill?.name ?? null).catch(() => null),
+						});
+					}
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/health') {
 						const head = booted.ledger.head;
 						return send(res, {
@@ -508,6 +581,12 @@ export function apply(ctx) {
 							projectId: booted.activeProjectId,
 							activeProjectId: booted.activeProjectId,
 							ledger: { events: booted.ledger.events.length, head },
+							projects: [...booted.runtimes.values()].map((runtime) => ({
+								id: runtime.id,
+								events: runtime.ledger.events.length,
+								head: runtime.ledger.head.seq,
+								active: runtime.id === booted.activeProjectId,
+							})),
 							runtime: {
 								roots: ctx.get('agents')?.roots?.().length ?? null,
 								defaultModel: ctx.get('agentDefaultModel')?.currentSelection?.() ?? null,
@@ -525,6 +604,9 @@ export function apply(ctx) {
 								}),
 								teamTool: ctx.get('tools')?.definitions?.().some((definition) => definition.name === 'team') ?? null,
 								skillsService: skillsService !== null && skillsService !== undefined,
+								skillNames: skillsService?.list
+									? await Promise.resolve(skillsService.list({})).then((rows) => rows.map((skill) => skill.name)).catch(() => [])
+									: [],
 								presets: await Promise.resolve(ctx.get('agentPresets')?.list?.()).catch(() => []),
 								members: Object.values(booted.service.state.members ?? {})
 									.filter((member) => member.kind === 'agent')
@@ -558,9 +640,23 @@ export function apply(ctx) {
 						});
 					}
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/bootstrap') {
-						const bootstrap = booted.service.bootstrap(booted.activeProjectId);
+						const requested = url.searchParams.get('project');
+						const requestedRuntime = requested === null ? null : projectRuntime(requested);
+						const bootstrapRuntime = requestedRuntime ?? currentRuntime();
+						const bootstrap = bootstrapRuntime.service.bootstrap(bootstrapRuntime.id);
+						const inbox = [];
+						for (const runtime of booted.runtimes.values()) {
+							const projectName = booted.registry.list().find((project) => project.id === runtime.id)?.name ?? runtime.id;
+							const view = runtime.id === bootstrapRuntime.id ? bootstrap : runtime.service.bootstrap(runtime.id);
+							for (const item of view.inbox ?? []) {
+								inbox.push({ ...item, projectId: runtime.id, projectName });
+							}
+						}
+						inbox.sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0));
 						return send(res, {
 							...bootstrap,
+							inbox,
+							inboxUnread: inbox.filter((item) => item.read !== true).length,
 							projects: booted.registry.list().map((project) => {
 								const active = bootstrap.projects?.find((entry) => entry.id === project.id);
 								return {
@@ -581,7 +677,8 @@ export function apply(ctx) {
 					const events = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/events$/);
 					if (req.method === 'GET' && events !== null) {
 						const projectId = decodeURIComponent(events[1]);
-						if (projectId !== booted.activeProjectId) {
+						const runtime = projectRuntime(projectId);
+						if (runtime === null) {
 							return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
 						}
 						res.writeHead(200, {
@@ -590,9 +687,10 @@ export function apply(ctx) {
 							connection: 'keep-alive',
 							'x-accel-buffering': 'no',
 						});
-						res.write(`event: ready\ndata: ${JSON.stringify({ ...snapshot(), type: 'ready' })}\n\n`);
-						sseClients.add(res);
-						const cleanup = () => sseClients.delete(res);
+						res.write(`event: ready\ndata: ${JSON.stringify({ ...snapshot(runtime), type: 'ready' })}\n\n`);
+						const client = { res, projectId };
+						sseClients.add(client);
+						const cleanup = () => sseClients.delete(client);
 						req.on('close', cleanup);
 						res.on('close', cleanup);
 						return;
@@ -601,12 +699,13 @@ export function apply(ctx) {
 					const board = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/board$/);
 					if (req.method === 'GET' && board !== null) {
 						const projectId = decodeURIComponent(board[1]);
-						if (projectId !== booted.activeProjectId) {
+						const runtime = projectRuntime(projectId);
+						if (runtime === null) {
 							return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
 						}
 						try {
 							const doneLimit = Number.parseInt(url.searchParams.get('doneLimit') ?? '', 10);
-							return send(res, booted.service.board(booted.activeProjectId, {
+							return send(res, runtime.service.board(projectId, {
 								doneLimit: Number.isSafeInteger(doneLimit) ? doneLimit : undefined,
 							}));
 						} catch (error) {
@@ -617,13 +716,14 @@ export function apply(ctx) {
 					const quadrants = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/quadrants$/);
 					if (req.method === 'GET' && quadrants !== null) {
 						const projectId = decodeURIComponent(quadrants[1]);
-						if (projectId !== booted.activeProjectId) {
+						const runtime = projectRuntime(projectId);
+						if (runtime === null) {
 							return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
 						}
 						try {
 							const q4Limit = Number.parseInt(url.searchParams.get('q4Limit') ?? '', 10);
 							const q4Days = Number.parseFloat(url.searchParams.get('q4Days') ?? '');
-							return send(res, booted.service.quadrants(booted.activeProjectId, {
+							return send(res, runtime.service.quadrants(projectId, {
 								q4Limit: Number.isSafeInteger(q4Limit) ? q4Limit : undefined,
 								q4Days: Number.isFinite(q4Days) ? q4Days : undefined,
 							}));
@@ -635,7 +735,8 @@ export function apply(ctx) {
 					const commands = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/commands$/);
 					if (req.method === 'POST' && commands !== null) {
 						const projectId = decodeURIComponent(commands[1]);
-						if (projectId !== booted.activeProjectId) {
+						const runtime = projectRuntime(projectId);
+						if (runtime === null) {
 							return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
 						}
 						let body;
@@ -651,8 +752,50 @@ export function apply(ctx) {
 						if (typeof body?.type !== 'string' || body.type === '') {
 							return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'command type is required' } }, 400);
 						}
+						if (body.type === 'test.llm.fault') {
+							if (process.env.DSH_AI_TEAM_TEST !== '1') {
+								return send(res, { error: { code: 'E_FORBIDDEN', message: 'test hook is disabled' } }, 403);
+							}
+							const mode = body.payload?.mode ?? null;
+							if (mode !== null && mode !== 'billing' && mode !== 'network') {
+								return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'mode must be billing, network or null' } }, 400);
+							}
+							llmFaultMode = mode;
+							return send(res, { ok: true, mode });
+						}
+						if (body.type === 'test.permission.downgrade') {
+							if (process.env.DSH_AI_TEAM_TEST !== '1') {
+								return send(res, { error: { code: 'E_FORBIDDEN', message: 'test hook is disabled' } }, 403);
+							}
+							const member = runtime.service.state.members?.[body.payload?.memberId];
+							const agent = member?.sessionId === undefined ? undefined : ctx.get('agents')?.get?.(member.sessionId);
+							const session = agent?.session;
+							if (session === undefined || session === null) {
+								return send(res, { error: { code: 'E_NOT_FOUND', message: 'member session not found' } }, 404);
+							}
+							const permissionPresets = ctx.get('permissionPresets');
+							permissionPresets?.set?.(session, 'workspace-write');
+							return send(res, {
+								ok: true,
+								mode: ctx.get('sandboxPolicy')?.overrideOf?.(session) ?? null,
+							});
+						}
+						if (body.type === 'test.permission.read') {
+							if (process.env.DSH_AI_TEAM_TEST !== '1') {
+								return send(res, { error: { code: 'E_FORBIDDEN', message: 'test hook is disabled' } }, 403);
+							}
+							const member = runtime.service.state.members?.[body.payload?.memberId];
+							const agent = member?.sessionId === undefined ? undefined : ctx.get('agents')?.get?.(member.sessionId);
+							const session = agent?.session;
+							return send(res, {
+								ok: true,
+								mode: session === undefined || session === null
+									? null
+									: ctx.get('sandboxPolicy')?.overrideOf?.(session) ?? null,
+							});
+						}
 						if (body.type === 'member.distill' && body.payload?.mode === 'model') {
-							const distilled = await distillMemberWithModel(body.payload ?? {});
+							const distilled = await distillMemberWithModel(runtime, body.payload ?? {});
 							if (distilled.error !== undefined) return send(res, { error: distilled.error }, distilled.status ?? 502);
 							return send(res, distilled);
 						}
@@ -662,7 +805,7 @@ export function apply(ctx) {
 							if (name === '') return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'project name is required' } }, 400);
 							const id = ids.project();
 							booted.registry.add({ id, name, goal });
-							const next = await switchRuntime(id, name, goal);
+							const next = await activateProject(id, name, goal);
 							return send(res, { ok: true, project: next.service.state.projects[id] ?? { id, name } });
 						}
 						if (body.type === 'project.activate') {
@@ -671,25 +814,25 @@ export function apply(ctx) {
 								return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
 							}
 							const record = booted.registry.list().find((project) => project.id === target);
-							const next = await switchRuntime(target, record?.name, record?.goal);
+							const next = await activateProject(target, record?.name, record?.goal);
 							return send(res, { ok: true, project: next.service.state.projects[target] ?? record });
 						}
 						if (body.type === 'member.activate') {
-							const activated = await activateMember(body);
+							const activated = await activateMember(body, runtime);
 							if (activated.error !== undefined) return send(res, { error: activated.error }, activated.status ?? 409);
 							broadcast(undefined);
 							return send(res, activated);
 						}
 						try {
-							const result = await booted.service.dispatch({
+							const result = await runtime.service.dispatch({
 								type: body.type,
 								payload: body.payload ?? {},
 								actor: { kind: 'human', memberId: HUMAN_ID },
-								projectId: booted.activeProjectId,
+								projectId: runtime.id,
 								correlationId: typeof body.correlationId === 'string' ? body.correlationId : undefined,
 							});
 							send(res, { ok: true, ...result });
-							void wakeFromResult(result, { agentId: HUMAN_ID }).catch((error) => {
+							void wakeFromResult(runtime, result, { agentId: HUMAN_ID }).catch((error) => {
 								console.warn('[ai-team] wake planner failed:', error?.message ?? error);
 							});
 							return;
@@ -707,7 +850,7 @@ export function apply(ctx) {
 
 		return () => {
 			for (const client of sseClients) {
-				try { client.end(); } catch { /* socket already gone */ }
+				try { client.res.end(); } catch { /* socket already gone */ }
 			}
 			sseClients.clear();
 			for (const activation of activations.values()) {
@@ -716,11 +859,13 @@ export function apply(ctx) {
 			activations.clear();
 			if (host !== null) void host.dispose?.();
 			try { disposePermissionGuard(); } catch { /* already disposed */ }
+			try { offLlmFault(); } catch { /* already disposed */ }
+			try { disposeSkillProvider(); } catch { /* already disposed */ }
 			offRequestError();
 			offSessionEvent();
 			disposeTool();
 			dispose();
-			if (booted !== null) booted.ledger.close();
+			for (const runtime of booted?.runtimes?.values() ?? []) runtime.close();
 		};
 	}, 'ai-team: workbench routes');
 }

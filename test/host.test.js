@@ -332,6 +332,38 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(changed.quadrants.rev, changed.rev);
 		controller.abort();
 
+		const projectCreate = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ type: 'project.create', payload: { name: '并发 P2', goal: '并发运行' } }),
+		});
+		assert.equal(projectCreate.status, 200);
+		const secondProject = (await projectCreate.json()).project.id;
+		const healthWithTwo = await (await fetch(`${base}/ai-team/api/health`)).json();
+		assert.equal(healthWithTwo.projects.length, 2);
+		assert.equal(healthWithTwo.projects.filter((project) => project.active).length, 1);
+
+		const secondTask = await fetch(`${base}/ai-team/api/projects/${secondProject}/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ type: 'task.create', payload: { title: 'P2 任务', resultDefinition: 'done', ownerId: 'mem_human' } }),
+		});
+		assert.equal(secondTask.status, 200);
+		const p1Board = await (await fetch(`${base}/ai-team/api/projects/prj_main/board`)).json();
+		const p2Board = await (await fetch(`${base}/ai-team/api/projects/${secondProject}/board`)).json();
+		assert.equal(p1Board.counts.todo, 3);
+		assert.equal(p2Board.counts.todo, 1);
+
+		const activateP1 = await fetch(`${base}/ai-team/api/projects/${secondProject}/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ type: 'project.activate', payload: { projectId: 'prj_main' } }),
+		});
+		assert.equal(activateP1.status, 200);
+		const healthAfterSwitch = await (await fetch(`${base}/ai-team/api/health`)).json();
+		assert.equal(healthAfterSwitch.activeProjectId, 'prj_main');
+		assert.equal(healthAfterSwitch.projects.length, 2);
+
 		const missing = await fetch(`${base}/ai-team/api/nope`);
 		assert.equal(missing.status, 404);
 	} finally {
