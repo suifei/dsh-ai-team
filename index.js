@@ -34,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.23';
+const VERSION = '0.3.24';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 

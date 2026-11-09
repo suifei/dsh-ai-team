@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.24 — 2026-11-10
+
+- 修复 member `team` 工具 accept 未透传 `checks` 的缺口：agent QA 带 checklist 验收不再 E_INVALID_STATE；
+- 增加 `checks` schema，并覆盖 QA agent 带清单验收测试。
+
 ## 0.3.23 — 2026-11-10
 
 - 报告六问只生成一个结构化收件箱项，不再按每条 Thread mention 重复；

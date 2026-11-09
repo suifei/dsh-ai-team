@@ -96,6 +96,25 @@ test('the team tool reads, claims, submits, threads and accepts through real Tea
 		assert.equal(distilled.member.distillVersion, 1);
 		assert.match(distilled.member.personality, /门禁/);
 
+		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'a3', name: '白砚', kind: 'agent', role: '验收' } });
+		await service.dispatch({ type: 'member.bind', actor: human, payload: { memberId: 'a3', sessionId: 's3' } });
+		const qaTask = await service.dispatch({
+			type: 'task.create', actor: human, projectId: 'prj_test',
+			payload: { title: 'QA task', resultDefinition: 'qa pass', ownerId: 'a1', qaRequired: true, qaChecklist: ['check one'] },
+		});
+		const qaClaim = await tool.execute({ action: 'claim', taskId: qaTask.task.id, expectedRevision: qaTask.task.revision }, exec('s1'));
+		assert.equal(qaClaim.ok, true);
+		const qaSubmit = await tool.execute({
+			action: 'submit', taskId: qaTask.task.id, expectedRevision: qaClaim.task.revision, summary: 'ready', evidence: ['qa.log'],
+		}, exec('s1'));
+		assert.equal(qaSubmit.ok, true);
+		const qaAccept = await tool.execute({
+			action: 'accept', taskId: qaTask.task.id, expectedRevision: qaSubmit.task.revision,
+			note: 'checklist passed', checks: [{ item: 'check one', passed: true }],
+		}, exec('s3'));
+		assert.equal(qaAccept.ok, true);
+		assert.equal(qaAccept.task.status, 'done');
+
 		const notMember = await tool.execute({ action: 'tasks' }, exec('other'));
 		assert.equal(notMember.ok, false);
 		assert.equal(notMember.error.code, 'E_NOT_MEMBER');
