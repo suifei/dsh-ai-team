@@ -33,6 +33,16 @@ test('assignment and submission wake the responsible Agent', () => {
 	assert.deepEqual(changes.map((item) => [item.memberId, item.reason]), [['a2', 'changes_requested']]);
 });
 
+test('restart resumes unfinished Tasks once without timers', () => {
+	const plans = planWakes(state, { event: { type: 'team/startup' } }, {});
+	assert.deepEqual(plans.map((item) => [item.memberId, item.taskId, item.reason]), [
+		['a1', 't1', 'startup_resume'],
+		['a2', 't2', 'startup_resume'],
+	]);
+	assert.match(plans[0].prompt, /DSH 已重启/);
+	assert.ok(plans.every((item) => item.key.startsWith('startup:')));
+});
+
 test('acceptance schedules a reflection wake for the executor', () => {
 	const doneState = {
 		...state,

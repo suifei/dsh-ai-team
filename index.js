@@ -429,6 +429,11 @@ export function apply(ctx) {
 						console.warn('[ai-team] event wake planner failed:', error?.message ?? error);
 					});
 				};
+				// A restart is an explicit lifecycle event: resume unfinished Tasks
+				// once, without timers or periodic polling.
+				void wakeFromResult({ event: { type: 'team/startup' } }, {}).catch((error) => {
+					console.warn('[ai-team] startup wake planner failed:', error?.message ?? error);
+				});
 			}
 		}).catch(() => {});
 		const broadcast = (event) => {
