@@ -19,6 +19,7 @@ import { classifyLlmFailure, retryDecision } from './lib/runtime/failure-policy.
 import { memberIdentity } from './lib/domain/member-profile.js';
 import { loadSkillContext } from './lib/runtime/skill-loader.js';
 import { formatSkillCatalog } from './lib/runtime/skill-catalog.js';
+import { createMemberPermissionGuard } from './lib/host/permission-guard.js';
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeWake, planWakes } from './lib/host/waker.js';
 
@@ -27,7 +28,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer'];
 
-const VERSION = '0.2.5';
+const VERSION = '0.2.6';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -419,9 +420,17 @@ export function apply(ctx) {
 				});
 			};
 		};
+		let disposePermissionGuard = () => {};
 		ready.then((value) => {
 			if (value !== null && value !== undefined) {
 				attachRuntime(value);
+				if (tools?.guard) {
+					disposePermissionGuard = tools.guard(createMemberPermissionGuard({
+						service: value.service,
+						permissionPresets: ctx.get('permissionPresets'),
+						sandboxPolicy: ctx.get('sandboxPolicy'),
+					})) ?? (() => {});
+				}
 				// A restart is an explicit lifecycle event: resume unfinished Tasks
 				// once, without timers or periodic polling.
 				void wakeFromResult({ event: { type: 'team/startup' } }, {}).catch((error) => {
@@ -706,6 +715,7 @@ export function apply(ctx) {
 			}
 			activations.clear();
 			if (host !== null) void host.dispose?.();
+			try { disposePermissionGuard(); } catch { /* already disposed */ }
 			offRequestError();
 			offSessionEvent();
 			disposeTool();

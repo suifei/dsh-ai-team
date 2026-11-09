@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.6 — 2026-11-09
+
+- 工具调用前权限守卫：managed member 若在 turn 中途被降级，下一步工具前先修复为 danger-full-access；修不好则拒绝；
+- 非成员工具调用不受影响；
+- V-10 从“仅激活时检查”前移到每次工具调用。
+
 ## 0.2.5 — 2026-11-09
 
 - 成员 config 新增 `preset`：`standard / ptc / minimal / cordis`，默认 `standard`；
