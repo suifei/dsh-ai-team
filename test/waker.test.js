@@ -52,6 +52,16 @@ test('restart resumes unfinished Tasks once without timers', () => {
 	assert.ok(plans.every((item) => item.key.startsWith('startup:')));
 });
 
+test('PMO review nudge wakes every QA member for a pending Task', () => {
+	const reviewState = {
+		...state,
+		members: { ...state.members, a4: { id: 'a4', name: '白砚', kind: 'agent', status: 'idle', qa: true } },
+	};
+	const plans = planWakes(reviewState, { event: { type: 'pmo/review', payload: { taskId: 't2', bucket: 42 } } }, {});
+	assert.deepEqual(plans.map((item) => [item.memberId, item.reason]), [['a4', 'pmo_review']]);
+	assert.match(plans[0].prompt, /pending_acceptance/);
+});
+
 test('PMO escalates a Task that stays in progress for 60 minutes to its owner', () => {
 	const plans = planWakes(state, { event: { type: 'pmo/escalate', payload: { taskId: 't2', bucket: 42 } } }, {});
 	assert.deepEqual(plans.map((item) => [item.memberId, item.reason]), [['a1', 'pmo_escalate']]);

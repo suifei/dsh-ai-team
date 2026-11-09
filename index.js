@@ -34,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.44';
+const VERSION = '0.3.45';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -281,6 +281,7 @@ export function apply(ctx) {
 		const pmoLastStall = new Map();
 		const pmoLastHeartbeat = new Map();
 		const pmoLastEscalate = new Map();
+		const pmoLastReview = new Map();
 		let pmoTimer = null;
 		const projectCwd = (projectRuntime, member) => member?.workspace
 			|| projectRuntime?.service?.state?.projects?.[projectRuntime.id]?.workspacePath
@@ -407,6 +408,16 @@ export function apply(ctx) {
 				);
 				if (updatedAt === 0) continue;
 				const idleFor = now - updatedAt;
+				if (task.status === 'pending_acceptance' && task.qaRequired === true && idleFor >= 10 * 60_000) {
+					const lastReview = pmoLastReview.get(task.id) ?? 0;
+					if (now - lastReview >= 10 * 60_000) {
+						pmoLastReview.set(task.id, now);
+						await wakeFromResult(projectRuntime, {
+							event: { type: 'pmo/review', payload: { taskId: task.id, bucket: Math.floor(now / 600_000) } },
+						}, {});
+					}
+					continue;
+				}
 				if (idleFor >= 10 * 60_000 && idleFor < 30 * 60_000) {
 					const lastHeartbeat = pmoLastHeartbeat.get(task.id) ?? 0;
 					if (now - lastHeartbeat >= 10 * 60_000) {
