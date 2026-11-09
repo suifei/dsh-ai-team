@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.4 — 2026-11-09
+
+- README 精装修：品牌、快速开始、能力地图、架构图、API、验证证据、文档索引；
+- 发布到 npm / GitHub Releases，补充 repository / homepage / keywords / LICENSE；
+- desktop profile 改为从 npm 安装。
+
 ## 0.3.3 — 2026-11-09
 
 - 产品显示名改为「文渊阁」（Wenyuan Pavilion），取藏修、校勘、纂辑之意；
