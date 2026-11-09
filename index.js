@@ -34,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.38';
+const VERSION = '0.3.39';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -258,6 +258,7 @@ export function apply(ctx) {
 		const activationTasks = new Map();
 		const pmoLastKick = new Map();
 		const pmoLastStall = new Map();
+		const pmoLastHeartbeat = new Map();
 		let pmoTimer = null;
 		const projectCwd = (projectRuntime, member) => member?.workspace
 			|| projectRuntime?.service?.state?.projects?.[projectRuntime.id]?.workspacePath
@@ -354,7 +355,20 @@ export function apply(ctx) {
 			const now = Date.now();
 			for (const task of active) {
 				const updatedAt = Number.isFinite(task.updatedAt) ? task.updatedAt : 0;
-				if (updatedAt === 0 || now - updatedAt < 30 * 60_000) continue;
+				if (updatedAt === 0) continue;
+				if (now - updatedAt >= 10 * 60_000) {
+					const lastHeartbeat = pmoLastHeartbeat.get(task.id) ?? 0;
+					if (now - lastHeartbeat >= 10 * 60_000) {
+						pmoLastHeartbeat.set(task.id, now);
+						await wakeFromResult(projectRuntime, {
+							event: {
+								type: 'pmo/heartbeat',
+								payload: { taskId: task.id, memberId: task.assigneeId ?? task.ownerId, bucket: Math.floor(now / 600_000) },
+							},
+						}, {});
+					}
+				}
+				if (now - updatedAt < 30 * 60_000) continue;
 				const lastPing = pmoLastStall.get(task.id) ?? 0;
 				if (now - lastPing < 30 * 60_000) continue;
 				pmoLastStall.set(task.id, now);

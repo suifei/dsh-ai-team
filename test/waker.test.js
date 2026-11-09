@@ -52,6 +52,12 @@ test('restart resumes unfinished Tasks once without timers', () => {
 	assert.ok(plans.every((item) => item.key.startsWith('startup:')));
 });
 
+test('PMO heartbeat wakes the assignee to post visible progress', () => {
+	const plans = planWakes(state, { event: { type: 'pmo/heartbeat', payload: { taskId: 't2', memberId: 'a2', bucket: 42 } } }, {});
+	assert.deepEqual(plans.map((item) => [item.memberId, item.reason]), [['a2', 'pmo_heartbeat']]);
+	assert.match(plans[0].prompt, /简短进度/);
+});
+
 test('PMO stall detection wakes the task owner and assignee', () => {
 	const plans = planWakes(state, { event: { type: 'pmo/stall', payload: { taskId: 't2', bucket: 42 } } }, {});
 	assert.deepEqual(plans.map((item) => [item.memberId, item.reason]), [['a1', 'pmo_stall'], ['a2', 'pmo_stall']]);

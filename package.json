@@ -1,6 +1,6 @@
 {
   "name": "@suifei/dsh-ai-team",
-  "version": "0.3.38",
+  "version": "0.3.39",
   "type": "module",
   "description": "文渊阁 (Wenyuan Pavilion) — AI Team mode for DeepSeek Harness: concurrent projects, owned tasks, threads, inbox and an append-only team ledger",
   "license": "MIT",

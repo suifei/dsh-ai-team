@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.39 — 2026-11-10
+
+- PMO 心跳：active Task 超过 10 分钟没有 Thread 更新时唤醒 assignee，要求发一条可见进度（不要求完成）；
+- 30 分钟仍无更新则升级为 stall 唤醒 owner+assignee；
+- 解决“Agent session 在跑但 Task/Thread 看不到进度、看起来不干活”的可见性问题。
+
 ## 0.3.38 — 2026-11-10
 
 - PMO 每 60s 检测 active Task 是否超过 30 分钟无更新；超时唤醒 owner + assignee，要求继续或报告卡点，避免任务静默停住；
