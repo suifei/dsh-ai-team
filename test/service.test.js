@@ -125,6 +125,14 @@ test('TeamService drives a real ledger from project setup to accepted task and t
 			true,
 		);
 		assert.equal(await service.backfillHumanMentions(), 0);
+		const decision = await service.dispatch({
+			type: 'decision.request',
+			actor: a1,
+			projectId: 'prj_test',
+			payload: { title: '需要拍板', questions: [{ text: '范围？', options: ['A', 'B'] }, '时间？'] },
+		});
+		assert.equal(decision.item.ref.questions.length, 2);
+		assert.equal(decision.item.ref.questions[0].options.length, 2);
 
 		const accepted = await service.dispatch({
 			type: 'task.accept',

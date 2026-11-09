@@ -277,6 +277,7 @@ window.__ModuleLoader__.load({
 			discussSent: '已发送给 Project owner。',
 			taskSent: '已创建 Task。',
 			sendFailed: '发送失败：{message}',
+			pendingHuman: '待你处理',
 			inboxUnread: '收件箱，{n} 条未读',
 			dismiss: '关闭提示',
 			retry: '重试',
@@ -578,6 +579,7 @@ window.__ModuleLoader__.load({
 			discussSent: 'Sent to the Project owner.',
 			taskSent: 'Task created.',
 			sendFailed: 'Send failed: {message}',
+			pendingHuman: 'Needs you',
 			inboxUnread: 'Inbox, {n} unread',
 			dismiss: 'Dismiss',
 			retry: 'Retry',
@@ -904,6 +906,7 @@ window.__ModuleLoader__.load({
 			.at-top { height: 40px; flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 12px; border-bottom: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-layer-1); }
 			.at-brand { color: var(--dsw-alias-label-primary); font-size: 12px; font-weight: 500; white-space: nowrap; }
 			.at-spike { display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border: 1px solid var(--dsw-alias-border-l3); border-radius: var(--dsw-radius-xs); color: var(--dsw-alias-label-tertiary); font-size: 10px; line-height: 16px; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+			.at-pending { margin-left: auto; height: 24px; padding: 0 8px; border: 1px solid var(--dsw-alias-state-warning-primary); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-state-warning-primary); font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; white-space: nowrap; }
 			.at-topproject { margin-left: auto; min-width: 0; color: var(--dsw-alias-label-tertiary); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 			.at-mobile { display: none; position: relative; min-width: 0; }
 			.at-mobilesummary { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); color: var(--dsw-alias-label-secondary); font-size: 11px; cursor: pointer; list-style: none; }
@@ -947,6 +950,11 @@ window.__ModuleLoader__.load({
 			.at-inboxitem { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 11px 13px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); }
 			.at-inboxitem.at-inboxdone { opacity: 0.62; }
 			.at-inboxbody { min-width: 0; flex: 1; }
+			.at-inboxquestions { margin: 6px 0 2px; padding-left: 20px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 19px; }
+			.at-inboxquestions li { margin: 3px 0; }
+			.at-inboxquestion { display: block; color: var(--dsw-alias-label-primary); }
+			.at-inboxoptions { display: block; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+			.at-inboxrecommend { display: block; color: var(--dsw-alias-state-business-primary); font-size: 11px; }
 			.at-inboxtitle { color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 20px; }
 			.at-inboxmeta { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
 			.at-inboxstate { color: var(--dsw-alias-label-caption); font-size: 10.5px; }
@@ -2950,10 +2958,18 @@ window.__ModuleLoader__.load({
 								h('div', { className: 'at-inboxbody' },
 									h('div', { className: 'at-inboxtitle' },
 										item.type === 'decision_required'
-											? t('inboxDecisionTitle')
+											? (item.ref?.title || t('inboxDecisionTitle'))
 											: item.type === 'followed_task_update'
 												? tf(t, 'inboxCompletedTitle', { title: item.ref?.title ?? item.ref?.taskId ?? '' })
 												: t('inboxItemTitle')),
+									Array.isArray(item.ref?.questions) && item.ref.questions.length
+										? h('ol', { className: 'at-inboxquestions' }, item.ref.questions.map((question, index) => h('li', { key: question.id ?? index },
+											h('span', { className: 'at-inboxquestion' }, question.text),
+											Array.isArray(question.options) && question.options.length
+												? h('span', { className: 'at-inboxoptions' }, question.options.join(' / '))
+												: null,
+											question.recommendation ? h('span', { className: 'at-inboxrecommend' }, '推荐：' + question.recommendation) : null)))
+										: null,
 									h('div', { className: 'at-inboxmeta' },
 										item.projectName ? item.projectName + ' · ' : '',
 										item.ref?.category ? item.ref.category + ' · ' : '',
@@ -3024,6 +3040,7 @@ window.__ModuleLoader__.load({
 				h('div', { className: 'at-top' },
 					h('span', { className: 'at-brand' }, t('panel')),
 					h('span', { className: 'at-spike', title: t('spikeTitle') }, t('spike')),
+					inboxUnread > 0 ? h('button', { className: 'at-pending', type: 'button', onClick: switchInbox }, t('pendingHuman') + ' · ' + unread) : null,
 					h('details', { className: 'at-mobile', ref: mobileRef },
 						h('summary', { className: 'at-mobilesummary', 'aria-label': t('menuAria') }, h(Ico, { name: 'menu', size: 14 }), h('span', null, t('menu'))),
 						h('div', { className: 'at-mobilepop' }, h(LeftPanel, leftProps))),
