@@ -88,7 +88,8 @@ dsh --profile ai-team --no-open --port 33271
 - **看板**：四列；进行中的卡片显示 accountable owner 与执行者；数量只统计 active Task。
 - **态势**：四象限——需要你、团队在做、等待受阻、最近完成。点击条目打开对应 Task 的 Thread。
 - **收件箱**：跨 Project 聚合；失败决策、需要你决定、关注 Task 的完成报告都在这里。
-- **成员资料**：改名、职责、personality、provider/model、运行配方、notes、skills、re-distill、离队/人才库。
+- **直接对话**：点击成员名字打开该 Agent 的 DSH 原生 Session；没有 session 会先激活。
+- **成员资料**：点「⋯」改名、职责、personality、provider/model、运行配方、notes、skills、re-distill、离队/人才库。
 
 ---
 
