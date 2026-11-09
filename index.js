@@ -198,6 +198,7 @@ export function apply(ctx) {
 				if (member?.sessionId === undefined || member.sessionId === null) continue;
 				const runtime = new MemberRuntime({
 					subagents, sessions, permissionPresets, sandboxPolicy,
+					agents: ctx.get('agents'),
 					parent: parentInfo.agent,
 					provider: providers[0],
 					cwd: member.workspace ?? booted.dataDir,
@@ -356,6 +357,16 @@ export function apply(ctx) {
 							runtime: {
 								roots: ctx.get('agents')?.roots?.().length ?? null,
 								providers: ctx.get('subagents')?.list?.() ?? [],
+								providerCaps: (ctx.get('subagents')?.list?.() ?? []).map((providerName) => {
+									const provider = ctx.get('subagents')?.getProvider?.(providerName);
+									return {
+										name: providerName,
+										capabilities: provider?.capabilities ?? null,
+										inheritsParentContext: provider?.inheritsParentContext ?? null,
+										continuable: typeof provider?.prepareContinuable === 'function',
+										start: typeof provider?.start === 'function',
+									};
+								}),
 								teamTool: ctx.get('tools')?.definitions?.().some((definition) => definition.name === 'team') ?? null,
 							},
 						});

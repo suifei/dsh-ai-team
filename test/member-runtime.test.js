@@ -129,6 +129,23 @@ test('wake re-checks permission before sendMessage', async () => {
 	assert.equal(sessions.get('session-member-1').sandbox, TEAM_PRESET);
 });
 
+test('wake explicitly resumes the child under the live parent before delivery', async () => {
+	const { runtime, sessions, calls } = makeRuntime();
+	let resumed = null;
+	runtime.agents = {
+		resume: async ({ resumeSessionId }) => {
+			resumed = resumeSessionId;
+			sessions.set(resumeSessionId, { id: resumeSessionId, sandbox: 'workspace-write' });
+			return { agent: { id: resumeSessionId }, dispose: async () => {} };
+		},
+	};
+	const result = await runtime.wake({ id: 'mem_1', name: '沈舟', sessionId: 'session-cold' }, { prompt: '继续' });
+	assert.equal(resumed, 'session-cold');
+	assert.equal(result.cold, false);
+	assert.equal(sessions.get('session-cold').sandbox, TEAM_PRESET);
+	assert.equal(calls.send.length, 1);
+});
+
 test('wake cold-resumes a member whose session is not live', async () => {
 	const { runtime, calls } = makeRuntime();
 	const result = await runtime.wake({ id: 'mem_1', name: '沈舟', sessionId: 'session-cold' }, { prompt: '继续' });
