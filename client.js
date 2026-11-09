@@ -1173,7 +1173,7 @@ window.__ModuleLoader__.load({
 				})));
 		}
 
-		function Board({ t, tasks, selected, follows, doneOpen, onToggleDone, onOpen, onToggleFollow, filter, onClearFilter, q1Extra }) {
+		function Board({ t, tasks, selected, follows, doneOpen, onToggleDone, onOpen, onToggleFollow, filter, onClearFilter, q1Extra, onBackMain }) {
 			const filtered = filter === 'all' ? tasks : tasks.filter((task) => matchesFilter(task, filter));
 			const filterName = filter === 'all' ? '' : t(filter === 'q1' ? 'q1Title' : filter === 'q2' ? 'q2Title' : filter === 'q3' ? 'q3Title' : 'q4Title');
 			const bar = filter === 'all' ? null : h('div', { className: 'at-boardbar', role: 'status' },
@@ -1189,7 +1189,7 @@ window.__ModuleLoader__.load({
 							icon: 'board',
 							title: t('emptyBoardTitle'),
 							body: t('emptyBoardBody'),
-							action: { label: t('emptyBoardAction'), onClick: () => onOpen(null) },
+							action: { label: t('emptyBoardAction'), onClick: onBackMain },
 						})
 						: h(EmptyState, {
 							t,
@@ -1916,6 +1916,7 @@ window.__ModuleLoader__.load({
 						filter: boardFilter,
 						onClearFilter: () => setBoardFilter('all'),
 						q1Extra,
+						onBackMain: () => setTab('main'),
 					})
 					: tab === 'situation'
 						? h(Situation, { t, quadrants, tasks, onItem: openQuadrantItem, onViewAll: viewQuadrant })
