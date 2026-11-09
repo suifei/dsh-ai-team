@@ -178,8 +178,11 @@ window.__ModuleLoader__.load({
 			projectSwitchMock: 'spike：项目切换只更新视图标题；按项目读取账本在 M1 接入。',
 			archivedMock: 'spike：归档项目只读；取消归档在 M3 接入。',
 			agentMock: 'spike：成员详情（打开会话 / 发消息 / 记忆与技能）在 M3 接入。',
-			agentOpen: '查看 {name} 的详情',
+			agentOpen: '与 {name} 对话',
 			moreActions: '更多操作',
+			agentChat: '直接对话',
+			agentChatOpening: '正在打开对话…',
+			agentChatUnavailable: '宿主没有可用的 Session 打开能力。',
 			newProject: '新建项目',
 			addAgent: '添加成员',
 			newProjectMock: 'spike：新建项目属于 S-01 流程，M1 之后接入。',
@@ -465,8 +468,11 @@ window.__ModuleLoader__.load({
 			projectSwitchMock: 'spike: switching projects only updates the header; per-project ledger reads land with M1.',
 			archivedMock: 'spike: archived projects are read-only; unarchive lands with M3.',
 			agentMock: 'spike: member detail (open session / message / memory & skills) lands with M3.',
-			agentOpen: 'Open details for {name}',
+			agentOpen: 'Chat with {name}',
 			moreActions: 'More actions',
+			agentChat: 'Direct chat',
+			agentChatOpening: 'Opening conversation…',
+			agentChatUnavailable: 'This host cannot open a Session.',
 			newProject: 'New project',
 			addAgent: 'Add member',
 			newProjectMock: 'spike: project creation belongs to S-01 and lands after M1.',
@@ -1482,7 +1488,7 @@ window.__ModuleLoader__.load({
 			h('span', { className: 'at-prowtitle' }, project.name));
 		}
 
-		function AgentRow({ t, agent, onAgent }) {
+		function AgentRow({ t, agent, onAgent, onAgentMore }) {
 			const statusText = t(AGENT_STATUS[agent.status] ?? 'agentIdle');
 			const config = agent.config ?? null;
 			const model = config?.model ? config.model : t('agentDefaultModel');
@@ -1510,11 +1516,11 @@ window.__ModuleLoader__.load({
 					type: 'button',
 					'aria-label': tf(t, 'agentOpen', { name: agent.name }),
 					title: t('moreActions'),
-					onClick: () => onAgent(agent),
+					onClick: () => onAgentMore(agent),
 				}, '⋯'));
 		}
 
-		function LeftPanel({ t, data, projectId, scope, tab, inboxUnread, onBack, onInbox, onBoard, onProject, onNewProject, onAgent, onAddAgent, onRecruit }) {
+		function LeftPanel({ t, data, projectId, scope, tab, inboxUnread, onBack, onInbox, onBoard, onProject, onNewProject, onAgent, onAgentMore, onAddAgent, onRecruit }) {
 			const projects = data.projects.filter((project) => !project.archived);
 			const activeAgents = data.agents.filter((agent) => agent.status !== 'retired');
 			const talentAgents = data.agents.filter((agent) => agent.status === 'retired');
@@ -1564,7 +1570,7 @@ window.__ModuleLoader__.load({
 					h('button', { className: 'at-mini', type: 'button', 'aria-label': t('addAgent'), title: t('addAgent'), onClick: onAddAgent }, h(Ico, { name: 'plus', size: 12 })),
 				),
 				activeAgents.length
-					? h('div', { role: 'list', 'aria-label': t('agentsAria') }, activeAgents.map((agent) => h(AgentRow, { key: agent.id, t, agent, onAgent })))
+					? h('div', { role: 'list', 'aria-label': t('agentsAria') }, activeAgents.map((agent) => h(AgentRow, { key: agent.id, t, agent, onAgent, onAgentMore })))
 					: h('div', { className: 'at-colempty' }, t('emptyColumn')),
 				talentAgents.length ? h('details', { className: 'at-archived' },
 					h('summary', null, tf(t, 'talentPoolCount', { n: talentAgents.length })),
@@ -2389,6 +2395,30 @@ window.__ModuleLoader__.load({
 					setMBusy(false);
 				}
 			}
+			async function openAgentChat(agent) {
+				closeMobile();
+				if (ctx?.uiWorkspace?.openSession === undefined) {
+					say(t('agentChatUnavailable'));
+					openProfile(agent);
+					return;
+				}
+				if (agent.sessionId) {
+					ctx.uiWorkspace.openSession(agent.sessionId);
+					return;
+				}
+				try {
+					say(t('agentChatOpening'));
+					const activated = await runCommand('member.activate', {
+						memberId: agent.id,
+						prompt: '你正在与 Human 直接对话。先简要说明你是谁、当前负责什么；不要创建 Task，除非 Human 明确要求。',
+					});
+					await reloadData();
+					if (activated?.sessionId) ctx.uiWorkspace.openSession(activated.sessionId);
+				} catch (error) {
+					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+					openProfile(agent);
+				}
+			}
 			function openProfile(agent) {
 				setProfileAgent(agent);
 				setPName(agent.name ?? '');
@@ -2753,7 +2783,8 @@ window.__ModuleLoader__.load({
 				onBoard: switchBoard,
 				onProject: switchProject,
 				onNewProject: () => { closeMobile(); openNewProject(); },
-				onAgent: (agent) => { closeMobile(); openProfile(agent); },
+				onAgent: (agent) => { closeMobile(); void openAgentChat(agent); },
+				onAgentMore: (agent) => { closeMobile(); openProfile(agent); },
 				onAddAgent: () => { closeMobile(); openAddAgent(); },
 				onRecruit: (agent) => { closeMobile(); recruit(agent); },
 			};
@@ -3030,6 +3061,7 @@ window.__ModuleLoader__.load({
 							pError ? h('div', { className: 'at-modalerror', role: 'alert' }, pError) : null,
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setProfileAgent(null), disabled: pBusy }, t('cancel')),
+								h('button', { className: 'at-btn', type: 'button', onClick: () => { const target = profileAgent; setProfileAgent(null); void openAgentChat(target); } }, t('agentChat')),
 								h('button', { className: 'at-btn', type: 'button', onClick: leaveProfile, disabled: pBusy }, t('leaveTeam')),
 								profileAgent.status === 'failed' ? h('button', { className: 'at-btn', type: 'button', onClick: retryProfile, disabled: pBusy }, t('retry')) : null,
 								h('button', { className: 'at-btn', type: 'button', onClick: distillProfile, disabled: pBusy }, t('redistill')),
