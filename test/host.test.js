@@ -197,9 +197,9 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(data.project.name, '我的项目');
 		assert.equal(data.projects.length, 1);
 		assert.equal(data.tasks.length, 0);
-		assert.equal(data.agents.length, 3);
-		assert.equal(data.members.length, 4);
-		assert.deepEqual(data.agents.map((agent) => agent.name), ['墨渊', '青岚', '白砚']);
+		assert.equal(data.agents.length, 4);
+		assert.equal(data.members.length, 5);
+		assert.deepEqual(data.agents.map((agent) => agent.name), ['墨渊', '青岚', '白砚', '玄策']);
 		assert.equal(data.agents.find((agent) => agent.name === '墨渊').role, '主理人');
 		assert.equal(data.agents.find((agent) => agent.name === '白砚').qa, true);
 		assert.equal(data.project?.owner, 'mem_lead');

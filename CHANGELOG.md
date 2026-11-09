@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.37 — 2026-11-10
+
+- 默认团队增加编程 Agent「玄策」（mem_coder，role=编程）；新 Project 默认为 4 名 Agent；
+- PMO/QA 可把开发任务按专长分给执行/编程成员并行推进；
+- 当前项目已把 T5 改派玄策，与青岚 T4 并行。
+
 ## 0.3.36 — 2026-11-10
 
 - 修复 bootstrap route 覆盖 projects 时丢失 `pmoAuto`，导致 PMO 开关点一下又回到“开”；

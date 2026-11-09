@@ -21,7 +21,7 @@
 
 `@suifei/dsh-ai-team` 是 DeepSeek Harness 的按需启用插件：装进专用 `ai-team` profile 后，DSH 里出现一个三栏工作台——左侧 Project 与成员，中间主对话 / 看板 / 态势，右侧 Thread。Agent 自己认领 Task、互相交接，由做的人以外的成员验收；Human 只处理方向、信任和不可撤回的决定。
 
-新 Project 自带一组可改的默认成员：**墨渊（主理人）**、**青岚（执行）**、**白砚（验收）**。名字、职责、个性、模型都可以改；模型提供商和模型名称直接读取 DSH 的 `llm` 目录，不需要手填 id。
+新 Project 自带一组可改的默认成员：**墨渊（主理人）**、**青岚（执行）**、**白砚（验收）**、**玄策（编程）**。名字、职责、个性、模型都可以改；模型提供商和模型名称直接读取 DSH 的 `llm` 目录，不需要手填 id。
 
 ---
 
@@ -105,7 +105,7 @@ dsh --profile ai-team --no-open --port 33271
 | 验收 | maker 不能验收；QA 硬门禁；`qaChecklist` 逐项通过 |
 | 收件箱 | Human/Agent 各自拉取；跨 Project 聚合；顶部待办入口；`askHuman` 结构化问题与选项直接展开并提交 |
 | 关注 | 关注 Task；完成后收到 `followed_task_update` |
-| 默认成员 | 新 Project 初始化墨渊 / 青岚 / 白砚；可改名、改职责、改个性、改模型 |
+| 默认成员 | 新 Project 初始化墨渊 / 青岚 / 白砚 / 玄策；可改名、改职责、改个性、改模型 |
 | 成员 | 持久 session；点击名字直接对话；「⋯」资料里有任务视图与直接对话 |
 | 模型 | Provider / Model 下拉读取 DSH `llm` 目录；可跟随系统默认 |
 | 进化 | `team.evolve` 只改自己的 personality；验收后 reflection wake |
