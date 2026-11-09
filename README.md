@@ -84,7 +84,7 @@ dsh --profile ai-team --no-open --port 33271
 └─────────────────┴────────────────────────────────────┴─────────────┘
 ```
 
-- **主对话**：Human 的一句话进入 Main stream，Project owner 拆 Task；Composer 支持讨论 / 任务模式。
+- **主对话**：Human 的一句话进入 Main stream，Project owner 拆 Task；顶部「团队动态」直接显示正在推进的 Task 和运行中的成员，点击 Task 可打开 Thread。
 - **看板**：四列；进行中的卡片显示 accountable owner 与执行者；数量只统计 active Task。
 - **态势**：四象限——需要你、团队在做、等待受阻、最近完成。点击条目打开对应 Task 的 Thread。
 - **收件箱**：跨 Project 聚合；失败决策、需要你决定、关注 Task 的完成报告都在这里。

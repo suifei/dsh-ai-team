@@ -188,6 +188,11 @@ window.__ModuleLoader__.load({
 			memberNoTasksBody: '在项目里创建或指派 Task 后，会出现在这里。',
 			taskOwner: '负责人',
 			taskAssignee: '执行',
+			teamPulseTitle: '团队动态',
+			teamPulseCount: '{n} 个 Task 正在推进',
+			teamPulseWorking: '成员已接单',
+			teamPulseStarting: '成员已唤醒，正在拆解任务…',
+			teamPulseAgents: '运行中：{names}',
 			newProject: '新建项目',
 			addAgent: '添加成员',
 			newProjectMock: 'spike：新建项目属于 S-01 流程，M1 之后接入。',
@@ -483,6 +488,11 @@ window.__ModuleLoader__.load({
 			memberNoTasksBody: 'Create or assign a Task in the Project and it appears here.',
 			taskOwner: 'Owner',
 			taskAssignee: 'Assignee',
+			teamPulseTitle: 'Team activity',
+			teamPulseCount: '{n} Task(s) in motion',
+			teamPulseWorking: 'Members picked up the work',
+			teamPulseStarting: 'Members are awake and breaking the work down…',
+			teamPulseAgents: 'Running: {names}',
 			newProject: 'New project',
 			addAgent: 'Add member',
 			newProjectMock: 'spike: project creation belongs to S-01 and lands after M1.',
@@ -948,6 +958,18 @@ window.__ModuleLoader__.load({
 			.at-agentfail { flex: none; color: var(--dsw-alias-state-warn-primary); }
 			.at-agentmore { flex: 0 0 auto; width: 28px; height: 28px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 13px; cursor: pointer; }
 			.at-agentmore:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+			.at-teampulse { width: 100%; max-width: 760px; margin: 4px auto 10px; padding: 10px 12px; border: 1px solid var(--dsw-alias-state-business-primary); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-module-platform); }
+			.at-teampulsehead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+			.at-teampulsetitle { font-size: 12px; font-weight: 600; color: var(--dsw-alias-label-primary); }
+			.at-teampulsecount { font-size: 11px; color: var(--dsw-alias-state-business-primary); }
+			.at-teampulselist { display: flex; flex-direction: column; gap: 4px; }
+			.at-teampulsetask { display: flex; align-items: center; gap: 7px; width: 100%; padding: 4px 6px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-primary); font: inherit; text-align: left; cursor: pointer; }
+			.at-teampulsetask:hover { background: var(--dsw-alias-interactive-bg-hover); }
+			.at-teampulseno { flex: 0 0 auto; color: var(--dsw-alias-label-tertiary); font-size: 11px; font-variant-numeric: tabular-nums; }
+			.at-teampulsetasktitle { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+			.at-teampulseowner { flex: 0 0 auto; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+			.at-teampulsehint { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
+			.at-teampulseagents { margin-top: 6px; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
 			.at-memberview { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 18px; }
 			.at-memberviewhead { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--dsw-alias-border-l1); }
 			.at-memberviewid { display: flex; flex-direction: column; min-width: 0; flex: 1 1 180px; }
@@ -1542,6 +1564,29 @@ window.__ModuleLoader__.load({
 					title: t('moreActions'),
 					onClick: () => onAgentMore(agent),
 				}, '⋯'));
+		}
+
+		function TeamPulse({ t, agents, tasks, onOpen }) {
+			const active = tasks.filter((task) => ['pending', 'in_progress', 'pending_acceptance'].includes(task.status)).slice(-5);
+			const running = agents.filter((agent) => agent.status === 'running');
+			if (active.length === 0 && running.length === 0) return null;
+			return h('section', { className: 'at-teampulse', 'aria-label': t('teamPulseTitle') },
+				h('div', { className: 'at-teampulsehead' },
+					h('span', { className: 'at-teampulsetitle' }, t('teamPulseTitle')),
+					h('span', { className: 'at-teampulsecount' }, active.length ? t('teamPulseCount').replace('{n}', String(active.length)) : t('teamPulseWorking'))),
+				active.length
+					? h('div', { className: 'at-teampulselist' }, active.map((task) => h('button', {
+						key: task.id,
+						className: 'at-teampulsetask',
+						type: 'button',
+						onClick: () => onOpen(task),
+					},
+						h('span', { className: 'at-teampulseno' }, '#' + taskNo(task)),
+						h('span', { className: 'at-teampulsetasktitle' }, task.title),
+						h(StatusPill, { t, status: task.status }),
+						h('span', { className: 'at-teampulseowner' }, task.owner ?? ''))))
+					: h('div', { className: 'at-teampulsehint' }, t('teamPulseStarting')),
+				running.length ? h('div', { className: 'at-teampulseagents' }, t('teamPulseAgents').replace('{names}', running.map((agent) => agent.name).join('、'))) : null);
 		}
 
 		function MemberView({ t, agent, tasks, onBack, onOpenTask, onOpenChat, onOpenProfile }) {
@@ -2921,6 +2966,7 @@ window.__ModuleLoader__.load({
 						? h(Situation, { t, quadrants, tasks, onItem: openQuadrantItem, onViewAll: viewQuadrant })
 						: h('div', { className: 'at-stream', role: 'tabpanel', id: 'at-panel-main', 'aria-labelledby': 'at-tab-main' },
 							h('div', { className: 'at-streaminner', role: 'log', 'aria-live': 'polite', 'aria-label': t('streamAria') },
+								h(TeamPulse, { t, agents: data.agents, tasks, onOpen: openTask }),
 								data.stream.length
 									? data.stream.map((item) => h(StreamMessage, {
 										key: item.id,
