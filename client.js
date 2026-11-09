@@ -183,6 +183,11 @@ window.__ModuleLoader__.load({
 			agentChat: '直接对话',
 			agentChatOpening: '正在打开对话…',
 			agentChatUnavailable: '宿主没有可用的 Session 打开能力。',
+			memberTasks: '他的任务',
+			memberNoTasks: '还没有属于他的 Task',
+			memberNoTasksBody: '在项目里创建或指派 Task 后，会出现在这里。',
+			taskOwner: '负责人',
+			taskAssignee: '执行',
 			newProject: '新建项目',
 			addAgent: '添加成员',
 			newProjectMock: 'spike：新建项目属于 S-01 流程，M1 之后接入。',
@@ -473,6 +478,11 @@ window.__ModuleLoader__.load({
 			agentChat: 'Direct chat',
 			agentChatOpening: 'Opening conversation…',
 			agentChatUnavailable: 'This host cannot open a Session.',
+			memberTasks: 'Their tasks',
+			memberNoTasks: 'No Task belongs to this member yet',
+			memberNoTasksBody: 'Create or assign a Task in the Project and it appears here.',
+			taskOwner: 'Owner',
+			taskAssignee: 'Assignee',
 			newProject: 'New project',
 			addAgent: 'Add member',
 			newProjectMock: 'spike: project creation belongs to S-01 and lands after M1.',
@@ -938,6 +948,20 @@ window.__ModuleLoader__.load({
 			.at-agentfail { flex: none; color: var(--dsw-alias-state-warn-primary); }
 			.at-agentmore { flex: 0 0 auto; width: 28px; height: 28px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 13px; cursor: pointer; }
 			.at-agentmore:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+			.at-memberview { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 18px; }
+			.at-memberviewhead { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--dsw-alias-border-l1); }
+			.at-memberviewid { display: flex; flex-direction: column; min-width: 0; flex: 1 1 180px; }
+			.at-memberviewid strong { font-size: 15px; line-height: 22px; }
+			.at-memberviewid span { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
+			.at-memberviewactions { display: flex; gap: 6px; flex-wrap: wrap; }
+			.at-memberviewbody { max-width: 760px; margin: 0 auto; padding-top: 14px; }
+			.at-memberviewsub { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; margin-bottom: 8px; }
+			.at-membertasklist { display: flex; flex-direction: column; gap: 6px; }
+			.at-membertask { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-module-platform); color: var(--dsw-alias-label-primary); font: inherit; text-align: left; cursor: pointer; }
+			.at-membertask:hover { border-color: var(--dsw-alias-border-l2); background: var(--dsw-alias-interactive-bg-hover); }
+			.at-membertaskno { flex: 0 0 auto; color: var(--dsw-alias-label-tertiary); font-variant-numeric: tabular-nums; font-size: 11px; }
+			.at-membertasktitle { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+			.at-membertaskmeta { flex: 0 0 auto; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
 			.at-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0; }
 			.at-chead { flex: 0 0 auto; padding: 14px 18px 0; }
 			.at-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; color: var(--dsw-alias-label-primary); font-size: 16px; font-weight: 600; line-height: 22px; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1520,6 +1544,33 @@ window.__ModuleLoader__.load({
 				}, '⋯'));
 		}
 
+		function MemberView({ t, agent, tasks, onBack, onOpenTask, onOpenChat, onOpenProfile }) {
+			return h('div', { className: 'at-memberview' },
+				h('div', { className: 'at-memberviewhead' },
+					h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: onBack }, '← ' + t('back')),
+					h('span', { className: 'at-dot at-dot-' + (agent.status ?? 'idle'), 'aria-hidden': 'true' }),
+					h('div', { className: 'at-memberviewid' },
+						h('strong', null, agent.name),
+						h('span', null, (agent.role ?? '') + (agent.qa ? ' · QA' : '') + ' · ' + t(AGENT_STATUS[agent.status] ?? 'agentIdle'))),
+					h('div', { className: 'at-memberviewactions' },
+						h('button', { className: 'at-btn at-btn-small at-btn-primary', type: 'button', onClick: () => onOpenChat(agent) }, t('agentChat')),
+						h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => onOpenProfile(agent) }, t('memberProfileTitle')))),
+				h('div', { className: 'at-memberviewbody' },
+					h('div', { className: 'at-memberviewsub' }, t('memberTasks') + ' · ' + tasks.length),
+					tasks.length
+						? h('div', { className: 'at-membertasklist' }, tasks.map((task) => h('button', {
+							key: task.id,
+							className: 'at-membertask',
+							type: 'button',
+							onClick: () => onOpenTask(task),
+						},
+							h('span', { className: 'at-membertaskno' }, '#' + taskNo(task)),
+							h('span', { className: 'at-membertasktitle' }, task.title),
+							h(StatusPill, { t, status: task.status }),
+							h('span', { className: 'at-membertaskmeta' }, task.ownerId === agent.id ? t('taskOwner') : t('taskAssignee')))))
+						: h(EmptyState, { t, title: t('memberNoTasks'), body: t('memberNoTasksBody'), compact: true })));
+		}
+
 		function LeftPanel({ t, data, projectId, scope, tab, inboxUnread, onBack, onInbox, onBoard, onProject, onNewProject, onAgent, onAgentMore, onAddAgent, onRecruit }) {
 			const projects = data.projects.filter((project) => !project.archived);
 			const activeAgents = data.agents.filter((agent) => agent.status !== 'retired');
@@ -1994,6 +2045,7 @@ window.__ModuleLoader__.load({
 			const [workspaceDraft, setWorkspaceDraft] = React.useState('');
 			const [workspaceError, setWorkspaceError] = React.useState('');
 			const [workspaceBusy, setWorkspaceBusy] = React.useState(false);
+			const [memberViewId, setMemberViewId] = React.useState(null);
 			const [nBusy, setNBusy] = React.useState(false);
 			const [nError, setNError] = React.useState('');
 			const [pSuccessor, setPSuccessor] = React.useState('');
@@ -2204,6 +2256,7 @@ window.__ModuleLoader__.load({
 			}
 			function goConversation() {
 				closeMobile();
+				setMemberViewId(null);
 				setScope('project');
 				setTab('main');
 				setThreadOpen(false);
@@ -2215,6 +2268,7 @@ window.__ModuleLoader__.load({
 			}
 			function switchInbox() {
 				closeMobile();
+				setMemberViewId(null);
 				setScope('inbox');
 				setThreadOpen(false);
 				setNote('');
@@ -2233,6 +2287,7 @@ window.__ModuleLoader__.load({
 					await runCommand('project.activate', { projectId: next.id });
 					setScope('project');
 					setTab('main');
+					setMemberViewId(null);
 					setBoardFilter('all');
 					setThreadOpen(false);
 					setReply('');
@@ -2251,17 +2306,21 @@ window.__ModuleLoader__.load({
 				setNewOpen(true);
 			}
 			async function pickWorkspacePath() {
+				const service = ctx?.get?.('uiWorkspace') ?? ctx?.uiWorkspace;
+				if (service === undefined || service === null || typeof service.pickDirectory !== 'function') {
+					return { error: 'unavailable', path: null };
+				}
 				try {
-					const picked = await ctx?.uiWorkspace?.pickDirectory?.();
-					return picked ?? null;
+					return { path: await service.pickDirectory(), error: null };
 				} catch {
-					return null;
+					return { error: 'failed', path: null };
 				}
 			}
 			async function pickNewWorkspace() {
 				const picked = await pickWorkspacePath();
-				if (picked) setNWorkspace(picked);
-				else setNError(t('workspacePickUnavailable'));
+				if (picked.path) setNWorkspace(picked.path);
+				else if (picked.error === 'unavailable') setNError(t('workspacePickUnavailable'));
+				else if (picked.error === 'failed') setNError(t('workspacePickFailed'));
 			}
 			function openWorkspaceEditor() {
 				setWorkspaceDraft(project?.workspacePath ?? '');
@@ -2270,8 +2329,9 @@ window.__ModuleLoader__.load({
 			}
 			async function pickProjectWorkspace() {
 				const picked = await pickWorkspacePath();
-				if (picked) setWorkspaceDraft(picked);
-				else setWorkspaceError(t('workspacePickUnavailable'));
+				if (picked.path) setWorkspaceDraft(picked.path);
+				else if (picked.error === 'unavailable') setWorkspaceError(t('workspacePickUnavailable'));
+				else if (picked.error === 'failed') setWorkspaceError(t('workspacePickFailed'));
 			}
 			async function saveWorkspace() {
 				if (!project || workspaceBusy || !workspaceDraft.trim()) return;
@@ -2395,15 +2455,27 @@ window.__ModuleLoader__.load({
 					setMBusy(false);
 				}
 			}
+			function openMemberView(agent) {
+				closeMobile();
+				setMemberViewId(agent.id);
+				setScope('project');
+				setTab('main');
+				setThreadOpen(false);
+				setNote('');
+			}
+			function closeMemberView() {
+				setMemberViewId(null);
+			}
 			async function openAgentChat(agent) {
 				closeMobile();
-				if (ctx?.uiWorkspace?.openSession === undefined) {
+				const service = ctx?.get?.('uiWorkspace') ?? ctx?.uiWorkspace;
+				if (service?.openSession === undefined) {
 					say(t('agentChatUnavailable'));
 					openProfile(agent);
 					return;
 				}
 				if (agent.sessionId) {
-					ctx.uiWorkspace.openSession(agent.sessionId);
+					service.openSession(agent.sessionId);
 					return;
 				}
 				try {
@@ -2413,7 +2485,7 @@ window.__ModuleLoader__.load({
 						prompt: '你正在与 Human 直接对话。先简要说明你是谁、当前负责什么；不要创建 Task，除非 Human 明确要求。',
 					});
 					await reloadData();
-					if (activated?.sessionId) ctx.uiWorkspace.openSession(activated.sessionId);
+					if (activated?.sessionId) service.openSession(activated.sessionId);
 				} catch (error) {
 					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
 					openProfile(agent);
@@ -2767,6 +2839,8 @@ window.__ModuleLoader__.load({
 			}
 
 			const inInbox = scope === 'inbox';
+			const memberViewAgent = data.agents.find((agent) => agent.id === memberViewId) ?? null;
+			const memberViewTasks = memberViewAgent === null ? [] : tasks.filter((task) => task.ownerId === memberViewAgent.id || task.assigneeId === memberViewAgent.id);
 			const headerTitle = inInbox ? t('inboxTitle') : project ? '# ' + project.name : t('noProject');
 			const headerGoal = inInbox ? t('inboxGoal') : (project?.goal ?? '');
 			const unread = inboxUnread > 99 ? '99+' : inboxUnread;
@@ -2783,7 +2857,7 @@ window.__ModuleLoader__.load({
 				onBoard: switchBoard,
 				onProject: switchProject,
 				onNewProject: () => { closeMobile(); openNewProject(); },
-				onAgent: (agent) => { closeMobile(); void openAgentChat(agent); },
+				onAgent: (agent) => { closeMobile(); openMemberView(agent); },
 				onAgentMore: (agent) => { closeMobile(); openProfile(agent); },
 				onAddAgent: () => { closeMobile(); openAddAgent(); },
 				onRecruit: (agent) => { closeMobile(); recruit(agent); },
@@ -2818,6 +2892,16 @@ window.__ModuleLoader__.load({
 								body: t('inboxEmptyBody'),
 								action: { label: t('inboxEmptyAction'), onClick: switchBoard },
 							})))
+				: memberViewAgent && tab === 'main'
+					? h(MemberView, {
+						t,
+						agent: memberViewAgent,
+						tasks: memberViewTasks,
+						onBack: closeMemberView,
+						onOpenTask: openTask,
+						onOpenChat: (agent) => { void openAgentChat(agent); },
+						onOpenProfile: openProfile,
+					})
 				: tab === 'board'
 					? h(Board, {
 						t,
@@ -2914,7 +2998,7 @@ window.__ModuleLoader__.load({
 								h('span', { className: 'at-notetext' }, note),
 								h('button', { className: 'at-noteclose', type: 'button', 'aria-label': t('dismiss'), title: t('dismiss'), onClick: () => setNote('') }, h(Ico, { name: 'close', size: 12 })))) : null,
 						body,
-						!inInbox && tab === 'main' ? h(Composer, {
+						!inInbox && tab === 'main' && !memberViewAgent ? h(Composer, {
 							t,
 							mode,
 							draft,

@@ -88,7 +88,8 @@ dsh --profile ai-team --no-open --port 33271
 - **看板**：四列；进行中的卡片显示 accountable owner 与执行者；数量只统计 active Task。
 - **态势**：四象限——需要你、团队在做、等待受阻、最近完成。点击条目打开对应 Task 的 Thread。
 - **收件箱**：跨 Project 聚合；失败决策、需要你决定、关注 Task 的完成报告都在这里。
-- **直接对话**：点击成员名字打开该 Agent 的 DSH 原生 Session；没有 session 会先激活。
+- **成员视图**：点击成员名字，切到他的任务列表与「直接对话」入口。
+- **直接对话**：成员视图里点「直接对话」，打开该 Agent 的 DSH 原生 Session；没有 session 会先激活。
 - **成员资料**：点「⋯」改名、职责、personality、provider/model、运行配方、notes、skills、re-distill、离队/人才库。
 
 ---
@@ -104,7 +105,7 @@ dsh --profile ai-team --no-open --port 33271
 | 收件箱 | Human/Agent 各自拉取；跨 Project 聚合与项目内 ack |
 | 关注 | 关注 Task；完成后收到 `followed_task_update` |
 | 默认成员 | 新 Project 初始化墨渊 / 青岚 / 白砚；可改名、改职责、改个性、改模型 |
-| 成员 | 持久 session；点击名字直接打开该 Agent 的 DSH Session 对话；「⋯」编辑资料 |
+| 成员 | 持久 session；点击名字进入成员视图（任务 + 直接对话）；「⋯」编辑资料 |
 | 模型 | Provider / Model 下拉读取 DSH `llm` 目录；可跟随系统默认 |
 | 进化 | `team.evolve` 只改自己的 personality；验收后 reflection wake |
 | 人才库 | leave/rejoin；遗留 Task 可被接管（taken-over） |
