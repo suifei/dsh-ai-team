@@ -98,8 +98,13 @@ window.__ModuleLoader__.load({
 			emptyBoardAction: '回到主对话',
 			inboxTitle: '收件箱',
 			inboxGoal: '跨项目聚合，M1 之后接入',
-			inboxEmptyTitle: '收件箱页还没接入',
-			inboxEmptyBody: 'M1 spike 只做工作台骨架；决策条目当前在「态势 · 需要你」里展示，未读计数在左栏。',
+			inboxEmptyTitle: '没有需要你处理的事',
+			inboxEmptyBody: '成员失败、需要决策或有人提到你时，会出现在这里。',
+			inboxDecisionTitle: '需要你决策',
+			inboxItemTitle: '收件箱消息',
+			inboxOpenTask: '打开 Task',
+			inboxAck: '知道了',
+			inboxAcked: '已标记处理。',
 			inboxEmptyAction: '看任务看板',
 			projectEmptyTitle: '还没有项目',
 			projectEmptyBody: '创建项目属于 S-01；M1 之后接入。',
@@ -336,8 +341,13 @@ window.__ModuleLoader__.load({
 			emptyBoardAction: 'Back to main',
 			inboxTitle: 'Inbox',
 			inboxGoal: 'Cross-project aggregation lands after M1',
-			inboxEmptyTitle: 'Inbox page not wired yet',
-			inboxEmptyBody: 'The M1 spike only covers the workbench shell; decision items currently appear in “Situation · Needs you” and unread counts stay in the left rail.',
+			inboxEmptyTitle: 'Nothing needs you',
+			inboxEmptyBody: 'Member failures, decisions and mentions land here.',
+			inboxDecisionTitle: 'Decision required',
+			inboxItemTitle: 'Inbox message',
+			inboxOpenTask: 'Open Task',
+			inboxAck: 'Acknowledge',
+			inboxAcked: 'Marked handled.',
 			inboxEmptyAction: 'Open the board',
 			projectEmptyTitle: 'No projects yet',
 			projectEmptyBody: 'Project creation belongs to S-01; it lands after M1.',
@@ -818,6 +828,13 @@ window.__ModuleLoader__.load({
 			.at-agentname { align-self: flex-start; max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; line-height: 18px; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.at-agentname:hover { text-decoration: underline; }
 			.at-agentrole { min-width: 0; color: var(--dsw-alias-label-caption); font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+			.at-inboxitem { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 11px 13px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); }
+			.at-inboxitem.at-inboxdone { opacity: 0.62; }
+			.at-inboxbody { min-width: 0; flex: 1; }
+			.at-inboxtitle { color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 20px; }
+			.at-inboxmeta { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
+			.at-inboxstate { color: var(--dsw-alias-label-caption); font-size: 10.5px; }
+			.at-inboxactions { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
 			.at-qacheck { display: inline-flex; align-items: center; gap: 4px; color: var(--dsw-alias-label-tertiary); font-size: 11px; white-space: nowrap; }
 			.at-qacheck input { accent-color: var(--dsw-alias-state-business-primary); }
 			.at-qabadge { display: inline-flex; align-items: center; margin-left: 5px; padding: 0 5px; border: 1px solid var(--dsw-alias-state-business-primary); border-radius: 999px; color: var(--dsw-alias-state-business-primary); font-size: 9px; line-height: 15px; vertical-align: 1px; }
@@ -2233,6 +2250,15 @@ window.__ModuleLoader__.load({
 					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
 				}
 			}
+			async function ackInbox(item) {
+				try {
+					await runCommand('inbox.ack', { itemId: item.id, disposition: 'read' });
+					say(t('inboxAcked'));
+					await reloadData();
+				} catch (error) {
+					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
+			}
 			async function send() {
 				const text = draft.trim();
 				if (!text) return;
@@ -2361,14 +2387,29 @@ window.__ModuleLoader__.load({
 			};
 
 			const body = inInbox
-				? h('div', { className: 'at-situation' },
-					h(EmptyState, {
-						t,
-						icon: 'inbox',
-						title: t('inboxEmptyTitle'),
-						body: t('inboxEmptyBody'),
-						action: { label: t('inboxEmptyAction'), onClick: switchBoard },
-					}))
+				? h('div', { className: 'at-stream', role: 'region', 'aria-label': t('inboxTitle') },
+					h('div', { className: 'at-streaminner' },
+						(data.inbox ?? []).length
+							? (data.inbox ?? []).map((item) => h('div', { key: item.id, className: cx('at-inboxitem', item.state !== 'unread' && 'at-inboxdone') },
+								h('div', { className: 'at-inboxbody' },
+									h('div', { className: 'at-inboxtitle' },
+										item.type === 'decision_required' ? t('inboxDecisionTitle') : t('inboxItemTitle')),
+									h('div', { className: 'at-inboxmeta' },
+										item.ref?.category ? item.ref.category + ' · ' : '',
+										item.ref?.memberId ? item.ref.memberId : '',
+										' · ',
+										fmtTime(item.createdAt)),
+									item.state !== 'unread' ? h('div', { className: 'at-inboxstate' }, item.state) : null),
+								h('div', { className: 'at-inboxactions' },
+									item.ref?.taskId ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => openTask(item.ref.taskId) }, t('inboxOpenTask')) : null,
+									item.state === 'unread' ? h('button', { className: 'at-btn at-btn-small at-btn-primary', type: 'button', onClick: () => ackInbox(item) }, t('inboxAck')) : null)))
+							: h(EmptyState, {
+								t,
+								icon: 'inbox',
+								title: t('inboxEmptyTitle'),
+								body: t('inboxEmptyBody'),
+								action: { label: t('inboxEmptyAction'), onClick: switchBoard },
+							})))
 				: tab === 'board'
 					? h(Board, {
 						t,
