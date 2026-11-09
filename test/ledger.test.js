@@ -170,6 +170,27 @@ test('append 三条后重开继续：seq 单调、分段与跨段 hash 链连续
 	second.close();
 });
 
+test('appendMany 在全新账本上跨多段时仍连续编号', async (t) => {
+	const { dir, track } = tempLedger(t);
+	const writer = track(
+		new LedgerWriter({ dir, projectId: PROJECT_ID, segmentEvents: 1, segmentBytes: 1_000_000 }),
+	);
+	writer.open();
+	const events = await writer.appendMany([
+		draft('project/created', { name: 'P' }),
+		draft('project/member-added', { memberId: 'mem_a', name: 'A' }),
+		draft('task/created', { taskId: 'tsk_batch', title: 'Batch' }),
+	]);
+	assert.deepEqual(events.map((event) => event.seq), [1, 2, 3]);
+	assert.deepEqual(
+		fs.readdirSync(dir).filter((name) => name.startsWith('ledger-')).sort(),
+		['ledger-000001.jsonl', 'ledger-000002.jsonl', 'ledger-000003.jsonl'],
+	);
+	assert.equal(writer.readAll().length, 3);
+	assert.equal(verifyChain(writer.readAll(), { projectId: PROJECT_ID }).ok, true);
+	writer.close();
+});
+
 test('账本被篡改 1 字节时 hash 链检出，且不会误当尾撕裂截断', async (t) => {
 	const { dir, track } = tempLedger(t);
 	const writer = track(new LedgerWriter({ dir, projectId: PROJECT_ID }));
@@ -833,6 +854,36 @@ test('openLedger 门面：append 成功才推进 state，重开后状态一致',
 	assert.equal(reopened.events.length, 3);
 	assert.equal(reopened.verify().ok, true);
 	reopened.close();
+});
+
+test('fold：stream / inbox 投影与 ack 终态幂等', () => {
+	const events = chain(PROJECT_ID, [
+		projectSpec,
+		{ type: 'stream/posted', payload: { kind: 'milestone', body: 'hi' } },
+		{
+			type: 'inbox/item-created',
+			payload: {
+				itemId: 'inb_1',
+				memberId: 'mem_a',
+				type: 'mention',
+				ref: { taskId: 'tsk_x' },
+				requiresDecision: false,
+			},
+		},
+		{ type: 'inbox/acked', payload: { itemId: 'inb_1', memberId: 'mem_a', disposition: 'read' } },
+		{ type: 'inbox/acked', payload: { itemId: 'inb_1', memberId: 'mem_a', disposition: 'done' } },
+		{ type: 'inbox/acked', payload: { itemId: 'inb_1', memberId: 'mem_a', disposition: 'read' } },
+	]);
+
+	const state = fold(events);
+	assert.equal(state.stream.length, 1);
+	assert.equal(state.stream[0].projectId, PROJECT_ID);
+	assert.equal(state.stream[0].kind, 'milestone');
+	assert.equal(state.stream[0].body, 'hi');
+	assert.equal(state.inbox.inb_1.state, 'done');
+	assert.equal(state.inbox.inb_1.disposition, 'done');
+	// 终态后 ack 不覆盖（A-INV-09）。
+	assert.equal(state.inbox.inb_1.ackedAt, events[4].at);
 });
 
 test('fold 可直接重放 host service/domain 写入的快照事件', async (t) => {
