@@ -377,6 +377,27 @@ export function apply(ctx) {
 									};
 								}),
 								teamTool: ctx.get('tools')?.definitions?.().some((definition) => definition.name === 'team') ?? null,
+								members: Object.values(booted.service.state.members ?? {})
+									.filter((member) => member.kind === 'agent')
+									.map((member) => {
+										const agent = ctx.get('agents')?.get?.(member.sessionId);
+										let lastEvent = null;
+										let seq = null;
+										try {
+											const events = agent?.session?.snapshotEvents?.() ?? [];
+											lastEvent = events.at(-1)?.type ?? null;
+											seq = events.at(-1)?.seq ?? null;
+										} catch { /* diagnostic only */ }
+										let tail = [];
+										try {
+											tail = (agent?.session?.snapshotEvents?.() ?? []).slice(-20).map((entry) => ({
+												seq: entry.seq,
+												type: entry.type,
+												tool: entry.type === 'tool/call' ? entry.data?.name ?? null : undefined,
+											}));
+										} catch { /* diagnostic only */ }
+										return { id: member.id, status: agent?.status ?? null, lastEvent, seq, tail };
+									}),
 							},
 						});
 					}
