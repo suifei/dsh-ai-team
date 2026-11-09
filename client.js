@@ -2005,6 +2005,7 @@ window.__ModuleLoader__.load({
 
 			const project = data.projects.find((item) => item.id === projectId) ?? data.projects[0] ?? null;
 			const tasks = data.tasks;
+			const boardTaskCount = tasks.filter((task) => ['pending', 'in_progress', 'pending_acceptance', 'done'].includes(task.status)).length;
 			const selectedTask = tasks.find((task) => task.id === selected) ?? tasks[0] ?? null;
 			const thread = threadFor(data, selectedTask?.id);
 			const quadrants = deriveQuadrants(data);
@@ -2695,7 +2696,7 @@ window.__ModuleLoader__.load({
 									'aria-controls': 'at-panel-board',
 									tabIndex: tab === 'board' ? 0 : -1,
 									onClick: () => selectTab('board'),
-								}, t('boardTab'), h('span', { className: 'at-tabcount' }, tasks.length)),
+								}, t('boardTab'), h('span', { className: 'at-tabcount' }, boardTaskCount)),
 								h('button', {
 									className: cx('at-tab', tab === 'situation' && 'at-on'),
 									type: 'button',
