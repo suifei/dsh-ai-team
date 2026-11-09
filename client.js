@@ -162,8 +162,9 @@ window.__ModuleLoader__.load({
 			newProjectMock: 'spike：新建项目属于 S-01 流程，M1 之后接入。',
 			addAgentMock: 'spike：添加成员在 M1 之后接入。',
 			conversationMock: 'spike：宿主没有可用的 layout.selectPanel(conversation)。',
-			discussSent: 'spike：讨论消息会发给项目负责人（命令未接入，未写账本）。',
-			taskSent: 'spike：任务模式会直接创建 Task 卡（命令未接入，未写账本）。',
+			discussSent: '已发送给 Project owner。',
+			taskSent: '已创建 Task。',
+			sendFailed: '发送失败：{message}',
 			inboxUnread: '收件箱，{n} 条未读',
 			dismiss: '关闭提示',
 			retry: '重试',
@@ -350,8 +351,9 @@ window.__ModuleLoader__.load({
 			newProjectMock: 'spike: project creation belongs to S-01 and lands after M1.',
 			addAgentMock: 'spike: adding members lands after M1.',
 			conversationMock: 'spike: this host has no working layout.selectPanel(conversation).',
-			discussSent: 'spike: the discussion message would go to the project owner (commands not wired; nothing written).',
-			taskSent: 'spike: task mode would create a Task card directly (commands not wired; nothing written).',
+			discussSent: 'Sent to the Project owner.',
+			taskSent: 'Task created.',
+			sendFailed: 'Send failed: {message}',
 			inboxUnread: 'Inbox, {n} unread',
 			dismiss: 'Dismiss',
 			retry: 'Retry',
@@ -1866,11 +1868,38 @@ window.__ModuleLoader__.load({
 				const buttons = event.currentTarget.querySelectorAll('[role="tab"]');
 				buttons.forEach((button) => { if (button.dataset.tab === next) button.focus(); });
 			}
-			function send() {
+			async function reloadData() {
+				const response = await fetch('/ai-team/api/bootstrap', { headers: { accept: 'application/json' } });
+				if (!response.ok) throw new Error('HTTP ' + response.status);
+				const next = normalizePayload(await response.json());
+				if (next) setData(next);
+			}
+			async function runCommand(type, payload) {
+				const target = projectId || 'prj_main';
+				const response = await fetch('/ai-team/api/projects/' + encodeURIComponent(target) + '/commands', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json', accept: 'application/json' },
+					body: JSON.stringify({ type, payload }),
+				});
+				const body = await response.json().catch(() => null);
+				if (!response.ok) throw new Error(body?.error?.message ?? ('HTTP ' + response.status));
+				return body;
+			}
+			async function send() {
 				const text = draft.trim();
 				if (!text) return;
-				say(mode === 'task' ? t('taskSent') : t('discussSent'));
-				setDraft('');
+				try {
+					if (mode === 'task') {
+						await runCommand('task.create', { title: text, resultDefinition: text });
+					} else {
+						await runCommand('stream.post', { body: text });
+					}
+					setDraft('');
+					say(mode === 'task' ? t('taskSent') : t('discussSent'));
+					await reloadData();
+				} catch (error) {
+					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
 			}
 			function sendReply() {
 				const text = reply.trim();
