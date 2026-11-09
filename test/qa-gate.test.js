@@ -26,9 +26,10 @@ test('qaRequired routes the reviewer to QA and rejects non-QA acceptance', async
 
 	const created = await service.dispatch({
 		type: 'task.create', actor: human, projectId: PROJECT_ID,
-		payload: { title: 'QA 卡', resultDefinition: 'Thread 有 ok', ownerId: 'w1', qaRequired: true },
+		payload: { title: 'QA 卡', resultDefinition: 'Thread 有 ok', ownerId: 'w1', qaRequired: true, qaChecklist: ['Thread 有 ok', '证据存在'] },
 	});
 	assert.equal(created.task.qaRequired, true);
+	assert.deepEqual(created.task.qaChecklist, ['Thread 有 ok', '证据存在']);
 	await service.dispatch({ type: 'task.claim', actor: worker, projectId: PROJECT_ID, payload: { taskId: created.task.id, expectedRevision: 1 } });
 	await service.dispatch({ type: 'thread.post', actor: worker, projectId: PROJECT_ID, payload: { taskId: created.task.id, baseSeq: 0, body: 'ok' } });
 	const submitted = await service.dispatch({
@@ -45,9 +46,19 @@ test('qaRequired routes the reviewer to QA and rejects non-QA acceptance', async
 		(error) => error.code === 'E_INVALID_STATE',
 	);
 	await service.dispatch({ type: 'task.follow', actor: human, projectId: PROJECT_ID, payload: { taskId: created.task.id, following: true } });
+	await assert.rejects(
+		() => service.dispatch({
+			type: 'task.accept', actor: qa, projectId: PROJECT_ID,
+			payload: { taskId: created.task.id, expectedRevision: submitted.task.revision, note: 'QA ok' },
+		}),
+		(error) => error.code === 'E_INVALID_STATE',
+	);
 	const accepted = await service.dispatch({
 		type: 'task.accept', actor: qa, projectId: PROJECT_ID,
-		payload: { taskId: created.task.id, expectedRevision: submitted.task.revision, note: 'QA ok' },
+		payload: {
+			taskId: created.task.id, expectedRevision: submitted.task.revision, note: 'QA ok',
+			checks: [{ item: 'Thread 有 ok', passed: true }, { item: '证据存在', passed: true }],
+		},
 	});
 	assert.equal(accepted.task.status, 'done');
 	assert.equal(service.state.tasks[created.task.id].lastReview.reviewerId, 'q1');

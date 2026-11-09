@@ -204,6 +204,7 @@ window.__ModuleLoader__.load({
 			memberNotes: '最近备忘',
 			memberMaxTokens: 'Max tokens',
 			qaRequired: '需要 QA 验收',
+			qaChecklist: 'QA 检查清单',
 			notePlaceholder: '加一条备忘…',
 			skillPlaceholder: '加一个技能，如 nuwa-skill',
 			addNote: '加备忘',
@@ -457,6 +458,7 @@ window.__ModuleLoader__.load({
 			memberNotes: 'Recent notes',
 			memberMaxTokens: 'Max tokens',
 			qaRequired: 'Require QA review',
+			qaChecklist: 'QA checklist',
 			notePlaceholder: 'Add a note…',
 			skillPlaceholder: 'Add a skill, e.g. nuwa-skill',
 			addNote: 'Add note',
@@ -1532,7 +1534,7 @@ window.__ModuleLoader__.load({
 				h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: !valid }, t('convertSubmit'))));
 		}
 
-		function AcceptancePanel({ t, task, checked, onChecked, onAccept, onChanges }) {
+		function AcceptancePanel({ t, task, checked, onChecked, checks, onCheck, onAccept, onChanges }) {
 			const submission = task.submission ?? null;
 			const evidence = Array.isArray(submission?.evidence) ? submission.evidence : [];
 			return h('section', { className: 'at-accept', 'aria-labelledby': 'at-accept-title' },
@@ -1554,6 +1556,15 @@ window.__ModuleLoader__.load({
 				h('div', { className: 'at-kv' },
 					h('span', { className: 'at-kvlabel' }, t('diff')),
 					h('div', { className: 'at-kvbody' }, submission?.diffStat ?? t('noDiff'))),
+				Array.isArray(task.qaChecklist) && task.qaChecklist.length > 0 ? h('div', { className: 'at-kv' },
+					h('span', { className: 'at-kvlabel' }, t('qaChecklist')),
+					h('div', { className: 'at-kvbody' }, task.qaChecklist.map((item, index) => h('label', { key: index, className: 'at-check' },
+						h('input', {
+							type: 'checkbox',
+							checked: checks?.[index]?.passed === true,
+							onChange: (event) => onCheck(index, event.target.checked),
+						}),
+						h('span', null, item))))) : null,
 				h('p', { className: 'at-elig' }, t('acceptEligible')),
 				h('p', { className: 'at-steward' }, t('acceptSteward')),
 				task.irreversible ? h('div', { className: 'at-irrev' },
@@ -1628,6 +1639,8 @@ window.__ModuleLoader__.load({
 							task,
 							checked: acceptChecked,
 							onChecked: onAcceptChecked,
+							checks: qaChecks,
+							onCheck: (index, passed) => setQaChecks((prev) => prev.map((entry, i) => i === index ? { ...entry, passed } : entry)),
 							onAccept,
 							onChanges,
 						}) : null,
@@ -1821,6 +1834,7 @@ window.__ModuleLoader__.load({
 			const [cTitle, setCTitle] = React.useState('');
 			const [cDod, setCDod] = React.useState('');
 			const [acceptChecked, setAcceptChecked] = React.useState(false);
+			const [qaChecks, setQaChecks] = React.useState([]);
 			const [addOpen, setAddOpen] = React.useState(false);
 			const [mName, setMName] = React.useState('');
 			const [mRole, setMRole] = React.useState('');
@@ -1914,6 +1928,7 @@ window.__ModuleLoader__.load({
 				const thread = threadFor(data, selected);
 				setReplyBase(thread?.baseSeq ?? null);
 				setAcceptChecked(false);
+				setQaChecks((selectedTask?.qaChecklist ?? []).map((item) => ({ item, passed: false })));
 				setConverting(false);
 				setCTitle('');
 				setCDod('');
@@ -2341,6 +2356,7 @@ window.__ModuleLoader__.load({
 						expectedRevision: selectedTask.revision,
 						note: t('acceptNote'),
 						confirmed: acceptChecked,
+						checks: qaChecks,
 					});
 					sayRight(tf(t, 'acceptDone', { n: taskNo(selectedTask) }));
 					await reloadData();
