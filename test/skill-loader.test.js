@@ -15,7 +15,7 @@ test('loadSkillContext reads bounded profile skills and rejects traversal names'
 	assert.match(context, /nuwa workflow/);
 	assert.match(context, /A short skill/);
 	assert.doesNotMatch(context, /escape/);
-	assert.ok(context.length < 4000);
-	assert.equal(await loadSkillContext({ skills: [] }, dir), '');
-	assert.equal(await loadSkillContext({ skills: ['missing'] }, dir), '');
+	assert.ok(context.length < 6000);
+	assert.match(await loadSkillContext({ skills: [] }, dir), /AI Team 核心工程纪律/);
+	assert.match(await loadSkillContext({ skills: ['missing'] }, dir), /AI Team 核心工程纪律/);
 });

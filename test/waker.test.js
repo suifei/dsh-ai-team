@@ -56,7 +56,7 @@ test('PMO continuation wakes the Project owner when nothing is active', () => {
 	const plans = planWakes(state, { event: { type: 'pmo/continue', payload: { bucket: 42 } } }, {});
 	assert.deepEqual(plans.map((item) => [item.memberId, item.reason]), [['a1', 'pmo_continue']]);
 	assert.match(plans[0].prompt, /没有 active Task/);
-	assert.match(plans[0].prompt, /创建下一批/);
+	assert.match(plans[0].prompt, /下一批 Task/);
 });
 
 test('acceptance schedules a reflection wake for the executor', () => {

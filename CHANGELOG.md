@@ -6,7 +6,9 @@
 - PMO 每 60s 检查：未读结构化决策按最高价值建议自动决策，不需要 Human 再确认；
 - 无 active Task 时自动唤醒 Project owner 续派下一批 Task，避免「全部完成但停住」；
 - PMO 自动决策写入 Task Thread，author=mem_pmo，并唤醒 owner/assignee；
-- 插件新增状态变化 toast 气泡；成员视图新增最近 Task 状态气泡。
+- 插件新增状态变化 toast 气泡；成员视图新增最近 Task 状态气泡；
+- 内置 `ai-team-core` skill（单一实现、网页取证/代理、懒惰高级程序员、最小依赖、日志埋点），所有 Agent wake 自动注入；
+- PMO 续派 prompt 要求先做复盘/头脑风暴/深度研究会议，再产出验收标准与下一批 Task。
 
 ## 0.3.33 — 2026-11-10
 
