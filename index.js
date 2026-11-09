@@ -299,7 +299,13 @@ export function apply(ctx) {
 					throw error;
 				}
 				activations.set(result.childId, result.activation);
-				return { ok: true, member: bound.member, sessionId: result.childId, messageId: result.messageId };
+				return {
+					ok: true,
+					member: bound.member,
+					sessionId: result.childId,
+					messageId: result.messageId,
+					debug: result.debug ?? null,
+				};
 			} catch (error) {
 				try {
 					await booted.service.failMember(
