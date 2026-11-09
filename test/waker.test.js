@@ -33,6 +33,15 @@ test('assignment and submission wake the responsible Agent', () => {
 	assert.deepEqual(changes.map((item) => [item.memberId, item.reason]), [['a2', 'changes_requested']]);
 });
 
+test('a Human DM wakes exactly the target member', () => {
+	const plans = planWakes(state, {
+		event: { type: 'member/message', seq: 11, payload: { memberId: 'a2', authorId: 'h1', body: '看一下 #2' } },
+	}, {});
+	assert.deepEqual(plans.map((item) => [item.memberId, item.reason]), [['a2', 'member_message']]);
+	assert.match(plans[0].prompt, /看一下 #2/);
+	assert.equal(plans[0].key, 'member_message:11');
+});
+
 test('restart resumes unfinished Tasks once without timers', () => {
 	const plans = planWakes(state, { event: { type: 'team/startup' } }, {});
 	assert.deepEqual(plans.map((item) => [item.memberId, item.taskId, item.reason]), [

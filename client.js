@@ -207,6 +207,9 @@ window.__ModuleLoader__.load({
 			qaChecklist: 'QA 检查清单',
 			notePlaceholder: '加一条备忘…',
 			skillPlaceholder: '加一个技能，如 nuwa-skill',
+			messagePlaceholder: '给这位成员发私信…',
+			sendMessage: '发私信',
+			messageSent: '私信已发送并唤醒成员。',
 			addNote: '加备忘',
 			addSkill: '加技能',
 			retry: '重试',
@@ -461,6 +464,9 @@ window.__ModuleLoader__.load({
 			qaChecklist: 'QA checklist',
 			notePlaceholder: 'Add a note…',
 			skillPlaceholder: 'Add a skill, e.g. nuwa-skill',
+			messagePlaceholder: 'Message this member…',
+			sendMessage: 'Send message',
+			messageSent: 'Message sent and member woken.',
 			addNote: 'Add note',
 			addSkill: 'Add skill',
 			retry: 'Retry',
@@ -1853,6 +1859,7 @@ window.__ModuleLoader__.load({
 			const [pMaxTokens, setPMaxTokens] = React.useState('');
 			const [pNote, setPNote] = React.useState('');
 			const [pSkill, setPSkill] = React.useState('');
+			const [pMessage, setPMessage] = React.useState('');
 			const [pSuccessor, setPSuccessor] = React.useState('');
 			const [pBusy, setPBusy] = React.useState(false);
 			const [pError, setPError] = React.useState('');
@@ -2153,6 +2160,7 @@ window.__ModuleLoader__.load({
 				setPMaxTokens(agent.config?.maxTokens ?? '');
 				setPNote('');
 				setPSkill('');
+				setPMessage('');
 				const successor = (data?.agents ?? []).find((candidate) => candidate.id !== agent.id && candidate.status !== 'retired');
 				setPSuccessor(successor?.id ?? '');
 				setPError('');
@@ -2189,6 +2197,17 @@ window.__ModuleLoader__.load({
 					setPError(error?.message ?? String(error));
 				} finally {
 					setPBusy(false);
+				}
+			}
+			async function sendMemberMessage() {
+				if (!profileAgent || !pMessage.trim()) return;
+				try {
+					await runCommand('member.message', { memberId: profileAgent.id, body: pMessage.trim() });
+					setPMessage('');
+					say(t('messageSent'));
+					await reloadData();
+				} catch (error) {
+					setPError(error?.message ?? String(error));
 				}
 			}
 			async function addNote() {
@@ -2732,6 +2751,9 @@ window.__ModuleLoader__.load({
 							h('div', { className: 'at-inlineadd' },
 								h('input', { value: pSkill, onChange: (event) => setPSkill(event.target.value), placeholder: t('skillPlaceholder') }),
 								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: addSkill, disabled: !pSkill.trim() }, t('addSkill'))),
+							h('div', { className: 'at-inlineadd' },
+								h('input', { value: pMessage, onChange: (event) => setPMessage(event.target.value), placeholder: t('messagePlaceholder') }),
+								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: sendMemberMessage, disabled: !pMessage.trim() }, t('sendMessage'))),
 							pError ? h('div', { className: 'at-modalerror', role: 'alert' }, pError) : null,
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setProfileAgent(null), disabled: pBusy }, t('cancel')),
