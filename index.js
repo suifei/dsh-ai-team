@@ -26,7 +26,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer'];
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
