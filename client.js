@@ -71,10 +71,12 @@ window.__ModuleLoader__.load({
 			fromDiscussion: '由讨论升格',
 			loading: '加载中…',
 			fallbackTitle: '演示数据',
-			fallbackBody: '/ai-team/api/bootstrap 不可达，已使用内置样例；发送、关注、验收只做本地反馈，不写账本。',
+			fallbackBody: 'bootstrap 接口（/ai-team）不可达，已使用内置样例；发送、关注、验收只做本地反馈，不写账本。',
 			spike: 'M1 spike',
 			spikeTitle: '只读界面演示：发送、关注、验收只产生本地反馈，不写账本。',
 			navAria: '页面导航',
+			menu: '目录',
+			menuAria: '打开项目与成员目录',
 			projectsAria: '项目',
 			agentsAria: '成员',
 			streamAria: '主对话',
@@ -94,7 +96,7 @@ window.__ModuleLoader__.load({
 			inboxTitle: '收件箱',
 			inboxGoal: '跨项目聚合，M1 之后接入',
 			inboxEmptyTitle: '收件箱页还没接入',
-			inboxEmptyBody: 'M1 spike 只做工作台骨架；决策与提及条目当前在「态势 · 需要你」与左栏计数里展示。',
+			inboxEmptyBody: 'M1 spike 只做工作台骨架；决策条目当前在「态势 · 需要你」里展示，未读计数在左栏。',
 			inboxEmptyAction: '看任务看板',
 			projectEmptyTitle: '还没有项目',
 			projectEmptyBody: '创建项目属于 S-01；M1 之后接入。',
@@ -254,10 +256,12 @@ window.__ModuleLoader__.load({
 			fromDiscussion: 'Promoted from discussion',
 			loading: 'Loading…',
 			fallbackTitle: 'Demo data',
-			fallbackBody: '/ai-team/api/bootstrap is unreachable, so the embedded sample is shown. Sending, following and acceptance only give local feedback; nothing is written to the ledger.',
+			fallbackBody: 'The bootstrap endpoint (/ai-team) is unreachable, so the embedded sample is shown. Sending, following and acceptance only give local feedback; nothing is written to the ledger.',
 			spike: 'M1 spike',
 			spikeTitle: 'Read-only UI demo: sending, following and acceptance only give local feedback; nothing is written to the ledger.',
 			navAria: 'Page navigation',
+			menu: 'Menu',
+			menuAria: 'Open the project and member menu',
 			projectsAria: 'Projects',
 			agentsAria: 'Agents',
 			streamAria: 'Main stream',
@@ -277,7 +281,7 @@ window.__ModuleLoader__.load({
 			inboxTitle: 'Inbox',
 			inboxGoal: 'Cross-project aggregation lands after M1',
 			inboxEmptyTitle: 'Inbox page not wired yet',
-			inboxEmptyBody: 'The M1 spike only covers the workbench shell; decisions and mentions currently appear in “Situation · Needs you” and the left count.',
+			inboxEmptyBody: 'The M1 spike only covers the workbench shell; decision items currently appear in “Situation · Needs you” and unread counts stay in the left rail.',
 			inboxEmptyAction: 'Open the board',
 			projectEmptyTitle: 'No projects yet',
 			projectEmptyBody: 'Project creation belongs to S-01; it lands after M1.',
@@ -1209,7 +1213,7 @@ window.__ModuleLoader__.load({
 					tasks,
 					selected,
 					follows,
-					doneOpen: doneOpen || filter === 'q4',
+					doneOpen: doneOpen,
 					onToggleDone,
 					onOpen,
 					onToggleFollow,
@@ -1640,24 +1644,40 @@ window.__ModuleLoader__.load({
 			React.useEffect(() => {
 				let alive = true;
 				const controller = typeof AbortController === 'function' ? new AbortController() : null;
-				fetch('/ai-team/api/bootstrap', {
-					headers: { accept: 'application/json' },
-					signal: controller ? controller.signal : undefined,
-				})
-					.then((response) => (response.ok ? response.json() : Promise.reject(new Error('HTTP ' + response.status))))
-					.then((payload) => {
-						if (!alive) return;
-						const next = normalizePayload(payload);
-						if (!next) throw new Error('invalid bootstrap payload');
-						setData(next);
-						setPhase('ready');
-					})
-					.catch((error) => {
-						if (!alive) return;
-						console.error(PKG + ': bootstrap unavailable, using embedded demo data', error);
-						setData(MOCK);
-						setPhase('fallback');
-					});
+				// The package is @suifei/dsh-ai-team; the Host prefix is /ai-team.
+				const paths = ['/ai-team/api/bootstrap'];
+				async function load() {
+					let lastError = null;
+					for (const path of paths) {
+						try {
+							const response = await fetch(path, {
+								headers: { accept: 'application/json' },
+								signal: controller ? controller.signal : undefined,
+							});
+							if (!response.ok) {
+								lastError = new Error('HTTP ' + response.status + ' for ' + path);
+								continue;
+							}
+							const next = normalizePayload(await response.json());
+							if (!next) {
+								lastError = new Error('invalid bootstrap payload from ' + path);
+								continue;
+							}
+							if (!alive) return;
+							setData(next);
+							setPhase('ready');
+							return;
+						} catch (error) {
+							lastError = error;
+							if (!alive || (controller && controller.signal.aborted)) return;
+						}
+					}
+					if (!alive) return;
+					console.error(PKG + ': bootstrap unavailable, using embedded demo data', lastError);
+					setData(MOCK);
+					setPhase('fallback');
+				}
+				load();
 				return () => { alive = false; if (controller) controller.abort(); };
 			}, []);
 
@@ -1946,7 +1966,7 @@ window.__ModuleLoader__.load({
 					h('span', { className: 'at-brand' }, t('panel')),
 					h('span', { className: 'at-spike', title: t('spikeTitle') }, t('spike')),
 					h('details', { className: 'at-mobile', ref: mobileRef },
-						h('summary', { className: 'at-mobilesummary' }, h(Ico, { name: 'menu', size: 14 }), h('span', null, t('projects'))),
+						h('summary', { className: 'at-mobilesummary', 'aria-label': t('menuAria') }, h(Ico, { name: 'menu', size: 14 }), h('span', null, t('menu'))),
 						h('div', { className: 'at-mobilepop' }, h(LeftPanel, leftProps))),
 					h('span', { className: 'at-topproject', title: headerTitle }, inInbox ? t('inboxTitle') + (unread ? ' · ' + unread : '') : (project?.name ?? ''))),
 				h('div', { className: cx('at-grid', threadOpen && selectedTask && 'at-withthread') },
