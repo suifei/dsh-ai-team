@@ -11,6 +11,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { ProjectRuntime } from './lib/host/project-runtime.js';
+import { ProjectRegistry } from './lib/host/project-registry.js';
 import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-runtime.js';
 import { ensureHostAgent } from './lib/runtime/host-agent.js';
 import { classifyLlmFailure, retryDecision } from './lib/runtime/failure-policy.js';
@@ -74,9 +75,13 @@ function errorResponse(res, error) {
  */
 async function boot() {
 	const dataDir = join(dshHome(), 'ai-team', profileName());
-	const runtime = await ProjectRuntime.open({ rootDir: dataDir, projectId: PROJECT_ID });
+	const registry = ProjectRegistry.load(dataDir);
+	const activeProjectId = registry.activeProjectId;
+	const runtime = await ProjectRuntime.open({ rootDir: dataDir, projectId: activeProjectId });
 	return {
 		...runtime,
+		registry,
+		activeProjectId,
 		ledger: runtime.ledger,
 		service: runtime.service,
 		dataDir,
@@ -449,7 +454,8 @@ export function apply(ctx) {
 							ok: true,
 							plugin: name,
 							version: VERSION,
-							projectId: PROJECT_ID,
+							projectId: booted.activeProjectId,
+							activeProjectId: booted.activeProjectId,
 							ledger: { events: booted.ledger.events.length, head },
 							runtime: {
 								roots: ctx.get('agents')?.roots?.().length ?? null,
