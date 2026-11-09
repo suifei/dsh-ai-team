@@ -34,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.42';
+const VERSION = '0.3.43';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -398,9 +398,15 @@ export function apply(ctx) {
 				task.tombstone !== true && ['pending', 'in_progress', 'pending_acceptance'].includes(task.status));
 			const now = Date.now();
 			for (const task of active) {
-				const updatedAt = Number.isFinite(task.updatedAt) ? task.updatedAt : 0;
+				const thread = state.threads?.[task.id];
+				const threadAt = thread?.entries?.at(-1)?.at;
+				const updatedAt = Math.max(
+					Number.isFinite(task.updatedAt) ? task.updatedAt : 0,
+					Number.isFinite(threadAt) ? threadAt : 0,
+				);
 				if (updatedAt === 0) continue;
-				if (now - updatedAt >= 10 * 60_000) {
+				const idleFor = now - updatedAt;
+				if (idleFor >= 10 * 60_000 && idleFor < 30 * 60_000) {
 					const lastHeartbeat = pmoLastHeartbeat.get(task.id) ?? 0;
 					if (now - lastHeartbeat >= 10 * 60_000) {
 						pmoLastHeartbeat.set(task.id, now);
@@ -412,7 +418,7 @@ export function apply(ctx) {
 						}, {});
 					}
 				}
-				if (now - updatedAt < 30 * 60_000) continue;
+				if (idleFor < 30 * 60_000) continue;
 				const lastPing = pmoLastStall.get(task.id) ?? 0;
 				if (now - lastPing < 30 * 60_000) continue;
 				pmoLastStall.set(task.id, now);
