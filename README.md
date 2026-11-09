@@ -12,7 +12,7 @@ dsh plugin --profile ai-team add E:/works/dsh-ai-team            # install this 
 dsh --profile ai-team --no-open --port 0                         # boot the test server
 ```
 
-The plugin is **not** installed in the normal `desktop`/`web` profiles; ordinary sessions keep their preset roster (R-01/R-02).
+The plugin is **not** installed in the normal `desktop`/`web` profiles; ordinary sessions keep their preset roster (R-01/R-02). Verified on 2026-11-09: `desktop` dump has no `@suifei/dsh-ai-team`; `ai-team` does. Full install / uninstall / upgrade steps, data locations and profile-isolation checks: [docs/10-安装卸载升级.md](docs/10-安装卸载升级.md).
 
 ## Layout
 

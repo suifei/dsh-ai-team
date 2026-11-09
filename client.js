@@ -1,5 +1,5 @@
 /**
- * dsh-ai-team — Client half (M1 spike, 04/D refined).
+ * dsh-ai-team — Client half (M2.5 workbench).
  *
  * A three-pane project workbench rendered inside the DSH `main` slot:
  *   left  = page nav + Project tree + Agents
@@ -7,7 +7,7 @@
  *   right = Task Thread panel (discussion, acceptance, done receipt)
  *
  * UI references: docs/04 §4–§7/§10, docs/appendix/D §2–§3, docs/07 §4–§6.
- * This is a read-only visual/contract spike: it reads
+ * This is the M2.5 workbench client: it reads
  * `/ai-team/api/bootstrap`, falls back to embedded demo data, and every
  * write action only produces local feedback. The registration contract
  * (`sidebar.panellist` id `ai-team`, `main` key `ai-team`) is unchanged.
@@ -75,8 +75,8 @@ window.__ModuleLoader__.load({
 			loading: '加载中…',
 			fallbackTitle: '演示数据',
 			fallbackBody: 'bootstrap 接口（/ai-team）不可达，已使用内置样例；发送、关注、验收只做本地反馈，不写账本。',
-			spike: 'M1 spike',
-			spikeTitle: '只读界面演示：发送、关注、验收只产生本地反馈，不写账本。',
+			spike: 'M2.5',
+			spikeTitle: 'AI Team 工作台：发送、关注、验收、任务动作都写账本。',
 			navAria: '页面导航',
 			menu: '目录',
 			menuAria: '打开项目与成员目录',
@@ -328,8 +328,8 @@ window.__ModuleLoader__.load({
 			loading: 'Loading…',
 			fallbackTitle: 'Demo data',
 			fallbackBody: 'The bootstrap endpoint (/ai-team) is unreachable, so the embedded sample is shown. Sending, following and acceptance only give local feedback; nothing is written to the ledger.',
-			spike: 'M1 spike',
-			spikeTitle: 'Read-only UI demo: sending, following and acceptance only give local feedback; nothing is written to the ledger.',
+			spike: 'M2.5',
+			spikeTitle: 'AI Team workbench: sending, following, acceptance and task actions write to the ledger.',
 			navAria: 'Page navigation',
 			menu: 'Menu',
 			menuAria: 'Open the project and member menu',
