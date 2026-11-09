@@ -62,6 +62,7 @@ const state = {
 	inbox: {
 		in1: { id: 'in1', memberId: 'h1', type: 'decision_required', requiresDecision: true, state: 'unread', createdAt: now - 40_000, ref: { taskId: 't3' } },
 		in2: { id: 'in2', memberId: 'a1', type: 'decision_required', requiresDecision: true, state: 'unread', createdAt: now - 40_000, ref: {} },
+		in3: { id: 'in3', memberId: 'h1', type: 'decision_required', requiresDecision: true, state: 'unread', createdAt: now - 30_000, ref: { category: 'thread_mention', title: '进度汇报' } },
 	},
 	followers: { t1: ['h1'] },
 };
@@ -91,6 +92,7 @@ test('quadrantsView puts each task in one quadrant and Q1 only where Human must 
 	const view = quadrantsView(state, { now, humanMemberId: 'h1', q4Days: 7, q4Limit: 20 });
 	assert.equal(view.q1.count, 4);
 	assert.deepEqual(view.q1.items.map((item) => item.category), ['irreversible', 'review', 'decision', 'owner_blocked']);
+	assert.equal(view.q1.items.some((item) => item.title === '进度汇报'), false);
 	assert.equal(view.q2.count, 1);
 	assert.deepEqual(view.q2.items.map((item) => item.taskId), ['t1']);
 	assert.equal(view.q3.count, 1);

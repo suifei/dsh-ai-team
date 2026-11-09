@@ -331,6 +331,9 @@ window.__ModuleLoader__.load({
 			filterLabel: '筛选：{name}',
 			filterClear: '清除筛选',
 			filterInboxExtra: '另有 {n} 条收件箱决策项',
+			filterInboxTitle: '需要你处理 {n} 条',
+			filterInboxBody: '这些是收件箱决策，不是 Task；去收件箱逐条处理。',
+			filterInboxAction: '打开收件箱',
 			filteredEmptyTitle: '这个筛选下没有任务',
 			filteredEmptyBody: '清除筛选后可看到全部任务。',
 			itemCount: '{n} 项',
@@ -653,6 +656,9 @@ window.__ModuleLoader__.load({
 			filterLabel: 'Filter: {name}',
 			filterClear: 'Clear filter',
 			filterInboxExtra: '{n} inbox decision item(s) not on the board',
+			filterInboxTitle: '{n} item(s) need you',
+			filterInboxBody: 'These are inbox decisions, not Tasks; open the inbox to handle them.',
+			filterInboxAction: 'Open inbox',
 			filteredEmptyTitle: 'No tasks under this filter',
 			filteredEmptyBody: 'Clear the filter to see all tasks.',
 			itemCount: '{n} items',
@@ -847,10 +853,20 @@ window.__ModuleLoader__.load({
 			};
 		};
 
+		function isInformationalInboxItem(item) {
+			return item?.ref?.category === 'thread_mention'
+				&& !(Array.isArray(item.ref?.questions) && item.ref.questions.length > 0);
+		}
+
 		/** Derive the read-only quadrants projection from the bootstrap DTO (spike fallback). */
 		function deriveQuadrants(data) {
 			const direct = data?.quadrants;
-			if (direct && direct.q1 && direct.q2 && direct.q3 && direct.q4) return direct;
+			if (direct && direct.q1 && direct.q2 && direct.q3 && direct.q4) {
+				const inboxById = new Map((data?.inbox ?? []).map((item) => [item.id, item]));
+				const q1Items = (direct.q1.items ?? []).filter((item) =>
+					item.kind !== 'inbox' || !isInformationalInboxItem(inboxById.get(item.id)));
+				return { ...direct, q1: { ...direct.q1, count: q1Items.length, items: q1Items } };
+			}
 			const tasks = data?.tasks ?? [];
 			const inbox = data?.inbox ?? [];
 			const q1 = [];
@@ -1520,7 +1536,7 @@ window.__ModuleLoader__.load({
 				})));
 		}
 
-		function Board({ t, tasks, selected, follows, doneOpen, onToggleDone, onOpen, onToggleFollow, filter, onClearFilter, q1Extra, onBackMain }) {
+		function Board({ t, tasks, selected, follows, doneOpen, onToggleDone, onOpen, onToggleFollow, filter, onClearFilter, q1Extra, onBackMain, onOpenInbox }) {
 			const filtered = (filter === 'all' ? tasks : tasks.filter((task) => matchesFilter(task, filter)))
 				.slice()
 				.sort((left, right) => (right.number ?? 0) - (left.number ?? 0));
@@ -1540,13 +1556,21 @@ window.__ModuleLoader__.load({
 							body: t('emptyBoardBody'),
 							action: { label: t('emptyBoardAction'), onClick: onBackMain },
 						})
-						: h(EmptyState, {
-							t,
-							icon: 'board',
-							title: t('filteredEmptyTitle'),
-							body: t('filteredEmptyBody'),
-							action: { label: t('filterClear'), onClick: onClearFilter },
-						}));
+						: filter === 'q1' && q1Extra > 0
+							? h(EmptyState, {
+								t,
+								icon: 'inbox',
+								title: tf(t, 'filterInboxTitle', { n: q1Extra }),
+								body: t('filterInboxBody'),
+								action: { label: t('filterInboxAction'), onClick: onOpenInbox },
+							})
+							: h(EmptyState, {
+								t,
+								icon: 'board',
+								title: t('filteredEmptyTitle'),
+								body: t('filteredEmptyBody'),
+								action: { label: t('filterClear'), onClick: onClearFilter },
+							}));
 			}
 			return h('div', { className: 'at-boardwrap', role: 'tabpanel', id: 'at-panel-board', 'aria-labelledby': 'at-tab-board' },
 				bar,
@@ -2374,8 +2398,7 @@ window.__ModuleLoader__.load({
 			const selectedTask = tasks.find((task) => task.id === selected) ?? tasks[0] ?? null;
 			const thread = threadFor(data, selectedTask?.id);
 			const quadrants = deriveQuadrants(data);
-			const inboxItems = (data.inbox ?? []).filter((item) =>
-				!(item.ref?.category === 'thread_mention' && !(Array.isArray(item.ref?.questions) && item.ref.questions.length > 0)));
+			const inboxItems = (data.inbox ?? []).filter((item) => !isInformationalInboxItem(item));
 			const inboxUnread = inboxItems.filter((item) => item.state === 'unread').length;
 			const q1Extra = (quadrants.q1.items ?? []).filter((item) => item.kind === 'inbox').length;
 			const threadHead = thread?.headSeq ?? thread?.entries?.length ?? 0;
@@ -3172,6 +3195,7 @@ window.__ModuleLoader__.load({
 						filter: boardFilter,
 						onClearFilter: () => setBoardFilter('all'),
 						q1Extra,
+						onOpenInbox: switchInbox,
 						onBackMain: () => setTab('main'),
 					})
 					: tab === 'situation'
