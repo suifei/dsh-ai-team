@@ -179,6 +179,13 @@ window.__ModuleLoader__.load({
 			memberPersonality: '个性 / 工作方式',
 			memberSkills: '技能',
 			memberNotes: '最近备忘',
+			memberMaxTokens: 'Max tokens',
+			notePlaceholder: '加一条备忘…',
+			skillPlaceholder: '加一个技能，如 nuwa-skill',
+			addNote: '加备忘',
+			addSkill: '加技能',
+			retry: '重试',
+			retried: '已重试并重新激活。',
 			save: '保存',
 			saving: '保存中…',
 			redistill: '重新蒸馏',
@@ -401,6 +408,13 @@ window.__ModuleLoader__.load({
 			memberPersonality: 'Personality / working style',
 			memberSkills: 'Skills',
 			memberNotes: 'Recent notes',
+			memberMaxTokens: 'Max tokens',
+			notePlaceholder: 'Add a note…',
+			skillPlaceholder: 'Add a skill, e.g. nuwa-skill',
+			addNote: 'Add note',
+			addSkill: 'Add skill',
+			retry: 'Retry',
+			retried: 'Retried and re-activated.',
 			save: 'Save',
 			saving: 'Saving…',
 			redistill: 'Re-distill',
@@ -995,7 +1009,9 @@ window.__ModuleLoader__.load({
 			.at-check { display: flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
 			.at-check input { accent-color: var(--dsw-alias-state-business-primary); }
 			.at-modalerror { color: var(--dsw-alias-state-error-primary); font-size: 11.5px; line-height: 16px; }
-			.at-modalactions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 2px; }
+			.at-inlineadd { display: flex; align-items: center; gap: 6px; }
+			.at-inlineadd input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; }
+			.at-modalactions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 2px; }
 			.at-fieldrow .at-staticfield { min-width: 0; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l1); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-module-platform); color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 			.at-context { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
 			.at-convertfoot { display: flex; justify-content: flex-end; gap: 8px; }
@@ -1758,6 +1774,11 @@ window.__ModuleLoader__.load({
 			const [pName, setPName] = React.useState('');
 			const [pRole, setPRole] = React.useState('');
 			const [pPersonality, setPPersonality] = React.useState('');
+			const [pProvider, setPProvider] = React.useState('');
+			const [pModel, setPModel] = React.useState('');
+			const [pMaxTokens, setPMaxTokens] = React.useState('');
+			const [pNote, setPNote] = React.useState('');
+			const [pSkill, setPSkill] = React.useState('');
 			const [pSuccessor, setPSuccessor] = React.useState('');
 			const [pBusy, setPBusy] = React.useState(false);
 			const [pError, setPError] = React.useState('');
@@ -2045,6 +2066,11 @@ window.__ModuleLoader__.load({
 				setPName(agent.name ?? '');
 				setPRole(agent.role ?? '');
 				setPPersonality(agent.personality ?? '');
+				setPProvider(agent.config?.provider ?? '');
+				setPModel(agent.config?.model ?? '');
+				setPMaxTokens(agent.config?.maxTokens ?? '');
+				setPNote('');
+				setPSkill('');
 				const successor = (data?.agents ?? []).find((candidate) => candidate.id !== agent.id && candidate.status !== 'retired');
 				setPSuccessor(successor?.id ?? '');
 				setPError('');
@@ -2061,8 +2087,62 @@ window.__ModuleLoader__.load({
 						personality: pPersonality,
 						reason: 'workbench profile',
 					});
+					const config = profileAgent.config ?? {};
+					const patch = {};
+					if (pProvider.trim() !== (config.provider ?? '')) patch.provider = pProvider.trim();
+					if (pModel.trim() !== (config.model ?? '')) patch.model = pModel.trim();
+					const maxTokens = Number(pMaxTokens);
+					if (Number.isSafeInteger(maxTokens) && maxTokens > 0 && maxTokens !== config.maxTokens) patch.maxTokens = maxTokens;
+					if (Object.keys(patch).length > 0) {
+						await runCommand('member.config.update', {
+							memberId: profileAgent.id,
+							patch,
+							reason: 'workbench config',
+						});
+					}
 					setProfileAgent(null);
 					say(t('profileSaved'));
+					await reloadData();
+				} catch (error) {
+					setPError(error?.message ?? String(error));
+				} finally {
+					setPBusy(false);
+				}
+			}
+			async function addNote() {
+				if (!profileAgent || !pNote.trim()) return;
+				try {
+					const result = await runCommand('member.note', { memberId: profileAgent.id, text: pNote.trim() });
+					setPNote('');
+					setProfileAgent(result.member);
+					await reloadData();
+				} catch (error) {
+					setPError(error?.message ?? String(error));
+				}
+			}
+			async function addSkill() {
+				if (!profileAgent || !pSkill.trim()) return;
+				try {
+					const result = await runCommand('member.skill', { memberId: profileAgent.id, name: pSkill.trim() });
+					setPSkill('');
+					setProfileAgent(result.member);
+					await reloadData();
+				} catch (error) {
+					setPError(error?.message ?? String(error));
+				}
+			}
+			async function retryProfile() {
+				if (!profileAgent || pBusy) return;
+				setPBusy(true);
+				setPError('');
+				try {
+					await runCommand('member.retry', { memberId: profileAgent.id });
+					const result = await runCommand('member.activate', {
+						memberId: profileAgent.id,
+						prompt: '你已被重试。先读 tasks/inbox，继续未完成的工作；不要修改无关文件。',
+					});
+					setProfileAgent(result.member);
+					say(t('retried'));
 					await reloadData();
 				} catch (error) {
 					setPError(error?.message ?? String(error));
@@ -2420,6 +2500,13 @@ window.__ModuleLoader__.load({
 								h('input', { value: pRole, onChange: (event) => setPRole(event.target.value) })),
 							h('label', { className: 'at-field' }, h('span', null, t('memberPersonality')),
 								h('textarea', { value: pPersonality, onChange: (event) => setPPersonality(event.target.value) })),
+							h('div', { className: 'at-fieldrow' },
+								h('label', { className: 'at-field' }, h('span', null, t('memberProvider')),
+									h('input', { value: pProvider, onChange: (event) => setPProvider(event.target.value), placeholder: 'deepseek-account' })),
+								h('label', { className: 'at-field' }, h('span', null, t('memberModel')),
+									h('input', { value: pModel, onChange: (event) => setPModel(event.target.value), placeholder: 'deepseek-flash' })),
+								h('label', { className: 'at-field' }, h('span', null, t('memberMaxTokens')),
+									h('input', { value: pMaxTokens, onChange: (event) => setPMaxTokens(event.target.value), inputMode: 'numeric' }))),
 							h('label', { className: 'at-field' }, h('span', null, t('successor')),
 								h('select', {
 									value: pSuccessor,
@@ -2428,10 +2515,17 @@ window.__ModuleLoader__.load({
 									h('option', { value: '' }, t('noSuccessor')),
 									(data?.agents ?? []).filter((candidate) => candidate.id !== profileAgent.id && candidate.status !== 'retired')
 										.map((candidate) => h('option', { key: candidate.id, value: candidate.id }, candidate.name + (candidate.qa ? ' · QA' : ''))))),
+							h('div', { className: 'at-inlineadd' },
+								h('input', { value: pNote, onChange: (event) => setPNote(event.target.value), placeholder: t('notePlaceholder') }),
+								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: addNote, disabled: !pNote.trim() }, t('addNote'))),
+							h('div', { className: 'at-inlineadd' },
+								h('input', { value: pSkill, onChange: (event) => setPSkill(event.target.value), placeholder: t('skillPlaceholder') }),
+								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: addSkill, disabled: !pSkill.trim() }, t('addSkill'))),
 							pError ? h('div', { className: 'at-modalerror', role: 'alert' }, pError) : null,
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setProfileAgent(null), disabled: pBusy }, t('cancel')),
 								h('button', { className: 'at-btn', type: 'button', onClick: leaveProfile, disabled: pBusy }, t('leaveTeam')),
+								profileAgent.status === 'failed' ? h('button', { className: 'at-btn', type: 'button', onClick: retryProfile, disabled: pBusy }, t('retry')) : null,
 								h('button', { className: 'at-btn', type: 'button', onClick: distillProfile, disabled: pBusy }, t('redistill')),
 								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: pBusy || !pName.trim() }, pBusy ? t('saving') : t('save'))))) : null));
 		}

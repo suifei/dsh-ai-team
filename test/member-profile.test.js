@@ -36,6 +36,14 @@ test('member profile, self-evolution, talent pool and takeover are append-only',
 	assert.equal(updated.member.name, '沈舟·二');
 	assert.equal(updated.member.profileVersion, 2);
 	assert.equal(service.state.members.a1.personality, '先复跑，再下结论。');
+	const blankPersonality = await service.dispatch({
+		type: 'member.profile.update',
+		actor: human,
+		projectId: PROJECT_ID,
+		payload: { memberId: 'a1', name: '沈舟·三', personality: '' },
+	});
+	assert.equal(blankPersonality.member.name, '沈舟·三');
+	assert.equal(blankPersonality.member.personality, '先复跑，再下结论。');
 
 	const evolved = await service.dispatch({
 		type: 'member.evolve',
@@ -44,7 +52,7 @@ test('member profile, self-evolution, talent pool and takeover are append-only',
 		payload: { personality: '先复跑，再下结论；把每次失败写进证据。' },
 	});
 	assert.equal(evolved.member.distillVersion, 1);
-	assert.equal(evolved.member.profileVersion, 3);
+	assert.equal(evolved.member.profileVersion, 4);
 	const distilled = await service.dispatch({
 		type: 'member.distill',
 		actor: human,
@@ -52,7 +60,7 @@ test('member profile, self-evolution, talent pool and takeover are append-only',
 		payload: { memberId: 'a1', personality: '先复跑，再下结论；QA 优先。', reason: 'Human re-distill' },
 	});
 	assert.equal(distilled.member.distillVersion, 2);
-	assert.equal(distilled.member.profileVersion, 4);
+	assert.equal(distilled.member.profileVersion, 5);
 	assert.match(distilled.member.personality, /QA 优先/);
 	await assert.rejects(
 		() => service.dispatch({ type: 'member.evolve', actor: a2, projectId: PROJECT_ID, payload: { memberId: 'a1', personality: 'x' } }),
