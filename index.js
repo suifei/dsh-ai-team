@@ -1,89 +1,192 @@
 /**
- * dsh-ai-team — Host half (M1 spike).
+ * dsh-ai-team — Host half.
  *
- * Serves the workbench bootstrap payload over the same-origin web carrier.
- * The real Team service (ledger + domain + member runtime) will replace the
- * mock payload in later tasks; this file exists first to validate that the
- * bundle installs, the Host route is reachable, and the Client workbench can
- * render against it.
+ * M1: one default Project backed by the plugin-owned append-only ledger.
+ * The workbench reads `GET /ai-team/api/bootstrap`; writes go through
+ * `POST /ai-team/api/projects/:id/commands` (Human actor for now).
+ *
+ * The member runtime (real Agent sessions) lands in M2. Until then the
+ * ledger/domain service is the only writer and the Host never fakes work.
  */
+import { mkdirSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { openLedger } from './lib/ledger/writer.js';
+import { TeamService } from './lib/host/service.js';
+
 export const name = 'ai-team';
 
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer'];
 
-const MOCK = {
-	projects: [
-		{ id: 'prj_main', name: 'Main-Dev', goal: '把这次回归清干净', owner: '沈舟', active: true },
-		{ id: 'prj_bug', name: 'Bug-Check-Fix', goal: '排查 issue 与后续修复', owner: '沈舟', active: false },
-		{ id: 'prj_ui', name: 'UI-UX-AX', goal: '工作台体验与可访问性', owner: '顾言', active: false },
-	],
-	agents: [
-		{ id: 'mem_shenzhou', name: '沈舟', role: '架构 · 项目 owner', status: 'running', color: 0 },
-		{ id: 'mem_linlan', name: '林岚', role: '研究 · 验收', status: 'idle', color: 1 },
-		{ id: 'mem_chenmo', name: '陈默', role: '产品 · 验收', status: 'idle', color: 2 },
-		{ id: 'mem_guyan', name: '顾言', role: 'UI/UX', status: 'idle', color: 3 },
-	],
-	stream: [
-		{
-			id: 'str_1', seq: 1, kind: 'human_message', at: Date.now() - 12 * 60_000,
-			author: { kind: 'human', name: '你' },
-			body: '把这次回归里失败的三条都修了，谁该看谁看。',
-		},
-		{
-			id: 'str_2', seq: 2, kind: 'task_card', at: Date.now() - 11 * 60_000,
-			author: { kind: 'agent', name: '沈舟' },
-			body: '拆成 5 项，2 项互相依赖。我先复现，其余并行。',
-			taskIds: ['tsk_11', 'tsk_12', 'tsk_13', 'tsk_14', 'tsk_15'],
-		},
-	],
-	tasks: [
-		{ id: 'tsk_11', number: 11, title: '复现三条失败的用例，界定影响面与不修什么', status: 'in_progress', owner: '沈舟', assignee: '沈舟', replies: 2, following: true, blockedBy: [] },
-		{ id: 'tsk_12', number: 12, title: '登录超时：先加锁再断言，见 upload.ts:88', status: 'pending', owner: '沈舟', assignee: null, replies: 0, following: true, blockedBy: [] },
-		{ id: 'tsk_13', number: 13, title: '上传 413：前端表单与后端限制不一致', status: 'pending', owner: '沈舟', assignee: null, replies: 0, following: true, blockedBy: ['tsk_12'] },
-		{ id: 'tsk_14', number: 14, title: '回归门禁：复跑 build 与 browser 8/8', status: 'pending', owner: '林岚', assignee: null, replies: 0, following: false, blockedBy: [] },
-		{ id: 'tsk_15', number: 15, title: '把修法写成可复核的验收证据', status: 'pending', owner: '陈默', assignee: null, replies: 0, following: false, blockedBy: [] },
-	],
-	thread: {
-		taskId: 'tsk_11',
-		headSeq: 3,
-		entries: [
-			{ seq: 1, author: '沈舟', at: Date.now() - 10 * 60_000, body: '先复现，再判断是不是同一个根因。' },
-			{ seq: 2, author: '林岚', at: Date.now() - 9 * 60_000, body: '我这边跑到第二条就复现了，日志在 /tmp/regression-2.log。' },
-			{ seq: 3, author: '沈舟', at: Date.now() - 8 * 60_000, body: '收到，把第三条也跑一遍，我加锁修。' },
-		],
-	},
-};
+const VERSION = '0.1.0';
+const PROJECT_ID = 'prj_main';
+const HUMAN_ID = 'mem_human';
 
-const json = (body, status = 200) => new Response(JSON.stringify(body), {
-	status,
-	headers: {
-		'content-type': 'application/json; charset=utf-8',
-		'cache-control': 'no-store',
-	},
-});
+function send(res, body, status = 200) {
+	if (res.writableEnded) return;
+	res.statusCode = status;
+	res.setHeader('content-type', 'application/json; charset=utf-8');
+	res.setHeader('cache-control', 'no-store');
+	res.end(JSON.stringify(body));
+}
+
+async function readJson(req) {
+	const chunks = [];
+	let size = 0;
+	for await (const chunk of req) {
+		size += chunk.length;
+		if (size > 1_000_000) throw Object.assign(new Error('body too large'), { code: 'E_INVALID_ARGUMENT', status: 413 });
+		chunks.push(chunk);
+	}
+	if (chunks.length === 0) return {};
+	return JSON.parse(Buffer.concat(chunks).toString('utf8'));
+}
+
+function dshHome() {
+	return process.env.DSH_HOME || join(homedir(), '.dsh');
+}
+
+function profileName() {
+	// The web launcher does not export DSH_PROFILE; the selected profile is in
+	// the process args. Prefer it over the ambient shell env so two profiles
+	// never share a ledger namespace.
+	const index = process.argv.indexOf('--profile');
+	if (index >= 0 && typeof process.argv[index + 1] === 'string') return process.argv[index + 1];
+	return process.env.DSH_PROFILE || 'default';
+}
+
+function errorResponse(res, error) {
+	const code = typeof error?.code === 'string' ? error.code : 'INTERNAL';
+	const status = typeof error?.status === 'number' ? error.status : (code === 'E_STORAGE' ? 503 : 409);
+	send(res, { error: { code, message: error?.message ?? 'command failed', details: error?.details ?? null } }, status);
+}
 
 /**
- * @param ctx - Host context; the workbench requires the web carrier.
+ * Open the default Project ledger and seed the Human + Project skeleton once.
+ * A torn tail is repaired by the writer; the repair is recorded as a system
+ * event so the append-only history explains the gap.
  */
+async function boot() {
+	const dataDir = join(dshHome(), 'ai-team', profileName());
+	const projectDir = join(dataDir, 'projects', PROJECT_ID);
+	mkdirSync(projectDir, { recursive: true });
+	const ledger = openLedger({ dir: projectDir, projectId: PROJECT_ID, fsync: true });
+	const service = new TeamService({ ledger });
+
+	const repairs = ledger.opened?.repairs ?? (ledger.opened?.repair ? [ledger.opened.repair] : []);
+	if (repairs.length > 0) {
+		await ledger.append({
+			type: 'ledger/repaired',
+			payload: { repairs },
+			actor: { kind: 'system' },
+			projectId: PROJECT_ID,
+		});
+	}
+
+	const state = service.state;
+	if (state.members?.[HUMAN_ID] === undefined) {
+		await service.dispatch({
+			type: 'member.add',
+			actor: { kind: 'human', memberId: HUMAN_ID },
+			payload: { id: HUMAN_ID, name: '你', kind: 'human', role: 'Human' },
+		});
+	}
+	if (state.projects?.[PROJECT_ID] === undefined) {
+		await service.dispatch({
+			type: 'project.create',
+			actor: { kind: 'human', memberId: HUMAN_ID },
+			payload: { name: '我的项目', goal: '把事交给团队', ownerId: HUMAN_ID },
+		});
+	}
+	return { ledger, service, dataDir };
+}
+
 export function apply(ctx) {
 	ctx.effect(() => {
 		const webServer = ctx.get('webServer');
 		if (webServer === undefined) return () => {};
+
+		let booted = null;
+		let bootError = null;
+		const ready = boot()
+			.then((value) => { booted = value; return value; })
+			.catch((error) => {
+				bootError = error;
+				console.error('[ai-team] ledger boot failed:', error?.message ?? error);
+				return null;
+			});
+
 		const dispose = webServer.register({
 			kind: 'prefix',
 			path: '/ai-team',
-			resource: async (request) => {
-				const url = new URL(request.url, 'http://local');
-				if (request.method === 'GET' && url.pathname === '/ai-team/api/health') {
-					return json({ ok: true, plugin: name, version: '0.1.0' });
+			handler: async (req, res) => {
+				try {
+					const url = new URL(req.url, 'http://local');
+					await ready;
+					if (booted === null) {
+						return send(res, {
+							error: { code: 'BOOT_FAILED', message: 'team ledger is unavailable', details: bootError?.message ?? null },
+						}, 503);
+					}
+
+					if (req.method === 'GET' && url.pathname === '/ai-team/api/health') {
+						const head = booted.ledger.head;
+						return send(res, {
+							ok: true,
+							plugin: name,
+							version: VERSION,
+							projectId: PROJECT_ID,
+							ledger: { events: booted.ledger.events.length, head },
+						});
+					}
+					if (req.method === 'GET' && url.pathname === '/ai-team/api/bootstrap') {
+						return send(res, booted.service.bootstrap(PROJECT_ID));
+					}
+
+					const commands = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/commands$/);
+					if (req.method === 'POST' && commands !== null) {
+						const projectId = decodeURIComponent(commands[1]);
+						if (projectId !== PROJECT_ID) {
+							return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
+						}
+						let body;
+						try {
+							body = await readJson(req);
+						} catch (error) {
+							return errorResponse(res, error.code === 'E_INVALID_ARGUMENT' ? error : Object.assign(error, {
+								code: 'E_INVALID_ARGUMENT',
+								message: 'JSON body is required',
+								status: 400,
+							}));
+						}
+						if (typeof body?.type !== 'string' || body.type === '') {
+							return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'command type is required' } }, 400);
+						}
+						try {
+							const result = await booted.service.dispatch({
+								type: body.type,
+								payload: body.payload ?? {},
+								actor: { kind: 'human', memberId: HUMAN_ID },
+								projectId: PROJECT_ID,
+								correlationId: typeof body.correlationId === 'string' ? body.correlationId : undefined,
+							});
+							return send(res, { ok: true, ...result });
+						} catch (error) {
+							return errorResponse(res, error);
+						}
+					}
+
+					return send(res, { error: { code: 'NOT_FOUND', message: 'not found' } }, 404);
+				} catch (error) {
+					return errorResponse(res, error);
 				}
-				if (request.method === 'GET' && url.pathname === '/ai-team/api/bootstrap') {
-					return json(MOCK);
-				}
-				return json({ error: { code: 'NOT_FOUND', message: 'not found' } }, 404);
 			},
 		});
-		return () => dispose();
-	}, 'ai-team: spike routes');
+
+		return () => {
+			dispose();
+			if (booted !== null) booted.ledger.close();
+		};
+	}, 'ai-team: workbench routes');
 }

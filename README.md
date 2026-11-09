@@ -2,7 +2,7 @@
 
 AI Team mode for DeepSeek Harness: **projects, owned tasks, threads, inbox and an append-only team ledger** — one Human sentence, a team of named persistent agents keeps going, and only direction / trust / irreversible steps come back.
 
-> M1 status: the package mounts a **three-pane workbench** (left projects + agents, center `主对话 / 看板 / 态势`, right thread). The app ledger, task/thread/inbox domain and `TeamService` are implemented and covered by `node --test` (34 tests); the HTTP bootstrap is still the spike mock, and the real member runtime lands in M2. The UI is a contract spike, not the final client; see `docs/05-项目启动与执行计划.md` and `docs/reports/M1-验收矩阵.md`.
+> M1 status: the package mounts a **three-pane workbench** (left projects + agents, center `主对话 / 看板 / 态势`, right thread). The app ledger, task/thread/inbox domain and `TeamService` are implemented and covered by `node --test` (34 tests); `GET /ai-team/api/bootstrap` and `POST /ai-team/api/projects/:id/commands` are wired to a real default-project ledger. The real member runtime (Agent sessions) lands in M2; the board/quadrant/SSE read models are not wired yet. The UI is a contract spike, not the final client; see `docs/05-项目启动与执行计划.md` and `docs/reports/M1-验收矩阵.md`.
 
 ## Install (dedicated profile)
 
@@ -16,7 +16,7 @@ The plugin is **not** installed in the normal `desktop`/`web` profiles; ordinary
 
 ## Layout
 
-- `index.js` — Host entry: same-origin `/ai-team/api/health` and `/ai-team/api/bootstrap` (mock in the spike).
+- `index.js` — Host entry: same-origin `/ai-team/api/health`, `/ai-team/api/bootstrap`, and `POST /ai-team/api/projects/:id/commands` backed by the default-project ledger.
 - `client.js` — Client entry: `sidebar.panellist` icon + `main` key `ai-team` three-pane workbench.
 - `cordis.patch.yml` — bundle row.
 - `lib/` — append-only ledger (`ledger/*`), task/thread/inbox domain (`domain/*`) and the host `TeamService` (`host/service.js`).
