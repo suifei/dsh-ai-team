@@ -26,6 +26,9 @@ test('client source contains the situation (four-quadrant) view', async () => {
 	assert.match(source, /member\.note/);
 	assert.match(source, /retryProfile/);
 	assert.match(source, /qaRequired/);
+	assert.match(source, /thread\.post/);
+	assert.match(source, /task\.accept/);
+	assert.match(source, /request_changes/);
 	assert.match(source, /leftTeamHanded/);
 	assert.match(source, /talentPoolCount/);
 });

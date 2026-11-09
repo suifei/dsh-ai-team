@@ -148,6 +148,14 @@ window.__ModuleLoader__.load({
 			conflictContextMock: 'spike：将展示你在 #{base} 时的上下文（命令未接入）。',
 			replyMock: 'spike：回复将基于 #{seq} 发送并写入账本（命令未接入）。',
 			replyMockNew: 'spike：将新建 Thread 并写入回复（命令未接入）。',
+			replySent: '已写入 Thread #{seq}。',
+			replyFailed: '回复失败：{message}',
+			acceptNote: '工作台验收：已核对 Thread 与证据。',
+			acceptDone: '已验收 #{n}。',
+			acceptFailed: '验收失败：{message}',
+			changesNeedNote: '先把返工理由写在回复框，再点退回。',
+			changesDone: '已退回 #{n}，要求返工。',
+			changesFailed: '退回失败：{message}',
 			followMock: 'spike：已关注 #{n}（仅本地演示，不写账本）。',
 			unfollowMock: 'spike：不关注 #{n}。完成、受阻或需要你决定时仍会出现（仅本地演示）。',
 			acceptMock: 'spike：接受 #{n} 将写验收记录并标记完成（命令未接入）。',
@@ -378,6 +386,14 @@ window.__ModuleLoader__.load({
 			conflictContextMock: 'spike: will show your context at #{base} (commands not wired).',
 			replyMock: 'spike: reply will be sent on #{seq} and written to the ledger (commands not wired).',
 			replyMockNew: 'spike: will start a thread and write the reply (commands not wired).',
+			replySent: 'Written to Thread #{seq}.',
+			replyFailed: 'Reply failed: {message}',
+			acceptNote: 'Workbench acceptance: Thread and evidence reviewed.',
+			acceptDone: 'Accepted #{n}.',
+			acceptFailed: 'Accept failed: {message}',
+			changesNeedNote: 'Write the change request in the reply box first.',
+			changesDone: 'Changes requested on #{n}.',
+			changesFailed: 'Change request failed: {message}',
 			followMock: 'spike: following #{n} (local demo only; nothing written).',
 			unfollowMock: 'spike: not following #{n}. You will still hear about completion, blockage, or decisions (local demo only).',
 			acceptMock: 'spike: accepting #{n} will write an acceptance record and mark it done (commands not wired).',
@@ -2233,11 +2249,21 @@ window.__ModuleLoader__.load({
 					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
 				}
 			}
-			function sendReply() {
+			async function sendReply() {
 				const text = reply.trim();
-				if (!text) return;
-				sayRight(threadHead ? tf(t, 'replyMock', { seq: replyBase ?? threadHead }) : t('replyMockNew'));
-				setReply('');
+				if (!text || !selectedTask) return;
+				try {
+					const result = await runCommand('thread.post', {
+						taskId: selectedTask.id,
+						baseSeq: replyBase ?? threadHead ?? 0,
+						body: text,
+					});
+					setReply('');
+					sayRight(tf(t, 'replySent', { seq: result.entry?.seq ?? '' }));
+					await reloadData();
+				} catch (error) {
+					sayRight(tf(t, 'replyFailed', { message: error?.message ?? String(error) }));
+				}
 			}
 			function openConvert() {
 				if (converting) { setConverting(false); return; }
@@ -2255,12 +2281,40 @@ window.__ModuleLoader__.load({
 				setCTitle('');
 				setCDod('');
 			}
-			function acceptTask() {
+			async function acceptTask() {
 				if (!selectedTask) return;
-				sayRight(tf(t, 'acceptMock', { n: taskNo(selectedTask) }));
+				try {
+					await runCommand('task.accept', {
+						taskId: selectedTask.id,
+						expectedRevision: selectedTask.revision,
+						note: t('acceptNote'),
+						confirmed: acceptChecked,
+					});
+					sayRight(tf(t, 'acceptDone', { n: taskNo(selectedTask) }));
+					await reloadData();
+				} catch (error) {
+					sayRight(tf(t, 'acceptFailed', { message: error?.message ?? String(error) }));
+				}
 			}
-			function requestChanges() {
-				sayRight(t('changesMock'));
+			async function requestChanges() {
+				if (!selectedTask) return;
+				const note = reply.trim();
+				if (!note) {
+					sayRight(t('changesNeedNote'));
+					return;
+				}
+				try {
+					await runCommand('task.request_changes', {
+						taskId: selectedTask.id,
+						expectedRevision: selectedTask.revision,
+						note,
+					});
+					setReply('');
+					sayRight(tf(t, 'changesDone', { n: taskNo(selectedTask) }));
+					await reloadData();
+				} catch (error) {
+					sayRight(tf(t, 'changesFailed', { message: error?.message ?? String(error) }));
+				}
 			}
 			function mockAction(action) {
 				sayRight(tf(t, 'actionMock', { action }));
