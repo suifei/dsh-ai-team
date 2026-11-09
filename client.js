@@ -1935,7 +1935,8 @@ window.__ModuleLoader__.load({
 				const thread = threadFor(data, selected);
 				setReplyBase(thread?.baseSeq ?? null);
 				setAcceptChecked(false);
-				setQaChecks((selectedTask?.qaChecklist ?? []).map((item) => ({ item, passed: false })));
+				const nextTask = data?.tasks?.find((task) => task.id === selected) ?? data?.tasks?.[0];
+				setQaChecks((nextTask?.qaChecklist ?? []).map((item) => ({ item, passed: false })));
 				setConverting(false);
 				setCTitle('');
 				setCDod('');
