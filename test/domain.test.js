@@ -86,7 +86,7 @@ test('submit requires evidence; independent reviewer can accept; claimant cannot
 	const accepted = acceptTask(task, a2, { note: 'verified' }, { expectedRevision: task.revision });
 	assert.equal(accepted.task.status, 'done');
 	assert.equal(accepted.task.reviewerId, 'a2');
-	assert.equal(accepted.event.type, 'review/accepted');
+	assert.equal(accepted.event.type, 'task/accepted');
 });
 
 test('request changes returns the task to in_progress and keeps history', () => {
@@ -97,7 +97,7 @@ test('request changes returns the task to in_progress and keeps history', () => 
 	assert.equal(changed.task.status, 'in_progress');
 	assert.equal(changed.task.assigneeId, 'a1');
 	assert.equal(changed.task.reviewRound, 1);
-	assert.equal(changed.event.type, 'review/changes-requested');
+	assert.equal(changed.event.type, 'task/changes-requested');
 });
 
 test('Human self-accept is allowed but marked as human_self_accept', () => {
@@ -183,6 +183,6 @@ test('inbox decision items cannot be bulk-read or done without a decision', () =
 	assert.equal(read.state, 'read');
 	expectCode(() => ackInboxItem(decision, { disposition: 'done' }), 'E_INVALID_STATE');
 	const done = ackInboxItem(decision, { disposition: 'done', decision: 'approve' }, { at: 3 });
-	assert.equal(done.state, 'done');
+	assert.equal(done.state, 'resolved');
 	assert.equal(inboxGroup(decision), 'needs_decision');
 });
