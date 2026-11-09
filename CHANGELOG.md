@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.35 — 2026-11-10
+
+- 内置 `ai-team-core` skill 自动注入所有 Agent wake；
+- 状态变化 toast 气泡、成员视图最近 Task 状态气泡；
+- PMO 自动推进 prompt 加入复盘/头脑风暴/深度研究会议要求。
+
 ## 0.3.34 — 2026-11-10
 
 - 新增 Project 级 PMO 全自动开关，默认开启；关闭后决策回到收件箱；
