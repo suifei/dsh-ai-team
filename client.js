@@ -2075,11 +2075,13 @@ window.__ModuleLoader__.load({
 				setPBusy(true);
 				setPError('');
 				try {
-					await runCommand('member.distill', {
+					const result = await runCommand('member.distill', {
 						memberId: profileAgent.id,
-						personality: pPersonality,
+						mode: 'model',
 						reason: 'workbench re-distill',
 					});
+					setPPersonality(result.member.personality);
+					setProfileAgent(result.member);
 					say(t('profileDistilled'));
 					await reloadData();
 				} catch (error) {

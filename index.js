@@ -235,6 +235,72 @@ export function apply(ctx) {
 				}
 			}
 		};
+		const distillMemberWithModel = async (payload) => {
+			const member = booted?.service.state.members?.[payload.memberId];
+			if (member === undefined || member.kind !== 'agent') {
+				return { error: { code: 'E_NOT_FOUND', message: 'agent not found' }, status: 404 };
+			}
+			const llm = ctx.get('llm');
+			if (llm?.stream === undefined) {
+				return { error: { code: 'E_RUNTIME_UNAVAILABLE', message: 'llm service is unavailable' }, status: 503 };
+			}
+			const selection = member.config?.provider && member.config?.model
+				? { provider: member.config.provider, model: member.config.model }
+				: ctx.get('agentDefaultModel')?.currentSelection?.();
+			if (!selection?.provider || !selection?.model) {
+				return { error: { code: 'E_RUNTIME_UNAVAILABLE', message: 'no provider/model configured' }, status: 503 };
+			}
+			const tasks = Object.values(booted.service.state.tasks ?? {})
+				.filter((task) => task.ownerId === member.id || task.assigneeId === member.id)
+				.slice(-8)
+				.map((task) => `#${task.number ?? '?'} ${task.title} [${task.status}]`)
+				.join('\n');
+			const prompt = [
+				`成员：${member.name}`,
+				`角色：${member.role || 'Team member'}`,
+				`现有个性：${member.personality || '（空）'}`,
+				`备忘：${(member.notes ?? []).slice(-8).join('；') || '（空）'}`,
+				`技能：${(member.skills ?? []).join('、') || '（空）'}`,
+				`最近任务：\n${tasks || '（无）'}`,
+				'',
+				'请基于以上材料，把这个成员的工作个性重新蒸馏成一段简洁、可执行、可验证的中文描述。',
+				'只输出 JSON：{"personality":"..."}；不要输出 Markdown、解释或代码块。',
+			].join('\n');
+			let text = '';
+			try {
+				const stream = llm.stream({
+					provider: selection.provider,
+					model: selection.model,
+					system: '你是团队的人格蒸馏器。只输出要求的 JSON，不调用工具。',
+					messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+					maxTokens: 400,
+				});
+				for await (const chunk of stream) {
+					if (chunk.type === 'text-delta') text += chunk.text;
+					if (chunk.type === 'finish' && chunk.reason?.kind === 'error') {
+						throw Object.assign(new Error(chunk.reason.failure?.message ?? 'model failed'), { code: chunk.reason.failure?.code ?? 'LLM_ERROR' });
+					}
+				}
+			} catch (error) {
+				return { error: { code: error?.code ?? 'E_DISTILL', message: error?.message ?? String(error) }, status: 502 };
+			}
+			const match = text.match(/\{[\s\S]*\}/);
+			let personality = text.trim();
+			if (match) {
+				try { personality = JSON.parse(match[0]).personality ?? personality; } catch { /* keep text */ }
+			}
+			if (typeof personality !== 'string' || personality.trim() === '') {
+				return { error: { code: 'E_DISTILL', message: 'model returned no personality' }, status: 502 };
+			}
+			const result = await booted.service.dispatch({
+				type: 'member.distill',
+				payload: { memberId: member.id, personality: personality.trim(), reason: payload.reason ?? 'model re-distill' },
+				actor: { kind: 'human', memberId: HUMAN_ID },
+				projectId: PROJECT_ID,
+			});
+			return { ok: true, member: result.member, distilled: { provider: selection.provider, model: selection.model } };
+		};
+
 		const tools = ctx.get('tools');
 		const disposeTool = tools?.register
 			? tools.register(createTeamTool({
@@ -532,6 +598,11 @@ export function apply(ctx) {
 						}
 						if (typeof body?.type !== 'string' || body.type === '') {
 							return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'command type is required' } }, 400);
+						}
+						if (body.type === 'member.distill' && body.payload?.mode === 'model') {
+							const distilled = await distillMemberWithModel(body.payload ?? {});
+							if (distilled.error !== undefined) return send(res, { error: distilled.error }, distilled.status ?? 502);
+							return send(res, distilled);
 						}
 						if (body.type === 'member.activate') {
 							const activated = await activateMember(body);
