@@ -1,27 +1,29 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<!--
-  班组 / Agent Team · 环上标记（Loop Mark）
-  概念：一个右侧开口的圆角方框（工作容器）+ 一个落在开口处的圆（成员）。
-  语义：方框开口 = 不是封闭的黑盒，人可以进来；圆压在边上 = 在环上（on the loop），不在环里。
-  配色：方框跟随 currentColor，内联时即继承宿主 DSW alias 的 label-primary 系列；
-  圆为品牌蓝 #5686fe（artwork 允许自有色，等同 static deepseek 450）。
-  规格：32×32 画布，2.6 描边，四周留白不小于 2.5，最小可用 16px。
-  用法：无文字、无渐变、无外部引用、无字体依赖；以 img 引用时方框取默认深色，双色版请内联使用。
--->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"
-     fill="none" role="img" aria-labelledby="loopMarkTitle" color="#0f1115">
-  <title id="loopMarkTitle">班组 Agent Team</title>
-  <defs>
-    <!-- 在方框右侧开一个圆口：白色保留、黑色挖空，避免依赖页面背景色 -->
-    <mask id="loopMarkMouth" maskUnits="userSpaceOnUse" x="0" y="0" width="32" height="32">
-      <rect x="0" y="0" width="32" height="32" fill="#fff"/>
-      <circle cx="24.75" cy="16" r="7.6" fill="#000"/>
-    </mask>
-  </defs>
-  <!-- 工作容器：右侧开口的圆角方框 -->
-  <rect x="3.75" y="5.5" width="21" height="21" rx="6.5"
-        stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"
-        mask="url(#loopMarkMouth)"/>
-  <!-- 成员：落在开口处的圆 -->
-  <circle cx="24.75" cy="16" r="4.8" fill="#5686fe"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="文渊阁图标">
+  <!-- 墨蓝底圆 -->
+  <circle cx="32" cy="32" r="31" fill="#17263A"/>
+  <circle cx="32" cy="32" r="28" fill="none" stroke="#D4AF37" stroke-width="1" opacity="0.55"/>
+
+  <!-- 重檐屋顶 -->
+  <path d="M23 21 L32 15 L41 21 Z" fill="#D4AF37"/>
+  <path d="M20 23 L44 23" stroke="#D4AF37" stroke-width="2" stroke-linecap="round"/>
+  <path d="M19 28 L32 23 L45 28 Z" fill="#D4AF37"/>
+  <path d="M16 30 L48 30" stroke="#D4AF37" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- 三开间柱 -->
+  <path d="M22 31 V42 M28 31 V42 M36 31 V42 M42 31 V42"
+        stroke="#D4AF37" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- 基座与台阶 -->
+  <path d="M19 43 H45" stroke="#D4AF37" stroke-width="2" stroke-linecap="round"/>
+  <path d="M17 46 H47" stroke="#D4AF37" stroke-width="2" stroke-linecap="round"/>
+  <path d="M21 49 H43" stroke="#D4AF37" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+
+  <!-- 渊水纹 -->
+  <path d="M15 54 Q21 51 27 54 T39 54 T51 54"
+        stroke="#D4AF37" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.85"/>
+  <path d="M19 57 Q25 54 31 57 T43 57"
+        stroke="#D4AF37" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.5"/>
+
+  <!-- 朱印：点“文”与“批红” -->
+  <rect x="29" y="33" width="6" height="7" rx="1" fill="#C0392B"/>
 </svg>
