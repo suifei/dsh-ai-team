@@ -1,7 +1,31 @@
 # dsh-ai-team bundle patch: mounts the Host half.
 # The Client half is discovered from this package's `dsh.client` declaration.
-# This is the spike row: a single Host entry, no Config yet. The real bundle
-# will add team-lead / team-member presets and the workbench rows.
+# AI Team is a dedicated, trusted profile: members run with full access by
+# design. These patches make that explicit at the profile layer, so a plain
+# web/desktop profile is never affected.
 - insert:
     - id: ai-team
       name: '@suifei/dsh-ai-team'
+
+# The Team profile must be danger-full-access end to end. The Host validates
+# this at boot (E_PERMISSION_PROFILE) and refuses to serve a weaker profile.
+- id: sandbox-policy
+  config:
+    mode: danger-full-access
+    workspaceRoot: !!js process.cwd()
+- id: approval
+  config:
+    policy: never
+- id: permission
+  config:
+    defaultPreset: danger-full-access
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+      workspace-write:
+        sandbox: workspace-write
+        approval: ask
+      danger-full-access:
+        sandbox: danger-full-access
+        approval: never

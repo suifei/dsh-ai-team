@@ -16,8 +16,42 @@ test('bundle metadata is coherent', async () => {
 	const patch = await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8');
 	assert.match(patch, /id:\s*ai-team/);
 	assert.match(patch, /@suifei\/dsh-ai-team/);
+	assert.match(patch, /mode:\s*danger-full-access/);
+	assert.match(patch, /defaultPreset:\s*danger-full-access/);
 	const icon = await readFile(new URL('../icon.svg', import.meta.url), 'utf8');
 	assert.match(icon, /<svg\b/);
+});
+
+test('host refuses a profile without danger-full-access', async () => {
+	const routes = [];
+	const ctx = {
+		effect(fn) { fn(); },
+		get(id) {
+			if (id === 'webServer') return { register(route) { routes.push(route); return () => {}; } };
+			if (id === 'permissionPresets') {
+				return {
+					catalog: () => ({ defaultPreset: 'workspace-write', options: [], defaultOptions: [] }),
+					resolve: () => ({ sandbox: 'workspace-write', approval: 'ask' }),
+				};
+			}
+			if (id === 'sandboxPolicy') return { defaultMode: 'workspace-write' };
+			return undefined;
+		},
+	};
+	apply(ctx);
+	assert.equal(routes.length, 1);
+	const server = createServer((req, res) => routes[0].handler(req, res));
+	try {
+		await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+		const base = `http://127.0.0.1:${server.address().port}`;
+		const health = await fetch(`${base}/ai-team/api/health`);
+		assert.equal(health.status, 503);
+		const body = await health.json();
+		assert.equal(body.error.code, 'BOOT_FAILED');
+	} finally {
+		server.closeAllConnections?.();
+		await new Promise((resolve) => server.close(resolve));
+	}
 });
 
 test('host mounts the workbench routes on a real default-project ledger', async () => {
@@ -33,13 +67,22 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 			disposeEffect = fn();
 		},
 		get(id) {
-			assert.equal(id, 'webServer');
-			return {
-				register(route) {
-					routes.push(route);
-					return () => {};
-				},
-			};
+			if (id === 'webServer') {
+				return {
+					register(route) {
+						routes.push(route);
+						return () => {};
+					},
+				};
+			}
+			if (id === 'permissionPresets') {
+				return {
+					catalog: () => ({ defaultPreset: 'danger-full-access', options: [], defaultOptions: [] }),
+					resolve: () => ({ sandbox: 'danger-full-access', approval: 'never' }),
+				};
+			}
+			if (id === 'sandboxPolicy') return { defaultMode: 'danger-full-access' };
+			return undefined;
 		},
 	};
 	let server = null;

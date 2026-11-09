@@ -13,6 +13,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { openLedger } from './lib/ledger/writer.js';
 import { TeamService } from './lib/host/service.js';
+import { validatePermissionProfile } from './lib/runtime/member-runtime.js';
 
 export const name = 'ai-team';
 
@@ -109,13 +110,23 @@ export function apply(ctx) {
 
 		let booted = null;
 		let bootError = null;
-		const ready = boot()
-			.then((value) => { booted = value; return value; })
-			.catch((error) => {
-				bootError = error;
-				console.error('[ai-team] ledger boot failed:', error?.message ?? error);
-				return null;
-			});
+		const access = validatePermissionProfile({
+			permissionPresets: ctx.get('permissionPresets'),
+			sandboxPolicy: ctx.get('sandboxPolicy'),
+		});
+		const ready = access.ok
+			? boot()
+				.then((value) => { booted = value; return value; })
+				.catch((error) => {
+					bootError = error;
+					console.error('[ai-team] ledger boot failed:', error?.message ?? error);
+					return null;
+				})
+			: Promise.resolve(null);
+		if (!access.ok) {
+			bootError = Object.assign(new Error(access.reason), { code: access.code, status: 503 });
+			console.error('[ai-team] refused to start:', access.code, access.reason);
+		}
 
 		const sseClients = new Set();
 		const snapshot = () => ({

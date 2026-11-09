@@ -2,7 +2,7 @@
 
 AI Team mode for DeepSeek Harness: **projects, owned tasks, threads, inbox and an append-only team ledger** — one Human sentence, a team of named persistent agents keeps going, and only direction / trust / irreversible steps come back.
 
-> M1 status: the package mounts a **three-pane workbench** (left projects + agents, center `主对话 / 看板 / 态势`, right thread). The app ledger, task/thread/inbox domain and `TeamService` are implemented and covered by `node --test` (38 tests); `bootstrap`, `POST .../commands`, `GET .../board`, `GET .../quadrants` and the event-driven `GET .../events` SSE are wired to a real default-project ledger. The real member runtime (Agent sessions) lands in M2. The UI is a contract spike, not the final client; see `docs/05-项目启动与执行计划.md` and `docs/reports/M1-验收矩阵.md`.
+> M1/M2 status: the package mounts a **three-pane workbench** (left projects + agents, center `主对话 / 看板 / 态势`, right thread). The app ledger, task/thread/inbox domain and `TeamService` are implemented and covered by `node --test` (44 tests); `bootstrap`, `POST .../commands`, `GET .../board`, `GET .../quadrants` and the event-driven `GET .../events` SSE are wired to a real default-project ledger. The profile patch enforces `danger-full-access`, and the Host refuses to boot a weaker profile; the `MemberRuntime` adapter (activation + permission repair + wake) is tested with injected fakes, but real Agent activation still needs the Project host Agent (M2). The UI is a contract spike, not the final client; see `docs/05-项目启动与执行计划.md` and `docs/reports/M1-验收矩阵.md`.
 
 ## Install (dedicated profile)
 
