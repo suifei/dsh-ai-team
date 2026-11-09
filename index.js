@@ -17,6 +17,7 @@ import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-r
 import { ensureHostAgent } from './lib/runtime/host-agent.js';
 import { classifyLlmFailure, retryDecision } from './lib/runtime/failure-policy.js';
 import { memberIdentity } from './lib/domain/member-profile.js';
+import { loadSkillContext } from './lib/runtime/skill-loader.js';
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeWake, planWakes } from './lib/host/waker.js';
 
@@ -220,7 +221,9 @@ export function apply(ctx) {
 					cwd: member.workspace ?? booted.dataDir,
 				});
 				try {
-					const delivered = await runtime.wake(member, { prompt: describeWake(plan, booted.service.state) });
+					const delivered = await runtime.wake(member, {
+						prompt: describeWake(plan, booted.service.state) + await loadSkillContext(member, booted.dataDir),
+					});
 					await booted.service.recordWake(plan.memberId, {
 						ok: true, taskId: plan.taskId, reason: plan.reason, messageId: delivered.messageId,
 					});
@@ -381,7 +384,7 @@ export function apply(ctx) {
 				const result = await runtime.activate(activationMember, {
 					prompt: `${memberIdentity(activationMember)}\n\n${typeof body.payload?.prompt === 'string'
 						? body.payload.prompt
-						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}`,
+						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await loadSkillContext(activationMember, booted.dataDir)}`,
 				});
 				let bound;
 				try {
