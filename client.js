@@ -2400,7 +2400,7 @@ window.__ModuleLoader__.load({
 			const quadrants = deriveQuadrants(data);
 			const inboxItems = (data.inbox ?? []).filter((item) => !isInformationalInboxItem(item));
 			const inboxUnread = inboxItems.filter((item) => item.state === 'unread').length;
-			const q1Extra = (quadrants.q1.items ?? []).filter((item) => item.kind === 'inbox').length;
+			const q1Extra = inboxItems.filter((item) => item.requiresDecision === true && item.state === 'unread').length;
 			const threadHead = thread?.headSeq ?? thread?.entries?.length ?? 0;
 			const followingOf = (card) => (Object.prototype.hasOwnProperty.call(follows, card.id) ? follows[card.id] : Boolean(card.following));
 
