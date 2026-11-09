@@ -60,6 +60,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 	const requestErrorListeners = [];
 	const sessionEventListeners = [];
 	const wakeCalls = [];
+	const memberAgents = new Map();
 	let toolRegistration = null;
 	const root = await mkdtemp(join(tmpdir(), 'ai-team-host-'));
 	const previousHome = process.env.DSH_HOME;
@@ -98,8 +99,23 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 			if (id === 'agents') {
 				return {
 					roots: () => [],
-					create: async (options) => ({
-						agent: { id: options.sessionId },
+					get: (sessionId) => memberAgents.get(sessionId),
+					create: async (options) => {
+						const session = { id: options.sessionId, sandbox: 'workspace-write' };
+						memberSessions.set(options.sessionId, session);
+						const agent = {
+							id: options.sessionId,
+							session,
+							followup: (message) => {
+								const text = message?.content?.[0]?.text ?? '';
+								if (text.includes('Team event')) wakeCalls.push({ targetId: options.sessionId, content: message.content });
+							},
+						};
+						memberAgents.set(options.sessionId, agent);
+						return { agent, dispose: async () => {} };
+					},
+					resume: async ({ resumeSessionId }) => ({
+						agent: memberAgents.get(resumeSessionId),
 						dispose: async () => {},
 					}),
 				};
@@ -124,7 +140,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 					},
 				};
 			}
-			if (id === 'sessions') return { get: (sessionId) => memberSessions.get(sessionId) };
+			if (id === 'sessions') return { get: (sessionId) => memberSessions.get(sessionId), flush: async () => true };
 			if (id === 'tools') {
 				return {
 					register(definition, options) {
@@ -205,12 +221,13 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(activate.status, 200);
 		const activated = await activate.json();
 		assert.equal(activated.member.status, 'running');
-		assert.equal(activated.member.sessionId, 'session-member-1');
-		assert.equal(memberSessions.get('session-member-1').sandbox, 'danger-full-access');
+		const memberSessionId = activated.member.sessionId;
+		assert.equal(typeof memberSessionId, 'string');
+		assert.equal(memberSessions.get(memberSessionId).sandbox, 'danger-full-access');
 		assert.ok(toolRegistration !== null);
-		assert.equal(toolRegistration.options.when({ agent: { id: 'session-member-1' } }), true);
+		assert.equal(toolRegistration.options.when({ agent: { id: memberSessionId } }), true);
 		assert.equal(toolRegistration.options.when({ agent: { id: 'other' } }), false);
-		const toolTasks = await toolRegistration.definition.execute({ action: 'tasks' }, { agent: { id: 'session-member-1' } });
+		const toolTasks = await toolRegistration.definition.execute({ action: 'tasks' }, { agent: { id: memberSessionId } });
 		assert.equal(toolTasks.ok, true);
 
 		const agentTask = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
@@ -225,13 +242,13 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		const agentTaskBody = await agentTask.json();
 		await new Promise((resolve) => setTimeout(resolve, 20));
 		assert.equal(wakeCalls.length, 1);
-		assert.equal(wakeCalls[0].targetId, 'session-member-1');
+		assert.equal(wakeCalls[0].targetId, memberSessionId);
 		assert.match(wakeCalls[0].content[0].text, new RegExp(agentTaskBody.task.id));
 
 		assert.equal(requestErrorListeners.length, 1);
 		let nextCalls = 0;
 		const retry = await requestErrorListeners[0](
-			{ agent: { id: 'session-member-1' }, provider: 'p1', failure: { status: 429, code: 'RATE_LIMIT', message: 'rate limit' } },
+			{ agent: { id: memberSessionId }, provider: 'p1', failure: { status: 429, code: 'RATE_LIMIT', message: 'rate limit' } },
 			async () => { nextCalls += 1; return undefined; },
 		);
 		assert.equal(retry.kind, 'retry');
@@ -242,7 +259,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 
 		assert.equal(sessionEventListeners.length, 1);
 		await sessionEventListeners[0](
-			{ id: 'session-member-1' },
+			{ id: memberSessionId },
 			{ type: 'turn/end', data: { reason: { kind: 'completed' } } },
 		);
 		const afterRecovery = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
@@ -251,7 +268,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.ok(afterRecovery.agents[0].lastRecoveredAt !== undefined);
 
 		const terminal = await requestErrorListeners[0](
-			{ agent: { id: 'session-member-1' }, provider: 'p1', failure: { status: 401, code: 'INVALID_API_KEY', message: 'bad key' } },
+			{ agent: { id: memberSessionId }, provider: 'p1', failure: { status: 401, code: 'INVALID_API_KEY', message: 'bad key' } },
 			async () => { nextCalls += 1; return undefined; },
 		);
 		assert.equal(terminal, undefined);

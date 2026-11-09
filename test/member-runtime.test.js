@@ -155,6 +155,42 @@ test('wake cold-resumes a member whose session is not live', async () => {
 	assert.equal(calls.set.length, 0, 'no live Session means no pre-delivery permission set');
 });
 
+test('direct mode creates an Agent and starts it with followup', async () => {
+	const sessions = new Map();
+	const followups = [];
+	const agent = {
+		id: 'direct-1',
+		session: { id: 'direct-1', sandbox: 'workspace-write' },
+		followup: (message) => { followups.push(message.content[0].text); },
+	};
+	sessions.set('direct-1', agent.session);
+	const runtime = new MemberRuntime({
+		agents: {
+			create: async (options) => {
+				assert.equal(options.parentAgent.id, 'session-host');
+				agent.id = options.sessionId;
+				agent.session.id = options.sessionId;
+				sessions.set(options.sessionId, agent.session);
+				return { agent, dispose: async () => {} };
+			},
+			get: (id) => (id === agent.id ? agent : undefined),
+		},
+		sessions: { get: (id) => sessions.get(id), flush: async () => true },
+		permissionPresets: { set: (session, name) => { session.sandbox = name; } },
+		sandboxPolicy: { overrideOf: (session) => session.sandbox },
+		parent: { id: 'session-host' },
+		cwd: 'E:/works/dsh-ai-team',
+		direct: true,
+	});
+	const result = await runtime.activate({ id: 'm1', name: '沈舟' }, { prompt: '开始' });
+	assert.equal(result.childId, agent.id);
+	assert.equal(result.member.status, 'running');
+	assert.equal(agent.session.sandbox, 'danger-full-access');
+	assert.deepEqual(followups, ['开始']);
+	await runtime.wake({ id: 'm1', name: '沈舟', sessionId: agent.id }, { prompt: '继续' });
+	assert.deepEqual(followups, ['开始', '继续']);
+});
+
 test('missing parent/provider or session is rejected explicitly', async () => {
 	const { runtime } = makeRuntime();
 	await assert.rejects(

@@ -199,6 +199,7 @@ export function apply(ctx) {
 				const runtime = new MemberRuntime({
 					subagents, sessions, permissionPresets, sandboxPolicy,
 					agents: ctx.get('agents'),
+					direct: true,
 					parent: parentInfo.agent,
 					provider: providers[0],
 					cwd: member.workspace ?? booted.dataDir,
@@ -276,6 +277,8 @@ export function apply(ctx) {
 					sessions,
 					permissionPresets,
 					sandboxPolicy,
+					agents: ctx.get('agents'),
+					direct: true,
 					parent: parentInfo.agent,
 					provider: providers[0],
 					cwd: member.workspace ?? booted.dataDir,
