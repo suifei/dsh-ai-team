@@ -13,7 +13,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { openLedger } from './lib/ledger/writer.js';
 import { TeamService } from './lib/host/service.js';
-import { validatePermissionProfile } from './lib/runtime/member-runtime.js';
+import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-runtime.js';
+import { ensureHostAgent } from './lib/runtime/host-agent.js';
 
 export const name = 'ai-team';
 
@@ -129,6 +130,78 @@ export function apply(ctx) {
 		}
 
 		const sseClients = new Set();
+		const activations = new Map();
+		let host = null;
+		let hostPromise = null;
+		const ensureParent = async () => {
+			if (host !== null) return host;
+			if (hostPromise === null) {
+				hostPromise = ensureHostAgent({
+					agents: ctx.get('agents'),
+					agentDefaultModel: ctx.get('agentDefaultModel'),
+					workspaceRegistry: ctx.get('workspaceRegistry'),
+					cwd: booted?.dataDir ?? process.cwd(),
+				}).then((value) => { host = value; return value; }).catch((error) => {
+					hostPromise = null;
+					throw error;
+				});
+			}
+			return hostPromise;
+		};
+		const activateMember = async (body) => {
+			const member = booted.service.state.members?.[body.payload?.memberId];
+			if (member === undefined) return { error: { code: 'E_NOT_FOUND', message: 'member not found' }, status: 404 };
+			if (member.status === 'retired') return { error: { code: 'E_INVALID_STATE', message: 'member is retired' }, status: 409 };
+			if (member.status === 'running') return { error: { code: 'E_INVALID_STATE', message: 'member is already running' }, status: 409 };
+			const subagents = ctx.get('subagents');
+			const sessions = ctx.get('sessions');
+			const permissionPresets = ctx.get('permissionPresets');
+			const sandboxPolicy = ctx.get('sandboxPolicy');
+			if (subagents === undefined || sessions === undefined || permissionPresets === undefined || sandboxPolicy === undefined) {
+				return { error: { code: 'E_RUNTIME_UNAVAILABLE', message: 'member runtime services are unavailable' }, status: 503 };
+			}
+			const providers = typeof subagents.list === 'function' ? subagents.list() : [];
+			if (providers.length === 0) {
+				return { error: { code: 'E_RUNTIME_UNAVAILABLE', message: 'no subagent provider is registered' }, status: 503 };
+			}
+			try {
+				const parentInfo = await ensureParent();
+				const runtime = new MemberRuntime({
+					subagents,
+					sessions,
+					permissionPresets,
+					sandboxPolicy,
+					parent: parentInfo.agent,
+					provider: providers[0],
+					cwd: member.workspace ?? booted.dataDir,
+				});
+				const result = await runtime.activate(member, {
+					prompt: typeof body.payload?.prompt === 'string'
+						? body.payload.prompt
+						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。',
+				});
+				let bound;
+				try {
+					bound = await booted.service.bindMemberSession(
+						{ actor: { kind: 'human', memberId: HUMAN_ID }, projectId: PROJECT_ID },
+						{ memberId: member.id, sessionId: result.childId },
+					);
+				} catch (error) {
+					try { await result.activation.dispose?.(); } catch { /* already gone */ }
+					throw error;
+				}
+				activations.set(result.childId, result.activation);
+				return { ok: true, member: bound.member, sessionId: result.childId, messageId: result.messageId };
+			} catch (error) {
+				try {
+					await booted.service.failMember(
+						{ actor: { kind: 'human', memberId: HUMAN_ID }, projectId: PROJECT_ID },
+						{ memberId: member.id, reason: `${error.code ?? 'E_RUNTIME'}: ${error.message ?? error}` },
+					);
+				} catch { /* member may already be gone */ }
+				return { error: { code: error.code ?? 'E_RUNTIME', message: error.message ?? String(error) }, status: 409 };
+			}
+		};
 		const snapshot = () => ({
 			rev: booted.ledger.head.seq,
 			generatedAt: Date.now(),
@@ -176,6 +249,10 @@ export function apply(ctx) {
 							version: VERSION,
 							projectId: PROJECT_ID,
 							ledger: { events: booted.ledger.events.length, head },
+							runtime: {
+								roots: ctx.get('agents')?.roots?.().length ?? null,
+								providers: ctx.get('subagents')?.list?.() ?? [],
+							},
 						});
 					}
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/bootstrap') {
@@ -255,6 +332,12 @@ export function apply(ctx) {
 						if (typeof body?.type !== 'string' || body.type === '') {
 							return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'command type is required' } }, 400);
 						}
+						if (body.type === 'member.activate') {
+							const activated = await activateMember(body);
+							if (activated.error !== undefined) return send(res, { error: activated.error }, activated.status ?? 409);
+							broadcast(undefined);
+							return send(res, activated);
+						}
 						try {
 							const result = await booted.service.dispatch({
 								type: body.type,
@@ -283,6 +366,11 @@ export function apply(ctx) {
 				try { client.end(); } catch { /* socket already gone */ }
 			}
 			sseClients.clear();
+			for (const activation of activations.values()) {
+				try { activation.dispose?.().catch?.(() => {}); } catch { /* already gone */ }
+			}
+			activations.clear();
+			if (host !== null) void host.dispose?.();
 			dispose();
 			if (booted !== null) booted.ledger.close();
 		};

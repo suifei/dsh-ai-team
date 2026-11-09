@@ -56,6 +56,7 @@ test('host refuses a profile without danger-full-access', async () => {
 
 test('host mounts the workbench routes on a real default-project ledger', async () => {
 	const routes = [];
+	const memberSessions = new Map();
 	const root = await mkdtemp(join(tmpdir(), 'ai-team-host-'));
 	const previousHome = process.env.DSH_HOME;
 	const previousProfile = process.env.DSH_PROFILE;
@@ -79,9 +80,38 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 				return {
 					catalog: () => ({ defaultPreset: 'danger-full-access', options: [], defaultOptions: [] }),
 					resolve: () => ({ sandbox: 'danger-full-access', approval: 'never' }),
+					set: (session, name) => { session.sandbox = name; },
 				};
 			}
-			if (id === 'sandboxPolicy') return { defaultMode: 'danger-full-access' };
+			if (id === 'sandboxPolicy') {
+				return { defaultMode: 'danger-full-access', overrideOf: (session) => session?.sandbox };
+			}
+			if (id === 'agents') {
+				return {
+					roots: () => [],
+					create: async (options) => ({
+						agent: { id: options.sessionId },
+						dispose: async () => {},
+					}),
+				};
+			}
+			if (id === 'agentDefaultModel') return { currentSelection: () => ({ provider: 'p1', model: 'm1' }) };
+			if (id === 'workspaceRegistry') return { archiveSession: async () => {} };
+			if (id === 'subagents') {
+				return {
+					list: () => ['local'],
+					startActivation: async (spec) => {
+						memberSessions.set('session-member-1', { id: 'session-member-1', sandbox: 'workspace-write' });
+						return {
+							childId: 'session-member-1',
+							messageId: 'msg-member-1',
+							result: Promise.resolve({ output: [], stopReason: 'completed' }),
+							dispose: async () => {},
+						};
+					},
+				};
+			}
+			if (id === 'sessions') return { get: (sessionId) => memberSessions.get(sessionId) };
 			return undefined;
 		},
 	};
@@ -136,6 +166,26 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		const afterBody = await after.json();
 		assert.equal(afterBody.tasks.length, 1);
 		assert.equal(afterBody.tasks[0].title, '第一条真实任务');
+
+		const addMember = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				type: 'member.add',
+				payload: { id: 'a1', name: '沈舟', kind: 'agent', status: 'provisioning' },
+			}),
+		});
+		assert.equal(addMember.status, 200);
+		const activate = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ type: 'member.activate', payload: { memberId: 'a1' } }),
+		});
+		assert.equal(activate.status, 200);
+		const activated = await activate.json();
+		assert.equal(activated.member.status, 'running');
+		assert.equal(activated.member.sessionId, 'session-member-1');
+		assert.equal(memberSessions.get('session-member-1').sandbox, 'danger-full-access');
 
 		const board = await fetch(`${base}/ai-team/api/projects/prj_main/board`);
 		assert.equal(board.status, 200);
