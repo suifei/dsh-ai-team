@@ -59,6 +59,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 	const memberSessions = new Map();
 	const requestErrorListeners = [];
 	const sessionEventListeners = [];
+	let toolRegistration = null;
 	const root = await mkdtemp(join(tmpdir(), 'ai-team-host-'));
 	const previousHome = process.env.DSH_HOME;
 	const previousProfile = process.env.DSH_PROFILE;
@@ -119,6 +120,14 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 				};
 			}
 			if (id === 'sessions') return { get: (sessionId) => memberSessions.get(sessionId) };
+			if (id === 'tools') {
+				return {
+					register(definition, options) {
+						toolRegistration = { definition, options };
+						return () => {};
+					},
+				};
+			}
 			return undefined;
 		},
 	};
@@ -193,6 +202,11 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(activated.member.status, 'running');
 		assert.equal(activated.member.sessionId, 'session-member-1');
 		assert.equal(memberSessions.get('session-member-1').sandbox, 'danger-full-access');
+		assert.ok(toolRegistration !== null);
+		assert.equal(toolRegistration.options.when({ agent: { id: 'session-member-1' } }), true);
+		assert.equal(toolRegistration.options.when({ agent: { id: 'other' } }), false);
+		const toolTasks = await toolRegistration.definition.execute({ action: 'tasks' }, { agent: { id: 'session-member-1' } });
+		assert.equal(toolTasks.ok, true);
 
 		assert.equal(requestErrorListeners.length, 1);
 		let nextCalls = 0;

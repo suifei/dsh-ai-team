@@ -16,6 +16,7 @@ import { TeamService } from './lib/host/service.js';
 import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-runtime.js';
 import { ensureHostAgent } from './lib/runtime/host-agent.js';
 import { classifyLlmFailure, retryDecision } from './lib/runtime/failure-policy.js';
+import { createTeamTool } from './lib/host/member-tools.js';
 
 export const name = 'ai-team';
 
@@ -177,6 +178,17 @@ export function apply(ctx) {
 			: () => {};
 		let host = null;
 		let hostPromise = null;
+		const tools = ctx.get('tools');
+		const disposeTool = tools?.register
+			? tools.register(createTeamTool({
+				getState: () => booted?.service.state ?? { projects: {}, members: {}, tasks: {}, threads: {}, inbox: {} },
+				dispatch: (command) => booted.service.dispatch(command),
+			}), {
+				when: (activation) => booted !== null && Object.values(booted.service.state.members ?? {})
+					.some((member) => member.sessionId === activation?.agent?.id),
+			})
+			: () => {};
+
 		const ensureParent = async () => {
 			if (host !== null) return host;
 			if (hostPromise === null) {
@@ -296,6 +308,7 @@ export function apply(ctx) {
 							runtime: {
 								roots: ctx.get('agents')?.roots?.().length ?? null,
 								providers: ctx.get('subagents')?.list?.() ?? [],
+								teamTool: ctx.get('tools')?.definitions?.().some((definition) => definition.name === 'team') ?? null,
 							},
 						});
 					}
@@ -417,6 +430,7 @@ export function apply(ctx) {
 			if (host !== null) void host.dispose?.();
 			offRequestError();
 			offSessionEvent();
+			disposeTool();
 			dispose();
 			if (booted !== null) booted.ledger.close();
 		};
