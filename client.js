@@ -115,6 +115,9 @@ window.__ModuleLoader__.load({
 			decisionChoose: '请选择…',
 			decisionAnswer: '填写你的决定',
 			decisionRecommend: '推荐',
+			decisionAdopt: '采纳',
+			decisionAdoptAll: '全部采纳建议',
+			decisionAdoptHint: '建议可直接采纳，再按需修改',
 			decisionSubmit: '提交决策',
 			decisionSubmitted: '决策已提交给团队。',
 			inboxEmptyAction: '看任务看板',
@@ -427,6 +430,9 @@ window.__ModuleLoader__.load({
 			decisionChoose: 'Choose…',
 			decisionAnswer: 'Write your decision',
 			decisionRecommend: 'Recommended',
+			decisionAdopt: 'Adopt',
+			decisionAdoptAll: 'Adopt all suggestions',
+			decisionAdoptHint: 'Adopt a suggestion, then edit if needed',
 			decisionSubmit: 'Submit decision',
 			decisionSubmitted: 'Decision sent to the team.',
 			inboxEmptyAction: 'Open the board',
@@ -980,6 +986,10 @@ window.__ModuleLoader__.load({
 			.at-inboxoptions { display: block; color: var(--dsw-alias-label-tertiary); font-size: 11px; }
 			.at-inboxrecommend { display: block; color: var(--dsw-alias-state-business-primary); font-size: 11px; }
 			.at-decision { display: flex; flex-direction: column; gap: 8px; margin: 6px 0 4px; }
+			.at-decisionhead { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+			.at-decisionhint { color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+			.at-decisionrecommend { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 3px; color: var(--dsw-alias-state-business-primary); font-size: 11px; }
+			.at-adopt { flex: 0 0 auto; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-state-business-primary); font: inherit; font-size: 11px; cursor: pointer; text-decoration: underline; }
 			.at-decisionselect, .at-decisioninput { width: 100%; margin-top: 4px; padding: 4px 6px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 18px; }
 			.at-decision .at-btn { align-self: flex-start; }
 			.at-inboxtitle { color: var(--dsw-alias-label-primary); font-size: 13px; line-height: 20px; }
@@ -1650,6 +1660,9 @@ window.__ModuleLoader__.load({
 			const [answers, setAnswers] = React.useState(() => questions.map(() => ''));
 			const [busy, setBusy] = React.useState(false);
 			const setAnswer = (index, value) => setAnswers((prev) => prev.map((entry, i) => i === index ? value : entry));
+			const recommendations = questions.map((question) => typeof question.recommendation === 'string' ? question.recommendation.trim() : '');
+			const hasRecommendations = recommendations.some((value) => value !== '');
+			const adoptAll = () => setAnswers((prev) => prev.map((entry, index) => recommendations[index] || entry));
 			const complete = questions.every((question, index) => answers[index].trim() !== '');
 			const submit = async () => {
 				if (!complete || busy) return;
@@ -1661,6 +1674,9 @@ window.__ModuleLoader__.load({
 				}
 			};
 			return h('div', { className: 'at-decision' },
+				hasRecommendations ? h('div', { className: 'at-decisionhead' },
+					h('span', { className: 'at-decisionhint' }, t('decisionAdoptHint')),
+					h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: adoptAll }, t('decisionAdoptAll'))) : null,
 				h('ol', { className: 'at-inboxquestions' }, questions.map((question, index) => h('li', { key: question.id ?? index },
 					h('span', { className: 'at-inboxquestion' }, question.text),
 					Array.isArray(question.options) && question.options.length
@@ -1668,7 +1684,9 @@ window.__ModuleLoader__.load({
 							h('option', { value: '' }, t('decisionChoose')),
 							question.options.map((option) => h('option', { key: option, value: option }, option)))
 						: h('input', { className: 'at-decisioninput', value: answers[index], placeholder: question.recommendation ?? t('decisionAnswer'), onChange: (event) => setAnswer(index, event.target.value) }),
-					question.recommendation ? h('span', { className: 'at-inboxrecommend' }, t('decisionRecommend') + '：' + question.recommendation) : null))),
+					question.recommendation ? h('div', { className: 'at-decisionrecommend' },
+						h('span', null, t('decisionRecommend') + '：' + question.recommendation),
+						h('button', { className: 'at-adopt', type: 'button', onClick: () => setAnswer(index, question.recommendation) }, t('decisionAdopt'))) : null))),
 				h('button', { className: 'at-btn at-btn-primary at-btn-small', type: 'button', disabled: !complete || busy, onClick: submit }, busy ? t('saving') : t('decisionSubmit')));
 		}
 
