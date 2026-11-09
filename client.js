@@ -134,6 +134,15 @@ window.__ModuleLoader__.load({
 			actCancel: '取消任务',
 			actReopen: '重开',
 			actReassign: '改派…',
+			cancelPrompt: '取消理由（可留空）',
+			cancelDone: '已取消 #{n}。',
+			reopenPrompt: '重开理由（可留空）',
+			reopenDone: '已重开 #{n}。',
+			deleteConfirm: '删除只允许从未认领的 pending Task，且只留 tombstone。确定？',
+			deleteDone: '已删除 #{n}（tombstone）。',
+			reassignPrompt: '把 accountable owner 改派给（输入名字）：',
+			reassignDone: '已把 #{n} 改派给 {name}。',
+			reassignNoTarget: '没有可改派的活跃成员。',
 			actHandoff: '交接…',
 			actDelete: '删除',
 			actionMock: 'spike：{action} 需要二次确认并写账本，命令接入后启用。',
@@ -378,6 +387,15 @@ window.__ModuleLoader__.load({
 			actCancel: 'Cancel task',
 			actReopen: 'Reopen',
 			actReassign: 'Reassign…',
+			cancelPrompt: 'Cancellation reason (optional)',
+			cancelDone: 'Cancelled #{n}.',
+			reopenPrompt: 'Reopen reason (optional)',
+			reopenDone: 'Reopened #{n}.',
+			deleteConfirm: 'Only a never-claimed pending Task can be deleted; it becomes a tombstone. Continue?',
+			deleteDone: 'Deleted #{n} (tombstone).',
+			reassignPrompt: 'Reassign the accountable owner to (name):',
+			reassignDone: 'Reassigned #{n} to {name}.',
+			reassignNoTarget: 'No active member is available for reassignment.',
 			actHandoff: 'Hand off…',
 			actDelete: 'Delete',
 			actionMock: 'spike: {action} needs confirmation and a ledger write; enabled when commands land.',
@@ -1615,8 +1633,7 @@ window.__ModuleLoader__.load({
 						}) : null,
 						actions.length ? h('section', { className: 'at-actions', 'aria-label': t('taskActions') },
 							h('div', { className: 'at-actionhead' },
-								h('span', { className: 'at-actiontitle' }, t('taskActions')),
-								h('span', { className: 'at-mocktag' }, t('mockOnly'))),
+								h('span', { className: 'at-actiontitle' }, t('taskActions'))),
 							h('div', { className: 'at-actionrow' }, actions.map((action) => h('button', {
 								key: action.label,
 								className: 'at-btn at-btn-quiet',
@@ -2351,8 +2368,69 @@ window.__ModuleLoader__.load({
 					sayRight(tf(t, 'changesFailed', { message: error?.message ?? String(error) }));
 				}
 			}
-			function mockAction(action) {
-				sayRight(tf(t, 'actionMock', { action }));
+			async function reassignSelected() {
+				if (!selectedTask) return;
+				const options = (data?.agents ?? []).filter((agent) => agent.status !== 'retired');
+				if (options.length === 0) {
+					sayRight(t('reassignNoTarget'));
+					return;
+				}
+				const answer = typeof window.prompt === 'function'
+					? window.prompt(t('reassignPrompt') + '\n' + options.map((agent) => agent.name).join('、'), options[0].name)
+					: null;
+				if (answer === null) return;
+				const target = options.find((agent) => agent.name === answer.trim() || agent.id === answer.trim());
+				if (target === undefined) {
+					sayRight(t('reassignNoTarget'));
+					return;
+				}
+				try {
+					await runCommand('task.reassign', {
+						taskId: selectedTask.id,
+						expectedRevision: selectedTask.revision,
+						ownerId: target.id,
+						reason: 'workbench reassign',
+					});
+					sayRight(tf(t, 'reassignDone', { n: taskNo(selectedTask), name: target.name }));
+					await reloadData();
+				} catch (error) {
+					sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
+			}
+			async function cancelSelected() {
+				if (!selectedTask) return;
+				const reason = typeof window.prompt === 'function' ? window.prompt(t('cancelPrompt'), '') : null;
+				if (reason === null) return;
+				try {
+					await runCommand('task.cancel', { taskId: selectedTask.id, expectedRevision: selectedTask.revision, reason });
+					sayRight(tf(t, 'cancelDone', { n: taskNo(selectedTask) }));
+					await reloadData();
+				} catch (error) {
+					sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
+			}
+			async function reopenSelected() {
+				if (!selectedTask) return;
+				const reason = typeof window.prompt === 'function' ? window.prompt(t('reopenPrompt'), '') : null;
+				if (reason === null) return;
+				try {
+					await runCommand('task.reopen', { taskId: selectedTask.id, expectedRevision: selectedTask.revision, reason });
+					sayRight(tf(t, 'reopenDone', { n: taskNo(selectedTask) }));
+					await reloadData();
+				} catch (error) {
+					sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
+			}
+			async function deleteSelected() {
+				if (!selectedTask) return;
+				if (typeof window.confirm === 'function' && !window.confirm(t('deleteConfirm'))) return;
+				try {
+					await runCommand('task.delete', { taskId: selectedTask.id, expectedRevision: selectedTask.revision });
+					sayRight(tf(t, 'deleteDone', { n: taskNo(selectedTask) }));
+					await reloadData();
+				} catch (error) {
+					sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
 			}
 			function continueFromLatest() {
 				const latest = threadHead;
@@ -2366,11 +2444,10 @@ window.__ModuleLoader__.load({
 			const actions = [];
 			if (selectedTask) {
 				const status = selectedTask.status;
-				if (status !== 'done' && status !== 'cancelled') actions.push({ label: t('actCancel'), onClick: () => mockAction(t('actCancel')) });
-				if (status === 'done' || status === 'pending_acceptance') actions.push({ label: t('actReopen'), onClick: () => mockAction(t('actReopen')) });
-				if (status !== 'done' && status !== 'cancelled') actions.push({ label: t('actReassign'), onClick: () => mockAction(t('actReassign')) });
-				if (selectedTask.assignee && status !== 'done' && status !== 'cancelled') actions.push({ label: t('actHandoff'), onClick: () => mockAction(t('actHandoff')) });
-				if (status === 'pending' && !selectedTask.assignee && !selectedTask.replies) actions.push({ label: t('actDelete'), onClick: () => mockAction(t('actDelete')) });
+				if (status !== 'done' && status !== 'cancelled') actions.push({ label: t('actCancel'), onClick: cancelSelected });
+				if (status === 'done' || status === 'pending_acceptance') actions.push({ label: t('actReopen'), onClick: reopenSelected });
+				if (status !== 'done' && status !== 'cancelled') actions.push({ label: t('actReassign'), onClick: reassignSelected });
+				if (status === 'pending' && !selectedTask.assignee && !selectedTask.replies) actions.push({ label: t('actDelete'), onClick: deleteSelected });
 			}
 
 			const inInbox = scope === 'inbox';
