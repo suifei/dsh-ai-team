@@ -77,6 +77,22 @@ test('the team tool reads, claims, submits, threads and accepts through real Tea
 		assert.equal(selfReview.ok, false);
 		assert.equal(selfReview.error.code, 'E_INVALID_STATE');
 
+		const info = await tool.execute({ action: 'member', memberId: 'a2' }, exec('s1'));
+		assert.equal(info.ok, true);
+		assert.equal(info.member.name, '林岚');
+		const note = await tool.execute({ action: 'note', text: '先读 Thread 再回复' }, exec('s1'));
+		assert.equal(note.ok, true);
+		assert.deepEqual(note.member.notes, ['先读 Thread 再回复']);
+		const skill = await tool.execute({ action: 'skill', skill: 'nuwa-skill' }, exec('s1'));
+		assert.equal(skill.ok, true);
+		assert.deepEqual(skill.member.skills, ['nuwa-skill']);
+		const distilled = await tool.execute({
+			action: 'distill', memberId: 'a2', personality: '复核证据优先，先跑门禁。', reason: 'Lead distill',
+		}, exec('s1'));
+		assert.equal(distilled.ok, true);
+		assert.equal(distilled.member.distillVersion, 1);
+		assert.match(distilled.member.personality, /门禁/);
+
 		const notMember = await tool.execute({ action: 'tasks' }, exec('other'));
 		assert.equal(notMember.ok, false);
 		assert.equal(notMember.error.code, 'E_NOT_MEMBER');

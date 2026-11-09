@@ -59,6 +59,14 @@ test('member profile, self-evolution, talent pool and takeover are append-only',
 		(error) => error.code === 'E_UNAUTHORIZED',
 	);
 
+	await service.dispatch({ type: 'member.note', actor: a1, projectId: PROJECT_ID, payload: { text: 'Thread 先读 headSeq' } });
+	await service.dispatch({ type: 'member.skill', actor: a1, projectId: PROJECT_ID, payload: { name: 'nuwa-skill' } });
+	assert.deepEqual(service.state.members.a1.notes, ['Thread 先读 headSeq']);
+	assert.deepEqual(service.state.members.a1.skills, ['nuwa-skill']);
+	await assert.rejects(
+		() => service.dispatch({ type: 'member.note', actor: a2, projectId: PROJECT_ID, payload: { memberId: 'a1', text: 'x' } }),
+		(error) => error.code === 'E_UNAUTHORIZED',
+	);
 	const task = await service.dispatch({
 		type: 'task.create',
 		actor: human,
