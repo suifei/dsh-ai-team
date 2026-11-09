@@ -380,6 +380,7 @@ export function apply(ctx) {
 							runtime: {
 								roots: ctx.get('agents')?.roots?.().length ?? null,
 								defaultModel: ctx.get('agentDefaultModel')?.currentSelection?.() ?? null,
+								llmProviders: ctx.get('llm')?.listProviders?.() ?? [],
 								providers: ctx.get('subagents')?.list?.() ?? [],
 								providerCaps: (ctx.get('subagents')?.list?.() ?? []).map((providerName) => {
 									const provider = ctx.get('subagents')?.getProvider?.(providerName);
