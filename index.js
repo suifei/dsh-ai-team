@@ -34,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.43';
+const VERSION = '0.3.44';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -280,6 +280,7 @@ export function apply(ctx) {
 		const pmoLastKick = new Map();
 		const pmoLastStall = new Map();
 		const pmoLastHeartbeat = new Map();
+		const pmoLastEscalate = new Map();
 		let pmoTimer = null;
 		const projectCwd = (projectRuntime, member) => member?.workspace
 			|| projectRuntime?.service?.state?.projects?.[projectRuntime.id]?.workspacePath
@@ -415,6 +416,15 @@ export function apply(ctx) {
 								type: 'pmo/heartbeat',
 								payload: { taskId: task.id, memberId: task.assigneeId ?? task.ownerId, bucket: Math.floor(now / 600_000) },
 							},
+						}, {});
+					}
+				}
+				if (idleFor >= 60 * 60_000) {
+					const lastEscalate = pmoLastEscalate.get(task.id) ?? 0;
+					if (now - lastEscalate >= 60 * 60_000) {
+						pmoLastEscalate.set(task.id, now);
+						await wakeFromResult(projectRuntime, {
+							event: { type: 'pmo/escalate', payload: { taskId: task.id, bucket: Math.floor(now / 3_600_000) } },
 						}, {});
 					}
 				}
