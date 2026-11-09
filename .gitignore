@@ -1,0 +1,10 @@
+node_modules/
+*.log
+.tmp/
+coverage/
+shots/
+AGENTS.md
+
+.release-msg.txt
+ml-msg.txt
+.ptc/
