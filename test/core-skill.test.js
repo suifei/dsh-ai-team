@@ -9,6 +9,8 @@ test('built-in core skill is packaged with the team discipline', () => {
 	assert.match(CORE_SKILL_TEXT, /懒惰的高级程序员思维/);
 	assert.match(CORE_SKILL_TEXT, /http 代理/);
 	assert.match(CORE_SKILL_TEXT, /日志埋点/);
+	assert.match(CORE_SKILL_TEXT, /PMO 自主性/);
+	assert.match(CORE_SKILL_TEXT, /禁止 Human 或外部 Agent/);
 	// The packaged skill file is the single source; it must be in the npm files list.
 	const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 	assert.ok(pkg.files.includes('skills/**/*'));
