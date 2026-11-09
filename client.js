@@ -180,6 +180,7 @@ window.__ModuleLoader__.load({
 			memberSkills: '技能',
 			memberNotes: '最近备忘',
 			memberMaxTokens: 'Max tokens',
+			qaRequired: '需要 QA 验收',
 			notePlaceholder: '加一条备忘…',
 			skillPlaceholder: '加一个技能，如 nuwa-skill',
 			addNote: '加备忘',
@@ -409,6 +410,7 @@ window.__ModuleLoader__.load({
 			memberSkills: 'Skills',
 			memberNotes: 'Recent notes',
 			memberMaxTokens: 'Max tokens',
+			qaRequired: 'Require QA review',
 			notePlaceholder: 'Add a note…',
 			skillPlaceholder: 'Add a skill, e.g. nuwa-skill',
 			addNote: 'Add note',
@@ -800,6 +802,8 @@ window.__ModuleLoader__.load({
 			.at-agentname { align-self: flex-start; max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; line-height: 18px; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.at-agentname:hover { text-decoration: underline; }
 			.at-agentrole { min-width: 0; color: var(--dsw-alias-label-caption); font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+			.at-qacheck { display: inline-flex; align-items: center; gap: 4px; color: var(--dsw-alias-label-tertiary); font-size: 11px; white-space: nowrap; }
+			.at-qacheck input { accent-color: var(--dsw-alias-state-business-primary); }
 			.at-qabadge { display: inline-flex; align-items: center; margin-left: 5px; padding: 0 5px; border: 1px solid var(--dsw-alias-state-business-primary); border-radius: 999px; color: var(--dsw-alias-state-business-primary); font-size: 9px; line-height: 15px; vertical-align: 1px; }
 			.at-talented { opacity: 0.82; }
 			.at-btn-small { min-height: 24px; padding: 0 8px; font-size: 11px; }
@@ -1605,7 +1609,7 @@ window.__ModuleLoader__.load({
 							h('button', { className: 'at-send', type: 'button', disabled: !reply.trim(), onClick: onReplySend }, t('send'))))) : null);
 		}
 
-		function Composer({ t, mode, draft, disabled, onMode, onDraft, onSend }) {
+		function Composer({ t, mode, draft, disabled, qaRequired, onQaRequired, onMode, onDraft, onSend }) {
 			const send = () => { if (draft.trim() && !disabled) onSend(); };
 			return h('div', { className: 'at-composer' },
 				h('div', { className: 'at-composerinner' },
@@ -1628,6 +1632,9 @@ window.__ModuleLoader__.load({
 							h('div', { className: 'at-mode', role: 'group', 'aria-label': t('modeAria') },
 								h('button', { type: 'button', 'aria-pressed': mode === 'discuss', onClick: () => onMode('discuss') }, t('discuss')),
 								h('button', { type: 'button', 'aria-pressed': mode === 'task', onClick: () => onMode('task') }, t('taskMode'))),
+							mode === 'task' ? h('label', { className: 'at-qacheck' },
+								h('input', { type: 'checkbox', checked: qaRequired, onChange: (event) => onQaRequired(event.target.checked) }),
+								h('span', null, t('qaRequired'))) : null,
 							h('span', { className: 'at-hint' }, t('enterHint')),
 							h('button', { className: 'at-send', type: 'button', disabled: disabled || !draft.trim(), onClick: send }, mode === 'task' ? t('createTask') : t('send'))))));
 		}
@@ -1750,6 +1757,7 @@ window.__ModuleLoader__.load({
 			const [selected, setSelected] = React.useState('');
 			const [threadOpen, setThreadOpen] = React.useState(false);
 			const [mode, setMode] = React.useState('discuss');
+			const [qaTask, setQaTask] = React.useState(false);
 			const [draft, setDraft] = React.useState('');
 			const [note, setNote] = React.useState('');
 			const [rightNote, setRightNote] = React.useState('');
@@ -2214,7 +2222,7 @@ window.__ModuleLoader__.load({
 				if (!text) return;
 				try {
 					if (mode === 'task') {
-						await runCommand('task.create', { title: text, resultDefinition: text });
+						await runCommand('task.create', { title: text, resultDefinition: text, qaRequired: qaTask });
 					} else {
 						await runCommand('stream.post', { body: text });
 					}
@@ -2404,6 +2412,8 @@ window.__ModuleLoader__.load({
 							mode,
 							draft,
 							disabled: !project,
+							qaRequired: qaTask,
+							onQaRequired: setQaTask,
 							onMode: setMode,
 							onDraft: setDraft,
 							onSend: send,
