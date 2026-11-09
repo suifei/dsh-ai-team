@@ -121,6 +121,14 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 				};
 			}
 			if (id === 'agentDefaultModel') return { currentSelection: () => ({ provider: 'p1', model: 'm1' }) };
+			if (id === 'llm') {
+				return {
+					listProviders: () => [{ id: 'p1', name: 'Provider One' }, { id: 'p2', name: 'Provider Two' }],
+					listModels: async (provider) => provider === 'p1'
+						? [{ id: 'm1', name: 'Model One' }]
+						: [{ id: 'm2', name: 'Model Two' }],
+				};
+			}
 			if (id === 'workspaceRegistry') return { archiveSession: async () => {} };
 			if (id === 'subagents') {
 				return {
@@ -183,8 +191,20 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(data.project.name, '我的项目');
 		assert.equal(data.projects.length, 1);
 		assert.equal(data.tasks.length, 0);
-		assert.equal(data.agents.length, 0);
-		assert.equal(data.members.length, 1);
+		assert.equal(data.agents.length, 3);
+		assert.equal(data.members.length, 4);
+		assert.deepEqual(data.agents.map((agent) => agent.name), ['沈舟', '林岚', '顾清']);
+		assert.equal(data.agents.find((agent) => agent.name === '沈舟').role, '主理人');
+		assert.equal(data.agents.find((agent) => agent.name === '顾清').qa, true);
+		assert.equal(data.project?.owner, 'mem_lead');
+
+		const models = await fetch(`${base}/ai-team/api/models`);
+		assert.equal(models.status, 200);
+		const modelBody = await models.json();
+		assert.equal(modelBody.ok, true);
+		assert.deepEqual(modelBody.defaultModel, { provider: 'p1', model: 'm1' });
+		assert.deepEqual(modelBody.providers.map((provider) => provider.id), ['p1', 'p2']);
+		assert.deepEqual(modelBody.providers[0].models.map((model) => model.id), ['m1']);
 
 		const create = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
 			method: 'POST',
@@ -211,7 +231,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({
 				type: 'member.add',
-				payload: { id: 'a1', name: '沈舟', kind: 'agent', status: 'provisioning' },
+				payload: { id: 'a1', name: '临时成员', kind: 'agent', status: 'provisioning' },
 			}),
 		});
 		assert.equal(addMember.status, 200);
@@ -256,8 +276,8 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(retry.kind, 'retry');
 		assert.equal(nextCalls, 0);
 		const afterRate = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
-		assert.equal(afterRate.agents[0].lastFailure.category, 'rate_limit');
-		assert.equal(afterRate.agents[0].attempts, 1);
+		assert.equal(afterRate.agents.find((agent) => agent.name === '临时成员').lastFailure.category, 'rate_limit');
+		assert.equal(afterRate.agents.find((agent) => agent.name === '临时成员').attempts, 1);
 
 		assert.equal(sessionEventListeners.length, 1);
 		await sessionEventListeners[0](
@@ -265,9 +285,9 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 			{ type: 'turn/end', data: { reason: { kind: 'completed' } } },
 		);
 		const afterRecovery = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
-		assert.equal(afterRecovery.agents[0].attempts, 0);
-		assert.equal(afterRecovery.agents[0].status, 'running');
-		assert.ok(afterRecovery.agents[0].lastRecoveredAt !== undefined);
+		assert.equal(afterRecovery.agents.find((agent) => agent.name === '临时成员').attempts, 0);
+		assert.equal(afterRecovery.agents.find((agent) => agent.name === '临时成员').status, 'running');
+		assert.ok(afterRecovery.agents.find((agent) => agent.name === '临时成员').lastRecoveredAt !== undefined);
 
 		const terminal = await requestErrorListeners[0](
 			{ agent: { id: memberSessionId }, provider: 'p1', failure: { status: 401, code: 'INVALID_API_KEY', message: 'bad key' } },
@@ -276,8 +296,8 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(terminal, undefined);
 		assert.equal(nextCalls, 1);
 		const afterAuth = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
-		assert.equal(afterAuth.agents[0].status, 'failed');
-		assert.equal(afterAuth.agents[0].lastFailure.category, 'auth');
+		assert.equal(afterAuth.agents.find((agent) => agent.name === '临时成员').status, 'failed');
+		assert.equal(afterAuth.agents.find((agent) => agent.name === '临时成员').lastFailure.category, 'auth');
 
 		const board = await fetch(`${base}/ai-team/api/projects/prj_main/board`);
 		assert.equal(board.status, 200);

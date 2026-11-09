@@ -21,6 +21,8 @@
 
 `@suifei/dsh-ai-team` 是 DeepSeek Harness 的按需启用插件：装进专用 `ai-team` profile 后，DSH 里出现一个三栏工作台——左侧 Project 与成员，中间主对话 / 看板 / 态势，右侧 Thread。Agent 自己认领 Task、互相交接，由做的人以外的成员验收；Human 只处理方向、信任和不可撤回的决定。
 
+新 Project 自带一组可改的默认成员：**沈舟（主理人）**、**林岚（执行）**、**顾清（验收）**。名字、职责、个性、模型都可以改；模型提供商和模型名称直接读取 DSH 的 `llm` 目录，不需要手填 id。
+
 ---
 
 ## 为什么是「文渊阁」
@@ -98,7 +100,9 @@ dsh --profile ai-team --no-open --port 33271
 | 验收 | maker 不能验收；QA 硬门禁；`qaChecklist` 逐项通过 |
 | 收件箱 | Human/Agent 各自拉取；跨 Project 聚合与项目内 ack |
 | 关注 | 关注 Task；完成后收到 `followed_task_update` |
+| 默认成员 | 新 Project 初始化沈舟 / 林岚 / 顾清；可改名、改职责、改个性、改模型 |
 | 成员 | 持久 session；名字/角色/personality/notes/skills |
+| 模型 | Provider / Model 下拉读取 DSH `llm` 目录；可跟随系统默认 |
 | 进化 | `team.evolve` 只改自己的 personality；验收后 reflection wake |
 | 人才库 | leave/rejoin；遗留 Task 可被接管（taken-over） |
 | 运行配方 | `standard` / `ptc` / `minimal` / `cordis` |

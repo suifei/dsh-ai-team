@@ -200,8 +200,14 @@ window.__ModuleLoader__.load({
 			presetPtc: 'PTC 模式',
 			presetMinimal: '极简模式',
 			presetCordis: '创造模式',
-			memberProvider: 'Provider',
+			memberProvider: '模型提供商',
 			memberModel: '模型',
+			memberProviderDefault: '跟随系统默认',
+			memberModelDefault: '跟随系统默认',
+			memberNoProviders: 'DSH 暂未提供可用模型',
+			memberModelsLoading: '正在读取 DSH 模型目录…',
+			memberModelsError: '无法读取 DSH 模型目录，仍可使用系统默认模型。',
+			memberNoModels: '该提供商暂无模型',
 			memberOwner: '设为 Project owner',
 			memberCreate: '创建并激活',
 			memberAdding: '正在创建…',
@@ -468,8 +474,14 @@ window.__ModuleLoader__.load({
 			presetPtc: 'PTC',
 			presetMinimal: 'Minimal',
 			presetCordis: 'Creative',
-			memberProvider: 'Provider',
+			memberProvider: 'Model provider',
 			memberModel: 'Model',
+			memberProviderDefault: 'Follow system default',
+			memberModelDefault: 'Follow system default',
+			memberNoProviders: 'DSH exposes no models yet',
+			memberModelsLoading: 'Reading the DSH model directory…',
+			memberModelsError: 'Could not read the DSH model directory; system default is still available.',
+			memberNoModels: 'No models for this provider',
 			memberOwner: 'Make Project owner',
 			memberCreate: 'Create and activate',
 			memberAdding: 'Creating…',
@@ -1088,6 +1100,8 @@ window.__ModuleLoader__.load({
 			.at-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
 			.at-field input, .at-field textarea, .at-field select { width: 100%; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 18px; }
 			.at-field textarea { min-height: 64px; resize: vertical; }
+			.at-modelfields { display: flex; flex-direction: column; gap: 4px; }
+			.at-fieldhint { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
 			.at-fieldrow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 			.at-modalback { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 20px; background: color-mix(in srgb, var(--dsw-alias-bg-base) 72%, transparent); }
 			.at-modal { width: min(420px, 100%); max-height: 86vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; background: var(--dsw-alias-bg-layer-2); }
@@ -1842,6 +1856,56 @@ window.__ModuleLoader__.load({
 			}
 		}
 
+		function ModelFields({ t, catalog, provider, model, onProvider, onModel, error }) {
+			const providers = Array.isArray(catalog?.providers) ? catalog.providers.slice() : [];
+			if (provider !== '' && !providers.some((entry) => entry.id === provider)) {
+				providers.unshift({ id: provider, name: provider, models: model === '' ? [] : [{ id: model, name: model }], modelCount: model === '' ? 0 : 1 });
+			}
+			const selected = providers.find((entry) => entry.id === provider);
+			const models = Array.isArray(selected?.models) ? selected.models.slice() : [];
+			if (model !== '' && !models.some((entry) => entry.id === model)) models.unshift({ id: model, name: model });
+			const fallbackProvider = catalog?.defaultModel?.provider ?? '';
+			const fallbackModel = catalog?.defaultModel?.model ?? '';
+			const chooseProvider = (event) => {
+				const next = event.target.value;
+				onProvider(next);
+				if (next === '') {
+					onModel('');
+					return;
+				}
+				if (fallbackProvider === next && fallbackModel !== '') {
+					onModel(fallbackModel);
+					return;
+				}
+				const entry = providers.find((candidate) => candidate.id === next);
+				onModel(entry?.models?.[0]?.id ?? '');
+			};
+			const hint = error
+				? error
+				: catalog === null
+					? t('memberModelsLoading')
+					: providers.length === 0
+						? t('memberNoProviders')
+						: provider !== '' && models.length === 0
+							? t('memberNoModels')
+							: '';
+			return h('div', { className: 'at-modelfields' },
+				h('div', { className: 'at-fieldrow' },
+					h('label', { className: 'at-field' }, h('span', null, t('memberProvider')),
+						h('select', { value: provider, onChange: chooseProvider },
+							h('option', { value: '' }, t('memberProviderDefault')),
+							providers.map((entry) => h('option', { key: entry.id, value: entry.id }, entry.name + (entry.modelCount ? ' · ' + entry.modelCount : ''))))),
+					h('label', { className: 'at-field' }, h('span', null, t('memberModel')),
+						h('select', {
+							value: model,
+							disabled: provider === '' || models.length === 0,
+							onChange: (event) => onModel(event.target.value),
+						},
+							h('option', { value: '' }, t('memberModelDefault')),
+							models.map((entry) => h('option', { key: entry.id, value: entry.id }, entry.name === entry.id ? entry.id : entry.name + ' · ' + entry.id))))),
+				hint ? h('div', { className: 'at-fieldhint' }, hint) : null);
+		}
+
 		function Workbench({ t, ctx }) {
 			const [phase, setPhase] = React.useState('loading');
 			const [data, setData] = React.useState(null);
@@ -1870,6 +1934,8 @@ window.__ModuleLoader__.load({
 			const [mPrompt, setMPrompt] = React.useState('');
 			const [mProvider, setMProvider] = React.useState('');
 			const [mModel, setMModel] = React.useState('');
+			const [modelCatalog, setModelCatalog] = React.useState(null);
+			const [modelCatalogError, setModelCatalogError] = React.useState('');
 			const [mOwner, setMOwner] = React.useState(false);
 			const [mBusy, setMBusy] = React.useState(false);
 			const [mError, setMError] = React.useState('');
@@ -1948,6 +2014,28 @@ window.__ModuleLoader__.load({
 					if (source) source.close();
 				};
 			}, [projectId]);
+
+			React.useEffect(() => {
+				let alive = true;
+				fetch('/ai-team/api/models', { headers: { accept: 'application/json' } })
+					.then(async (response) => {
+						const body = await response.json().catch(() => null);
+						if (!response.ok) throw new Error(body?.error?.message ?? ('HTTP ' + response.status));
+						return body;
+					})
+					.then((body) => {
+						if (!alive) return;
+						setModelCatalog({
+							defaultModel: body?.defaultModel ?? null,
+							providers: Array.isArray(body?.providers) ? body.providers : [],
+						});
+						if (body?.ok === false) setModelCatalogError(body?.error?.message ?? t('memberModelsError'));
+					})
+					.catch((error) => {
+						if (alive) setModelCatalogError(error?.message ?? t('memberModelsError'));
+					});
+				return () => { alive = false; };
+			}, []);
 
 			React.useEffect(() => {
 				if (!data) return;
@@ -2175,7 +2263,7 @@ window.__ModuleLoader__.load({
 				return body;
 			}
 			function openAddAgent() {
-				const defaults = data?.runtime?.defaultModel ?? {};
+				const defaults = modelCatalog?.defaultModel ?? data?.runtime?.defaultModel ?? {};
 				setMName('');
 				setMRole('');
 				setMPrompt('');
@@ -2780,11 +2868,15 @@ window.__ModuleLoader__.load({
 									onChange: (event) => setMPrompt(event.target.value),
 									placeholder: t('memberPromptHint'),
 								})),
-							h('div', { className: 'at-fieldrow' },
-								h('label', { className: 'at-field' }, h('span', null, t('memberProvider')),
-									h('input', { value: mProvider, onChange: (event) => setMProvider(event.target.value), placeholder: 'deepseek-account' })),
-								h('label', { className: 'at-field' }, h('span', null, t('memberModel')),
-									h('input', { value: mModel, onChange: (event) => setMModel(event.target.value), placeholder: 'deepseek-flash' }))),
+							h(ModelFields, {
+								t,
+								catalog: modelCatalog,
+								provider: mProvider,
+								model: mModel,
+								onProvider: setMProvider,
+								onModel: setMModel,
+								error: modelCatalogError,
+							}),
 							h('label', { className: 'at-check' },
 								h('input', { type: 'checkbox', checked: mOwner, onChange: (event) => setMOwner(event.target.checked) }),
 								h('span', null, t('memberOwner'))),
@@ -2826,12 +2918,17 @@ window.__ModuleLoader__.load({
 										h('option', { value: 'ptc' }, t('presetPtc')),
 										h('option', { value: 'minimal' }, t('presetMinimal')),
 										h('option', { value: 'cordis' }, t('presetCordis')))),
-								h('label', { className: 'at-field' }, h('span', null, t('memberProvider')),
-									h('input', { value: pProvider, onChange: (event) => setPProvider(event.target.value), placeholder: 'deepseek-account' })),
-								h('label', { className: 'at-field' }, h('span', null, t('memberModel')),
-									h('input', { value: pModel, onChange: (event) => setPModel(event.target.value), placeholder: 'deepseek-flash' })),
 								h('label', { className: 'at-field' }, h('span', null, t('memberMaxTokens')),
 									h('input', { value: pMaxTokens, onChange: (event) => setPMaxTokens(event.target.value), inputMode: 'numeric' }))),
+							h(ModelFields, {
+								t,
+								catalog: modelCatalog,
+								provider: pProvider,
+								model: pModel,
+								onProvider: setPProvider,
+								onModel: setPModel,
+								error: modelCatalogError,
+							}),
 							h('label', { className: 'at-field' }, h('span', null, t('successor')),
 								h('select', {
 									value: pSuccessor,

@@ -24,6 +24,7 @@ import { installFileSkillProvider } from './lib/runtime/skill-provider.js';
 import { apply as applySkillOpt } from './lib/vendor/skillopt/src/index.js';
 import { createMemberPermissionGuard } from './lib/host/permission-guard.js';
 import { installFaultAdapter } from './lib/host/fault-adapter.js';
+import { buildModelCatalog } from './lib/host/model-catalog.js';
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeWake, planWakes } from './lib/host/waker.js';
 
@@ -32,7 +33,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.4';
+const VERSION = '0.3.5';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -591,6 +592,10 @@ export function apply(ctx) {
 							variants,
 							get: await skillsService.get('distilly', {}).then((skill) => skill?.name ?? null).catch(() => null),
 						});
+					}
+					if (req.method === 'GET' && url.pathname === '/ai-team/api/models') {
+						const catalog = await buildModelCatalog(ctx.get('llm'), ctx.get('agentDefaultModel'));
+						return send(res, catalog);
 					}
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/health') {
 						const head = booted.ledger.head;

@@ -12,7 +12,11 @@ test('ProjectRuntime owns one ledger and reopens the same Project', async (t) =>
 	const first = await ProjectRuntime.open({ rootDir: root, projectId: 'p1' });
 	assert.equal(first.ledger.projectId, 'p1');
 	assert.equal(first.service.state.members.mem_human.kind, 'human');
+	assert.equal(first.service.state.members.mem_lead.role, '主理人');
+	assert.equal(first.service.state.members.mem_maker.role, '执行');
+	assert.equal(first.service.state.members.mem_check.role, '验收');
 	assert.equal(first.service.state.projects.p1.name, '我的项目');
+	assert.equal(first.service.state.projects.p1.ownerMemberId, 'mem_lead');
 	await first.service.dispatch({
 		type: 'task.create',
 		actor: { kind: 'human', memberId: 'mem_human' },
@@ -23,10 +27,13 @@ test('ProjectRuntime owns one ledger and reopens the same Project', async (t) =>
 
 	const reopened = await ProjectRuntime.open({ rootDir: root, projectId: 'p1' });
 	assert.equal(reopened.service.state.tasks[Object.keys(reopened.service.state.tasks)[0]].title, '持久任务');
+	assert.equal(Object.keys(reopened.service.state.members).length, 4);
 	reopened.close();
 
 	const second = await ProjectRuntime.open({ rootDir: root, projectId: 'p2' });
 	assert.equal(second.service.state.projects.p2.name, '我的项目');
+	assert.equal(second.service.state.projects.p2.ownerMemberId, 'mem_lead');
+	assert.equal(Object.keys(second.service.state.members).length, 4);
 	assert.equal(Object.keys(second.service.state.tasks).length, 0);
 	second.close();
 });

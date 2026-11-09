@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.5 — 2026-11-09
+
+- 新 Project 默认成员：沈舟（主理人）/ 林岚（执行）/ 顾清（验收），均可在成员资料中改；
+- 默认 Lead 成为 Project owner，让一句话开工可以直接唤醒团队；
+- Provider / Model 改为读取 DSH `llm.listProviders()` + `llm.listModels()` 的下拉，不再手填 id；
+- 新增 `GET /ai-team/api/models` 与 `lib/host/model-catalog.js`；
+- 默认成员只在 Project 没有 Agent 时播种一次，不覆盖用户已有 roster。
+
 ## 0.3.4 — 2026-11-09
 
 - README 精装修：品牌、快速开始、能力地图、架构图、API、验证证据、文档索引；
