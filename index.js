@@ -34,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.50';
+const VERSION = '0.3.51';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -340,6 +340,8 @@ export function apply(ctx) {
 						});
 						const delivered = await runtime.wake(member, { prompt: await wakePrompt(plan, member) });
 						messageId = delivered.messageId ?? null;
+						// A cold session cannot be renamed before wake; retry once it is live.
+						await titleMemberSession(projectRuntime, member);
 					}
 					await projectRuntime.service.recordWake(plan.memberId, {
 						ok: true, taskId: plan.taskId, reason: plan.reason, messageId,

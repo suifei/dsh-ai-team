@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.51 — 2026-11-10
+
+- 唤醒后再同步一次 session 标题：cold session 在唤醒前无法 rename，唤醒变 live 后补同步；
+- 避免 QA/闲置 Agent 长期保留旧任务标题。
+
 ## 0.3.50 — 2026-11-10
 
 - PMO 自动决策覆盖无结构化问题的 `decision_required`：按当前 Task/Thread 最高价值路径推进并 ack，不再留 unread；
