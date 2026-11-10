@@ -80,11 +80,28 @@ test('PMO stall detection wakes the task owner and assignee', () => {
 	assert.match(plans[0].prompt, /长时间没有新进展/);
 });
 
-test('PMO continuation wakes the Project owner when nothing is active', () => {
-	const plans = planWakes(state, { event: { type: 'pmo/continue', payload: { bucket: 42 } } }, {});
-	assert.deepEqual(plans.map((item) => [item.memberId, item.reason]), [['a1', 'pmo_continue']]);
-	assert.match(plans[0].prompt, /没有 active Task/);
-	assert.match(plans[0].prompt, /下一批 Task/);
+test('PMO continuation wakes the owner and convenes every member', () => {
+	const meetingState = {
+		...state,
+		members: {
+			...state.members,
+			a4: { id: 'a4', name: '知微', kind: 'agent', status: 'idle', role: 'UX 设计' },
+		},
+	};
+	const plans = planWakes(meetingState, { event: { type: 'pmo/continue', payload: { bucket: 42 } } }, {});
+	assert.deepEqual(plans.map((item) => [item.memberId, item.reason]).sort(), [
+		['a1', 'pmo_continue'],
+		['a2', 'pmo_meeting'],
+		['a4', 'pmo_meeting'],
+	]);
+	const lead = plans.find((item) => item.reason === 'pmo_continue');
+	assert.match(lead.prompt, /没有 active Task/);
+	assert.match(lead.prompt, /下一批 Task/);
+	const attendee = plans.find((item) => item.reason === 'pmo_meeting');
+	assert.match(attendee.prompt, /PMO 会议/);
+	assert.match(attendee.prompt, /专业视角/);
+	// Retired members are never convened.
+	assert.equal(plans.some((item) => item.memberId === 'a3'), false);
 });
 
 test('acceptance schedules a reflection wake for the executor', () => {
