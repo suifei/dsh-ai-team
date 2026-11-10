@@ -841,6 +841,11 @@ window.__ModuleLoader__.load({
 			.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
 			.join('');
 		const failureHuman = (t, category) => t(failKey(category ?? 'unknown'));
+		// R-18 事件历史的 actor 后缀。
+		const actorSuffix = (actor) => actor?.kind === 'human' ? ' · Human'
+			: actor?.kind === 'agent' ? ' · ' + (actor.memberId ?? 'Agent')
+			: actor?.kind === 'system' ? ' · 系统'
+			: '';
 		const tf = (t, key, vars) => String(t(key)).replace(/\{(\w+)\}/g, (match, name) => (
 			vars && Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : match
 		));
@@ -1439,6 +1444,7 @@ window.__ModuleLoader__.load({
 				fromDiscussion ? h('span', { className: 'at-origin', title: t('fromDiscussion'), 'aria-hidden': 'true' }, h(Ico, { name: 'reply', size: 12 })) : null,
 				h('span', { className: 'at-num' }, 'Task #' + no),
 				h(StatusPill, { t, status: card.status }),
+				card.irreversible ? h('span', { className: 'at-blocked', title: t('irreversibleBadge') }, t('irreversibleBadge')) : null,
 				refs.length ? h('span', { className: 'at-blocked' }, h(Ico, { name: 'block', size: 12 }), t('blocked'), h('span', { className: 'at-dep' }, '· ' + t('dependsOn') + ' ' + refs.join('、'))) : null,
 				h('span', { className: 'at-replies' }, replyLabel + (time ? ' · ' + time : '')),
 			),
@@ -2150,7 +2156,7 @@ window.__ModuleLoader__.load({
 						h('div', { className: 'at-kvbody' }, task.updatedAt ? fmtDateTime(task.updatedAt) : '—'))));
 		}
 
-		function ThreadPanel({ t, task, thread, project, following, onToggleFollow, onClose, onChat, converting, convert, reply, onReplyChange, onReplySend, replyBase, onContinue, note, onDismissNote, acceptChecked, onAcceptChecked, qaChecks, onQaCheck, onAccept, onChanges, actions, panelRef, replyRef }) {
+		function ThreadPanel({ t, task, thread, project, following, onToggleFollow, onClose, onChat, converting, convert, reply, onReplyChange, onReplySend, replyBase, onContinue, note, onDismissNote, acceptChecked, onAcceptChecked, qaChecks, onQaCheck, onAccept, onChanges, actions, panelRef, replyRef, taskEventsData }) {
 			const headSeq = thread?.headSeq ?? thread?.entries?.length ?? 0;
 			const stale = replyBase !== null && replyBase !== undefined && headSeq > replyBase;
 			const entries = Array.isArray(thread?.entries) ? thread.entries : [];
@@ -2198,6 +2204,13 @@ window.__ModuleLoader__.load({
 								type: 'button',
 								onClick: action.onClick,
 							}, action.label)))) : null),
+						// R-18 可追溯入口：这条任务的账本事件时间序。
+						taskEventsData && taskEventsData.taskId === task.id ? h('details', { className: 'at-events' },
+							h('summary', { className: 'at-actiontitle' }, t('eventHistoryTitle') + ' · ' + taskEventsData.events.length),
+							h('div', { className: 'at-peopleprojects' }, taskEventsData.events.map((event) => h('div', { key: event.seq, className: 'at-peopleproject' },
+								h('span', { className: 'at-peopleprojectname' }, '#' + event.seq),
+								h('span', { className: 'at-peoplestate' }, event.type),
+								h('span', { className: 'at-peopletasks' }, fmtTime(event.at) + actorSuffix(event.actor)))))) : null,
 				!converting ? h('div', { className: 'at-rfoot' },
 					h('div', { className: 'at-box at-rbox' },
 						h('textarea', {
@@ -2511,7 +2524,19 @@ window.__ModuleLoader__.load({
 			const peopleSeqRef = React.useRef(0);
 			// 风险清单（R-07）：进入收件箱时拉取当前项目三类风险。
 			const [risksData, setRisksData] = React.useState(null);
+			// R-18 任务事件历史。
+			const [taskEventsData, setTaskEventsData] = React.useState(null);
 			const riskSeqRef = React.useRef(0);
+			// R-18 任务事件历史（只读）。
+			function openTaskEvents(taskId) {
+				fetch(`/ai-team/api/projects/${encodeURIComponent(projectId || '')}/tasks/${encodeURIComponent(taskId)}/events`, { headers: { accept: 'application/json' } })
+					.then(async (response) => {
+						const payload = await response.json().catch(() => null);
+						if (!response.ok) throw new Error(payload?.error?.message ?? ('HTTP ' + response.status));
+						setTaskEventsData({ taskId, events: payload.events ?? [] });
+					})
+					.catch(() => setTaskEventsData(null));
+			}
 			function loadRisks() {
 				const seq = ++riskSeqRef.current;
 				setPeopleLoading(true);
@@ -3916,6 +3941,7 @@ window.__ModuleLoader__.load({
 						actions,
 						panelRef: rightRef,
 						replyRef,
+						taskEventsData,
 					}) : null,
 					addOpen ? h(ModalBack, { onClose: () => setAddOpen(false) },
 						h('form', {
