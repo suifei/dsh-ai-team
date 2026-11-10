@@ -34,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.47';
+const VERSION = '0.3.48';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -141,17 +141,15 @@ export function apply(ctx) {
 				return null;
 			}
 		};
-		const taskSessionTitle = (task) => `#${task?.number ?? '?'} ${task?.title ?? ''}`.trim().slice(0, 120);
-		const titleMemberSession = async (projectRuntime, member, taskId) => {
-			if (member === undefined || typeof taskId !== 'string') return;
-			const task = projectRuntime?.service?.state?.tasks?.[taskId];
-			if (task === undefined) return;
+		const memberSessionTitle = (member) => `${member?.name ?? 'Agent'}（${member?.role ?? 'Agent'}）`.trim().slice(0, 120);
+		const titleMemberSession = async (projectRuntime, member) => {
+			if (member === undefined) return;
 			const sessions = ctx.get('sessions');
 			const titleService = ctx.get('sessionTitle');
 			const session = sessions?.get?.(member.sessionId);
 			if (session === undefined || session === null || typeof titleService?.rename !== 'function') return;
 			try {
-				titleService.rename(session, taskSessionTitle(task));
+				titleService.rename(session, memberSessionTitle(member));
 			} catch (error) {
 				console.warn('[ai-team] session title failed:', error?.message ?? error);
 			}
@@ -178,15 +176,8 @@ export function apply(ctx) {
 						for (const member of Object.values(runtime.service.state.members ?? {})) {
 							if (member.kind === 'agent' && typeof member.sessionId === 'string') {
 								await attachMemberWorkspace(runtime, member.sessionId);
+								await titleMemberSession(runtime, member);
 							}
-						}
-					}
-					for (const runtime of value.runtimes.values()) {
-						for (const task of Object.values(runtime.service.state.tasks ?? {})) {
-							if (!['pending', 'in_progress', 'pending_acceptance'].includes(task.status)) continue;
-							const memberId = task.assigneeId ?? task.ownerId;
-							const member = runtime.service.state.members?.[memberId];
-							await titleMemberSession(runtime, member, task.id);
 						}
 						void pmoTick(runtime).catch((error) => console.warn('[ai-team] PMO tick failed:', error?.message ?? error));
 					}
@@ -299,9 +290,10 @@ export function apply(ctx) {
 			const providers = typeof subagents.list === 'function' ? subagents.list() : [];
 			if (providers.length === 0) return;
 			const parentInfo = await ensureParent();
-			const wakePrompt = async (plan, member) => describeWake(plan, projectRuntime.service.state)
-				+ await formatSkillCatalog(skillsService, { cwd: projectCwd(projectRuntime, member) })
-				+ await loadSkillContext(member, projectRuntime.dir);
+			// A live member already carries the activation context (identity,
+			// personality, skills). A wake is only the Task delta; re-sending the
+			// whole activation prompt caused the duplicated blocks users saw.
+			const wakePrompt = async (plan) => describeWake(plan, projectRuntime.service.state);
 			for (const plan of plans) {
 				if (wakeKeys.has(plan.key)) continue;
 				let member = projectRuntime.service.state.members?.[plan.memberId];
@@ -331,42 +323,21 @@ export function apply(ctx) {
 						}
 						messageId = activated.messageId ?? null;
 						member = projectRuntime.service.state.members?.[member.id] ?? member;
-						await titleMemberSession(projectRuntime, member, plan.taskId);
+						await titleMemberSession(projectRuntime, member);
 					} else {
-						const titleService = ctx.get('sessionTitle');
-						const liveSession = sessions.get?.(member.sessionId);
-						const task = plan.taskId === null ? undefined : projectRuntime.service.state.tasks?.[plan.taskId];
-						const targetTitle = task === undefined ? null : taskSessionTitle(task);
-						const currentTitle = targetTitle === null || liveSession === undefined || liveSession === null || typeof titleService?.get !== 'function'
-							? null
-							: titleService.get(liveSession)?.title ?? null;
-						if (targetTitle !== null && currentTitle !== null && currentTitle !== targetTitle) {
-							// The member is moving to another Task: start a task-scoped session
-							// instead of renaming/reusing the previous Task's conversation.
-							const activated = await activateMember({
-								payload: { memberId: member.id, prompt: await wakePrompt(plan, member), force: true },
-							}, projectRuntime);
-							if (activated.error !== undefined) {
-								throw Object.assign(new Error(activated.error.message), { code: activated.error.code });
-							}
-							messageId = activated.messageId ?? null;
-							member = projectRuntime.service.state.members?.[member.id] ?? member;
-							await titleMemberSession(projectRuntime, member, plan.taskId);
-						} else {
-							await titleMemberSession(projectRuntime, member, plan.taskId);
-							const runtime = new MemberRuntime({
-								subagents, sessions, permissionPresets, sandboxPolicy,
-								agents: ctx.get('agents'),
-								agentPresets: ctx.get('agentPresets'),
-								direct: true,
-								parent: parentInfo.agent,
-								provider: providers[0],
-								preset: 'standard',
-								cwd,
-							});
-							const delivered = await runtime.wake(member, { prompt: await wakePrompt(plan, member) });
-							messageId = delivered.messageId ?? null;
-						}
+						await titleMemberSession(projectRuntime, member);
+						const runtime = new MemberRuntime({
+							subagents, sessions, permissionPresets, sandboxPolicy,
+							agents: ctx.get('agents'),
+							agentPresets: ctx.get('agentPresets'),
+							direct: true,
+							parent: parentInfo.agent,
+							provider: providers[0],
+							preset: 'standard',
+							cwd,
+						});
+						const delivered = await runtime.wake(member, { prompt: await wakePrompt(plan, member) });
+						messageId = delivered.messageId ?? null;
 					}
 					await projectRuntime.service.recordWake(plan.memberId, {
 						ok: true, taskId: plan.taskId, reason: plan.reason, messageId,

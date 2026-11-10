@@ -137,7 +137,7 @@ test('a Human Main-stream message wakes the Agent Project owner', () => {
 	assert.match(plans[0].prompt, /create/);
 });
 
-test('wake prompt carries the customized name, role and personality', () => {
+test('wake prompt is a Task delta, not a repeated identity block', () => {
 	const customized = {
 		...state,
 		members: {
@@ -146,10 +146,10 @@ test('wake prompt carries the customized name, role and personality', () => {
 		},
 	};
 	const prompt = describeWake({ memberId: 'a1', taskId: 't1', prompt: 'Team event.' }, customized);
-	assert.match(prompt, /沈舟·二/);
-	assert.match(prompt, /Lead \+ QA/);
-	assert.match(prompt, /先复跑/);
-	assert.match(prompt, /QA 职责/);
+	assert.match(prompt, /\[沈舟·二\]/);
+	assert.match(prompt, /Task 边界/);
+	assert.doesNotMatch(prompt, /先复跑/);
+	assert.doesNotMatch(prompt, /你是/);
 });
 
 test('no wake is planned for a member who authored a thread reply', () => {

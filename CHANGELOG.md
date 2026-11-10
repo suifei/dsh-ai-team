@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.48 — 2026-11-10
+
+- 改回“一个 Agent 一个持久 session”：新 Task 复用原 session，不再每任务新开；
+- session 标题固定为 `Agent（角色）`，任务名只留在 Task/Thread，不再随任务改名；
+- 首次 activation 发送身份/个性/核心 skill，后续 wake 只发 Task 增量与任务边界；
+- 修复 identity / skill catalog / core skill 在每次任务提示词中重复的问题；
+- 任务边界提示要求先读 Task/Thread，避免跨任务上下文污染。
+
 ## 0.3.47 — 2026-11-10
 
 - 修复 PMO review nudge 使用 `member.qa` 判断、真实账本 QA 成员用 role 表示导致永远不唤醒白砚的问题；
