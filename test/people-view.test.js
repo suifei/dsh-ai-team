@@ -31,9 +31,9 @@ test('people pool aggregates the same person across projects with exact task cou
 				{ id: 'h1', name: '你', kind: 'human', role: 'Human', status: 'idle' },
 			],
 			tasks: [
-				{ id: 't1', status: 'in_progress', ownerId: 'a1', assigneeId: 'a1', tombstone: false },
-				{ id: 't2', status: 'pending', ownerId: 'a1', assigneeId: null, tombstone: false },
-				{ id: 't3', status: 'done', ownerId: 'a1', assigneeId: null, tombstone: false },
+				{ id: 't1', status: 'in_progress', ownerId: 'a1', assigneeId: 'a1', blockedBy: [], tombstone: false },
+				{ id: 't2', status: 'pending', ownerId: 'a1', assigneeId: null, blockedBy: [], tombstone: false },
+				{ id: 't3', status: 'done', ownerId: 'a1', assigneeId: null, blockedBy: [], tombstone: false },
 			],
 		}),
 		fakeRuntime('prj_b', '项目B', {
@@ -41,7 +41,7 @@ test('people pool aggregates the same person across projects with exact task cou
 				{ id: 'b1', name: '青岚', kind: 'agent', role: '执行', status: 'failed', lastFailure: { category: 'rate_limit' } },
 			],
 			tasks: [
-				{ id: 't4', status: 'pending_acceptance', ownerId: 'b1', assigneeId: null, tombstone: false },
+				{ id: 't4', status: 'pending_acceptance', ownerId: 'b1', assigneeId: null, blockedBy: [], tombstone: false },
 			],
 		}),
 	];

@@ -11,6 +11,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readFileSync, writeFileSync } from 'node:fs';
 import z from '@deepseek-ai/schemastery';
 import { ProjectRuntime } from './lib/host/project-runtime.js';
 import { ProjectRegistry } from './lib/host/project-registry.js';
@@ -31,6 +32,7 @@ import { createTeamTool } from './lib/host/member-tools.js';
 import { describeWake, planWakes } from './lib/host/waker.js';
 import { aggregatePeople } from './lib/host/people-view.js';
 import { riskView } from './lib/host/risk-view.js';
+import { weeklyView } from './lib/host/weekly-view.js';
 import { isInformationalThreadMention } from './lib/domain/inbox.js';
 import { createDiagLogger, defaultDiagDir } from './lib/diaglog.js';
 
@@ -1010,12 +1012,52 @@ export function apply(ctx, config = {}) {
 						const catalog = await buildModelCatalog(ctx.get('llm'), ctx.get('agentDefaultModel'));
 						return send(res, catalog);
 					}
-					// 人员池：按"人"聚合各项目账本的成员身份/状态/失败/任务数
-					//（11-管理视角与信息架构 §2；只读，复用既有投影，不建新数据）。
-					if (req.method === 'GET' && url.pathname === '/ai-team/api/people') {
+				// R-17 person 别名：视图层绑定（name → personId），文件存策略数据
+				// 目录；聚合时别名生效，未绑定回落同名聚合（可回退路径）。
+				const aliasesPath = join(booted.dataDir, 'people-aliases.json');
+				const readAliases = () => {
+					try {
+						const parsed = JSON.parse(readFileSync(aliasesPath, 'utf8'));
+						return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+					} catch {
+						return null;
+					}
+				};
+				// 人员池：按"人"聚合各项目账本的成员身份/状态/失败/任务数
+				//（11-管理视角与信息架构 §2；只读，复用既有投影，不建新数据）。
+				if (req.method === 'GET' && url.pathname === '/ai-team/api/people') {
+					const registryEntries = booted.registry.list();
+					const people = aggregatePeople(registryEntries, [...booted.runtimes.values()], { aliases: readAliases() });
+					return send(res, { ok: true, people });
+				}
+				// R-17 绑定：把一个名字并到某个 personId（Human 在人员池显式确认）。
+				if (req.method === 'POST' && url.pathname === '/ai-team/api/people-aliases') {
+					const body = await readJson(req);
+					const memberName = typeof body?.name === 'string' ? body.name.trim() : '';
+					const personId = typeof body?.personId === 'string' ? body.personId.trim() : '';
+					if (memberName === '' || personId === '') {
+						return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'name and personId are required' } }, 400);
+					}
+					const aliases = readAliases() ?? {};
+					aliases[memberName] = personId;
+					writeFileSync(aliasesPath, JSON.stringify(aliases, null, 2) + '\n', 'utf8');
+					diag?.append({ ev: 'people.alias', name: memberName, personId });
+					return send(res, { ok: true, aliases });
+				}
+					// 待验收跨项目队列（R-09）：各项目 q1 中需要 Human 验收的任务
+					//（review/irreversible 类目，复用 quadrantsView 既有投影）。
+					if (req.method === 'GET' && url.pathname === '/ai-team/api/pending-acceptance') {
 						const registryEntries = booted.registry.list();
-						const people = aggregatePeople(registryEntries, [...booted.runtimes.values()]);
-						return send(res, { ok: true, people });
+						const rows = [];
+						for (const runtime of booted.runtimes.values()) {
+							const projectName = registryEntries.find((project) => project.id === runtime.id)?.name ?? runtime.id;
+							const q1 = runtime.service.quadrants(runtime.id).q1;
+							for (const item of q1.items ?? []) {
+								if (item.kind !== 'task' || (item.category !== 'review' && item.category !== 'irreversible')) continue;
+								rows.push({ ...item, projectId: runtime.id, projectName });
+							}
+						}
+						return send(res, { ok: true, rows });
 					}
 					// 风险清单（R-07）：当前项目账本的三类风险只读投影（受阻/失败/待决超时）。
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/risks') {
@@ -1031,8 +1073,41 @@ export function apply(ctx, config = {}) {
 						});
 						return send(res, { ok: true, projectId: runtime.id, risks });
 					}
-					if (req.method === 'GET' && url.pathname === '/ai-team/api/health') {
-						const head = booted.ledger.head;
+					// 项目周报（R-11）：同一投影的正向/负向双解读数据面。
+					const weekly = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/weekly$/);
+					if (req.method === 'GET' && weekly !== null) {
+						const runtime = projectRuntime(decodeURIComponent(weekly[1]));
+						if (runtime === null) return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
+						const weeks = Number.parseInt(url.searchParams.get('weeks') ?? '', 10);
+						return send(res, {
+							ok: true,
+							projectId: runtime.id,
+							weekly: weeklyView(runtime.service.state, {
+								now: Date.now(),
+								weeks: Number.isSafeInteger(weeks) && weeks > 0 ? Math.min(weeks, 12) : 1,
+							}),
+						});
+					}
+					// 任务事件历史（R-18）：Human 侧可追溯入口的只读数据面。
+					const taskEvents = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/tasks\/([^/]+)\/events$/);
+					if (req.method === 'GET' && taskEvents !== null) {
+						const runtime = projectRuntime(decodeURIComponent(taskEvents[1]));
+						const taskId = decodeURIComponent(taskEvents[2]);
+						if (runtime === null || runtime === undefined) return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
+						const events = runtime.ledger.events.filter((event) => {
+							const pid = event.payload?.taskId ?? event.payload?.id ?? null;
+							return typeof pid === 'string' && pid === taskId;
+						});
+						return send(res, {
+							ok: true,
+							taskId,
+							events: events.map((event) => ({
+								seq: event.seq, type: event.type, at: event.at,
+								actor: event.actor ?? null,
+							})),
+						});
+					}
+					if (req.method === 'GET' && url.pathname === '/ai-team/api/health') {						const head = booted.ledger.head;
 						return send(res, {
 							ok: true,
 							plugin: name,
