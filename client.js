@@ -309,6 +309,16 @@ window.__ModuleLoader__.load({
 			dismiss: '关闭提示',
 			crashTitle: '工作台渲染失败',
 			noProject: '未选择项目',
+			navHome: '对话',
+			agentsScope: '本项目成员',
+			people: '人员',
+			peopleTitle: '人员池',
+			peopleEmpty: '还没有成员；先在项目里添加。',
+			peopleProjects: '{n} 个项目',
+			peopleActiveTasks: '{n} 个活跃任务',
+			peopleFailure: '最近失败 ×{n}',
+			peopleOpenProject: '打开项目',
+			peopleLoadFailed: '人员池加载失败：{message}',
 			archivedCount: '已归档 {n}',
 			q1Title: '需要你',
 			q2Title: '团队在做',
@@ -639,6 +649,16 @@ window.__ModuleLoader__.load({
 			dismiss: 'Dismiss',
 			crashTitle: 'Workbench failed to render',
 			noProject: 'No project selected',
+			navHome: 'Conversation',
+			agentsScope: 'Project members',
+			people: 'People',
+			peopleTitle: 'People',
+			peopleEmpty: 'No members yet; add them in a project.',
+			peopleProjects: '{n} project(s)',
+			peopleActiveTasks: '{n} active task(s)',
+			peopleFailure: '{n} recent failure(s)',
+			peopleOpenProject: 'Open project',
+			peopleLoadFailed: 'Failed to load people: {message}',
 			archivedCount: 'Archived {n}',
 			q1Title: 'Needs you',
 			q2Title: 'Team is doing',
@@ -1131,6 +1151,19 @@ window.__ModuleLoader__.load({
 			.at-skel-agent { height: 40px; margin-bottom: 6px; }
 			.at-skel-col { height: 120px; }
 			.at-crash { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; color: var(--dsw-alias-state-error-primary); text-align: center; }
+			.at-people { margin: 0 12px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); }
+			.at-people-failed { border-color: var(--dsw-alias-state-error-primary); }
+			.at-peoplesum { display: flex; align-items: center; gap: 8px; padding: 9px 10px; cursor: pointer; list-style: none; }
+			.at-peoplesum::-webkit-details-marker { display: none; }
+			.at-peoplename { color: var(--dsw-alias-label-primary); font-size: 13px; font-weight: 500; }
+			.at-people-role { color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+			.at-peoplebadges { margin-left: auto; color: var(--dsw-alias-label-caption); font-size: 11px; font-variant-numeric: tabular-nums; }
+			.at-peopleprojects { display: flex; flex-direction: column; gap: 4px; padding: 0 10px 10px; }
+			.at-peopleproject { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); }
+			.at-peopleprojectname { color: var(--dsw-alias-label-secondary); font-size: 12px; }
+			.at-peoplestate { color: var(--dsw-alias-label-tertiary); font-size: 11px; }
+			.at-peopletasks { margin-left: auto; color: var(--dsw-alias-label-caption); font-size: 11px; font-variant-numeric: tabular-nums; }
+			.at-peoplefail { color: var(--dsw-alias-state-error-primary); font-size: 11px; }
 			.at-crashtitle { font-size: 14px; font-weight: 500; line-height: 22px; }
 			.at-crashbody { max-width: 60ch; margin: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
 			@container at-center (max-width: 759px) {
@@ -1664,6 +1697,43 @@ window.__ModuleLoader__.load({
 				h('button', { className: 'at-btn at-btn-primary at-btn-small', type: 'button', disabled: !complete || busy, onClick: submit }, busy ? t('saving') : t('decisionSubmit')));
 		}
 
+		/**
+		 * 人员池总览（全局层，11-管理视角 §2）：按"人"聚合各项目身份。
+		 * 数据 = GET /ai-team/api/people（各项目账本 members/tasks 的只读聚合）。
+		 */
+		function PeoplePage({ t, people, error, loading, onOpenProject }) {
+			if (error) return h('div', { className: 'at-stream', role: 'alert' },
+				h('div', { className: 'at-streaminner' }, h(EmptyState, { t, icon: 'alert', title: t('peopleTitle'), body: tf(t, 'peopleLoadFailed', { message: error }) })));
+			if (loading && !people) return h(Skeleton, { t });
+			if (!people || people.length === 0) return h('div', { className: 'at-stream', role: 'region', 'aria-label': t('peopleTitle') },
+				h('div', { className: 'at-streaminner' }, h(EmptyState, { t, icon: 'layers', title: t('peopleTitle'), body: t('peopleEmpty') })));
+			return h('div', { className: 'at-stream', role: 'region', 'aria-label': t('peopleTitle') },
+				h('div', { className: 'at-streaminner' }, people.map((person) => {
+					const badges = [
+						tf(t, 'peopleProjects', { n: person.projects.length }),
+						tf(t, 'peopleActiveTasks', { n: person.activeTasks }),
+					];
+					if (person.failures > 0) badges.push(tf(t, 'peopleFailure', { n: person.failures }));
+					return h('details', { key: person.name, className: cx('at-people', person.failures > 0 && 'at-people-failed') },
+						h('summary', { className: 'at-peoplesum' },
+							h(Avatar, { name: person.name, human: false }),
+							h('span', { className: 'at-peoplename' }, person.name),
+							person.role ? h('span', { className: 'at-people-role' }, person.role) : null,
+							h('span', { className: 'at-peoplebadges' }, badges.join(' · '))),
+						h('div', { className: 'at-peopleprojects' }, person.projects.map((row) => {
+							const failed = row.lastFailure !== undefined && row.lastFailure !== null;
+							return h('div', { key: row.projectId, className: 'at-peopleproject' },
+								h('span', { className: 'at-peopleprojectname' }, row.projectName),
+								row.talentPool
+									? h('span', { className: 'at-peoplestate' }, t('talentPool'))
+									: h('span', { className: 'at-peoplestate' }, t(AGENT_STATUS[row.status] ?? 'agentIdle')),
+								h('span', { className: 'at-peopletasks' }, tf(t, 'peopleActiveTasks', { n: row.activeTasks })),
+								failed ? h('span', { className: 'at-peoplefail' }, tf(t, 'peopleFailure', { n: 1 }) + ' · ' + (row.lastFailure.category ?? '')) : null,
+								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => onOpenProject(row.projectId) }, t('peopleOpenProject')));
+						})));
+				})));
+		}
+
 		function MemberView({ t, agent, tasks, onBack, onOpenTask, onOpenChat, onOpenProfile }) {
 			const recentTasks = tasks.slice().sort((left, right) => (right.number ?? 0) - (left.number ?? 0)).slice(0, 3);
 			return h('div', { className: 'at-memberview' },
@@ -1699,7 +1769,7 @@ window.__ModuleLoader__.load({
 						: h(EmptyState, { t, title: t('memberNoTasks'), body: t('memberNoTasksBody'), compact: true })));
 		}
 
-		function LeftPanel({ t, data, projectId, scope, tab, inboxUnread, onBack, onInbox, onBoard, onProject, onNewProject, onAgent, onAgentMore, onAgentChat, onAddAgent, onRecruit }) {
+		function LeftPanel({ t, data, projectId, scope, tab, inboxUnread, onBack, onInbox, onBoard, onPeople, peopleActive, onProject, onNewProject, onAgent, onAgentMore, onAgentChat, onAddAgent, onRecruit }) {
 			const projects = data.projects.filter((project) => !project.archived);
 			const activeAgents = data.agents.filter((agent) => agent.status !== 'retired');
 			const talentAgents = data.agents.filter((agent) => agent.status === 'retired');
@@ -1707,7 +1777,7 @@ window.__ModuleLoader__.load({
 			const boardActive = scope === 'project' && tab === 'board';
 			return h('div', null,
 				h('nav', { className: 'at-nav', 'aria-label': t('navAria') },
-					h('button', { className: 'at-navrow', type: 'button', onClick: onBack }, h(Ico, { name: 'back' }), h('span', null, t('back'))),
+					h('button', { className: 'at-navrow', type: 'button', onClick: onBack }, h(Ico, { name: 'back' }), h('span', null, t('navHome'))),
 					h('button', {
 						className: cx('at-navrow', scope === 'inbox' && 'at-on'),
 						type: 'button',
@@ -1721,6 +1791,12 @@ window.__ModuleLoader__.load({
 						'aria-current': boardActive ? 'page' : undefined,
 						onClick: onBoard,
 					}, h(Ico, { name: 'board' }), h('span', null, t('board'))),
+					h('button', {
+						className: cx('at-navrow', peopleActive && 'at-on'),
+						type: 'button',
+						'aria-current': peopleActive ? 'page' : undefined,
+						onClick: onPeople,
+					}, h(Ico, { name: 'layers' }), h('span', null, t('people'))),
 				),
 				h('div', { className: 'at-h' },
 					h('span', null, t('projects')),
@@ -1745,7 +1821,7 @@ window.__ModuleLoader__.load({
 						onSelect: onProject,
 					})))) : null,
 				h('div', { className: 'at-h' },
-					h('span', null, t('agents')),
+					h('span', { title: t('agentsScope') }, t('agentsScope')),
 					h('button', { className: 'at-mini', type: 'button', 'aria-label': t('addAgent'), title: t('addAgent'), onClick: onAddAgent }, h(Ico, { name: 'plus', size: 12 })),
 				),
 				activeAgents.length
@@ -2223,6 +2299,10 @@ window.__ModuleLoader__.load({
 			const [workspaceError, setWorkspaceError] = React.useState('');
 			const [workspaceBusy, setWorkspaceBusy] = React.useState(false);
 			const [memberViewId, setMemberViewId] = React.useState(null);
+			// 人员池（全局层）：进入该 scope 时拉取一次聚合视图。
+			const [peopleData, setPeopleData] = React.useState(null);
+			const [peopleError, setPeopleError] = React.useState('');
+			const [peopleLoading, setPeopleLoading] = React.useState(false);
 			const [nBusy, setNBusy] = React.useState(false);
 			const [nError, setNError] = React.useState('');
 			const [pSuccessor, setPSuccessor] = React.useState('');
@@ -2531,6 +2611,23 @@ window.__ModuleLoader__.load({
 				setScope('inbox');
 				setThreadOpen(false);
 				setNote('');
+			}
+			function openPeople() {
+				closeMobile();
+				setMemberViewId(null);
+				setScope('people');
+				setThreadOpen(false);
+				setNote('');
+				setPeopleLoading(true);
+				setPeopleError('');
+				fetch('/ai-team/api/people', { headers: { accept: 'application/json' } })
+					.then(async (response) => {
+						const payload = await response.json().catch(() => null);
+						if (!response.ok) throw new Error(payload?.error?.message ?? ('HTTP ' + response.status));
+						setPeopleData(Array.isArray(payload?.people) ? payload.people : []);
+					})
+					.catch((error) => setPeopleError(error?.message ?? String(error)))
+					.finally(() => setPeopleLoading(false));
 			}
 			function switchBoard() {
 				closeMobile();
@@ -2987,7 +3084,13 @@ window.__ModuleLoader__.load({
 			async function send() {
 				const text = draft.trim();
 				if (!text) return;
-				if (!project?.workspacePath) { say(t('workspaceRequired')); return; }
+				// 目录门槛只拦"要动手"的任务：讨论与建卡无需工作目录（11-管理视角
+				// §3）；激活/认领由 Host fail-closed，并把用户引导到目录设置。
+				if (!project?.workspacePath && mode === 'task') {
+					say(t('workspaceRequired'));
+					openWorkspaceEditor();
+					return;
+				}
 				try {
 					if (mode === 'task') {
 						const definition = taskDefinition.trim();
@@ -3189,8 +3292,8 @@ window.__ModuleLoader__.load({
 			const inInbox = scope === 'inbox';
 			const memberViewAgent = data.agents.find((agent) => agent.id === memberViewId) ?? null;
 			const memberViewTasks = memberViewAgent === null ? [] : tasks.filter((task) => task.ownerId === memberViewAgent.id || task.assigneeId === memberViewAgent.id);
-			const headerTitle = inInbox ? t('inboxTitle') : project ? '# ' + project.name : t('noProject');
-			const headerGoal = inInbox ? t('inboxGoal') : (project?.goal ?? '');
+			const headerTitle = inPeople ? t('peopleTitle') : inInbox ? t('inboxTitle') : project ? '# ' + project.name : t('noProject');
+			const headerGoal = inPeople ? t('peopleEmpty') : inInbox ? t('inboxGoal') : (project?.goal ?? '');
 			const unread = inboxUnread > 99 ? '99+' : inboxUnread;
 
 			const leftProps = {
@@ -3203,6 +3306,8 @@ window.__ModuleLoader__.load({
 				onBack: () => { closeMobile(); goConversation(); },
 				onInbox: switchInbox,
 				onBoard: switchBoard,
+				onPeople: openPeople,
+				peopleActive: scope === 'people',
 				onProject: switchProject,
 				onNewProject: () => { closeMobile(); openNewProject(); },
 				onAgent: (agent) => { closeMobile(); void openAgentChat(agent); },
@@ -3211,8 +3316,20 @@ window.__ModuleLoader__.load({
 				onAddAgent: () => { closeMobile(); openAddAgent(); },
 				onRecruit: (agent) => { closeMobile(); recruit(agent); },
 			};
+			const inPeople = scope === 'people';
 
-			const body = inInbox
+			const body = inPeople
+				? h(PeoplePage, {
+					t,
+					people: peopleData,
+					error: peopleError,
+					loading: peopleLoading,
+					onOpenProject: (targetId) => {
+						const target = data.projects.find((project) => project.id === targetId);
+						if (target) void switchProject(target);
+					},
+				})
+				: inInbox
 				? h('div', { className: 'at-stream', role: 'region', 'aria-label': t('inboxTitle') },
 					h('div', { className: 'at-streaminner' },
 						inboxItems.length
@@ -3323,7 +3440,7 @@ window.__ModuleLoader__.load({
 						h('header', { className: 'at-chead' },
 							h('div', { className: 'at-title', title: headerTitle }, headerTitle),
 							headerGoal ? h('div', { className: 'at-goal', title: headerGoal }, headerGoal) : null,
-							!inInbox && project ? h('div', { className: 'at-workspacebar' },
+							!inInbox && !inPeople && project ? h('div', { className: 'at-workspacebar' },
 								h('span', { className: 'at-workspacepath', title: project.workspacePath || t('workspaceHint') },
 									project.workspacePath ? t('workspace') + '：' + project.workspacePath : t('workspaceUnset')),
 								h('button', { className: 'at-workspacebtn', type: 'button', onClick: openWorkspaceEditor }, project.workspacePath ? t('workspaceChange') : t('workspaceChoose')),
@@ -3334,7 +3451,7 @@ window.__ModuleLoader__.load({
 									'aria-pressed': project.pmoAuto !== false,
 									onClick: togglePmo,
 								}, project.pmoAuto !== false ? t('pmoOn') : t('pmoOff'))) : null,
-							inInbox ? null : h('div', { className: 'at-tabs', role: 'tablist', 'aria-label': t('tabsAria'), onKeyDown: tabKeyDown },
+							inInbox || inPeople ? null : h('div', { className: 'at-tabs', role: 'tablist', 'aria-label': t('tabsAria'), onKeyDown: tabKeyDown },
 								h('button', {
 									className: cx('at-tab', tab === 'main' && 'at-on'),
 									type: 'button',
@@ -3373,7 +3490,7 @@ window.__ModuleLoader__.load({
 								h('span', { className: 'at-notetext' }, note),
 								h('button', { className: 'at-noteclose', type: 'button', 'aria-label': t('dismiss'), title: t('dismiss'), onClick: () => setNote('') }, h(Ico, { name: 'close', size: 12 })))) : null,
 						body,
-						!inInbox && tab === 'main' && !memberViewAgent ? h(Composer, {
+						scope === 'project' && tab === 'main' && !memberViewAgent ? h(Composer, {
 							t,
 							mode,
 							draft,

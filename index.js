@@ -29,6 +29,7 @@ import { installFaultAdapter } from './lib/host/fault-adapter.js';
 import { buildModelCatalog } from './lib/host/model-catalog.js';
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeWake, planWakes } from './lib/host/waker.js';
+import { aggregatePeople } from './lib/host/people-view.js';
 import { createDiagLogger, defaultDiagDir } from './lib/diaglog.js';
 
 export const name = 'ai-team';
@@ -36,7 +37,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.56';
+const VERSION = '0.3.57';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -723,6 +724,19 @@ export function apply(ctx, config = {}) {
 			if (member === undefined) return { error: { code: 'E_NOT_FOUND', message: 'member not found' }, status: 404 };
 			if (member.status === 'retired') return { error: { code: 'E_INVALID_STATE', message: 'member is retired' }, status: 409 };
 			if (member.status === 'running' && body.payload?.force !== true) return { error: { code: 'E_INVALID_STATE', message: 'member is already running' }, status: 409 };
+			// 无目录项目 fail-closed：成员绝不落到宿主默认目录或插件数据目录
+			// （projectCwd 的 dir 兜底）里执行。显式判工作目录，不吃兜底。
+			const workspacePath = projectRuntime?.service?.state?.projects?.[projectRuntime.id]?.workspacePath;
+			const effectiveDir = member?.workspace || (typeof workspacePath === 'string' ? workspacePath.trim() : '');
+			if (effectiveDir === '') {
+				return {
+					error: {
+						code: 'E_WORKSPACE_REQUIRED',
+						message: 'this Project has no workspace yet; set a workspace directory before activating members',
+					},
+					status: 409,
+				};
+			}
 			const subagents = ctx.get('subagents');
 			const sessions = ctx.get('sessions');
 			const permissionPresets = ctx.get('permissionPresets');
@@ -761,7 +775,7 @@ export function apply(ctx, config = {}) {
 					parent: parentInfo.agent,
 					provider: providers[0],
 					preset: 'standard',
-					cwd: projectCwd(projectRuntime, member),
+					cwd: effectiveDir,
 					trackHandle: (handle) => resumedHandles.add(handle),
 				});
 				const result = await runtime.activate(activationMember, {
@@ -955,6 +969,13 @@ export function apply(ctx, config = {}) {
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/models') {
 						const catalog = await buildModelCatalog(ctx.get('llm'), ctx.get('agentDefaultModel'));
 						return send(res, catalog);
+					}
+					// 人员池：按"人"聚合各项目账本的成员身份/状态/失败/任务数
+					//（11-管理视角与信息架构 §2；只读，复用既有投影，不建新数据）。
+					if (req.method === 'GET' && url.pathname === '/ai-team/api/people') {
+						const registryEntries = booted.registry.list();
+						const people = aggregatePeople(registryEntries, [...booted.runtimes.values()]);
+						return send(res, { ok: true, people });
 					}
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/health') {
 						const head = booted.ledger.head;
@@ -1191,7 +1212,8 @@ export function apply(ctx, config = {}) {
 							const goal = typeof body.payload?.goal === 'string' ? body.payload.goal.trim() : '';
 							const workspacePath = typeof body.payload?.workspacePath === 'string' ? body.payload.workspacePath.trim() : '';
 							if (name === '') return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'project name is required' } }, 400);
-							if (workspacePath === '') return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'project workspacePath is required' } }, 400);
+							// 工作目录可空（稍后设置）：讨论与建卡不受限；成员激活在
+							// activateMember 处 fail-closed，绝不落到宿主默认目录执行。
 							const id = ids.project();
 							booted.registry.add({ id, name, goal, workspacePath });
 							const next = await activateProject(id, name, goal, workspacePath);
