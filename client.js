@@ -7,10 +7,11 @@
  *   right = Task Thread panel (discussion, acceptance, done receipt)
  *
  * UI references: docs/04 §4–§7/§10, docs/appendix/D §2–§3, docs/07 §4–§6.
- * This is the M2.5 workbench client: it reads
- * `/ai-team/api/bootstrap`, falls back to embedded demo data, and every
- * write action only produces local feedback. The registration contract
- * (`sidebar.panellist` id `ai-team`, `main` key `ai-team`) is unchanged.
+ * The client reads `/ai-team/api/bootstrap` and the SSE change stream; every
+ * write goes through `POST /ai-team/api/projects/:id/commands`. Without the
+ * endpoint it shows an honest error state with retry — no embedded demo data.
+ * The registration contract (`sidebar.panellist` id `ai-team`, `main` key
+ * `ai-team`) is unchanged.
  *
  * Colors come from `--dsw-alias-*` only; radii/font steps from host tokens.
  */
@@ -55,6 +56,7 @@ window.__ModuleLoader__.load({
 			follow: '关注',
 			unfollow: '取消关注',
 			convert: '转为 Task',
+			you: '你',
 			reply: '回复此 Thread…',
 			replyHint: '将基于 #{seq} 发送',
 			replyHintNew: '将新建此 Task 的 Thread',
@@ -83,8 +85,8 @@ window.__ModuleLoader__.load({
 			groupLess: '收起其余 {n} 项',
 			fromDiscussion: '由讨论升格',
 			loading: '加载中…',
-			fallbackTitle: '演示数据',
-			fallbackBody: 'bootstrap 接口（/ai-team）不可达，已使用内置样例；发送、关注、验收只做本地反馈，不写账本。',
+			loadFailedTitle: '工作台不可达',
+			loadFailedBody: 'bootstrap 接口（/ai-team）无法访问；请确认插件已启用后重试。',
 			spike: 'AI Team',
 			spikeTitle: '文渊阁 AI Team 工作台：修书、校勘、纂辑；方向、验收与账本。',
 			navAria: '页面导航',
@@ -127,9 +129,8 @@ window.__ModuleLoader__.load({
 			decisionReopened: '已重开一份可编辑的决策项。',
 			decisionSubmit: '提交决策',
 			decisionSubmitted: '决策已提交给团队。',
-			inboxEmptyAction: '看任务看板',
-			projectEmptyTitle: '还没有项目',
-			projectEmptyBody: '创建项目属于 S-01；M1 之后接入。',
+			inboxEmptyAction: '看任务看板',			projectEmptyTitle: '还没有项目',
+			projectEmptyBody: '用左栏「新建项目」创建第一个项目。',
 			emptyColumn: '暂无',
 			expandDone: '展开全部',
 			collapseDone: '收起',
@@ -151,7 +152,6 @@ window.__ModuleLoader__.load({
 			diff: '差异',
 			noDiff: '未提供差异',
 			taskActions: '任务动作',
-			mockOnly: '仅演示，不写账本',
 			actCancel: '取消任务',
 			actReopen: '重开',
 			actReassign: '改派…',
@@ -166,7 +166,6 @@ window.__ModuleLoader__.load({
 			reassignNoTarget: '没有可改派的活跃成员。',
 			actHandoff: '交接…',
 			actDelete: '删除',
-			actionMock: 'spike：{action} 需要二次确认并写账本，命令接入后启用。',
 			convertTitle: '转为 Task',
 			titleLabel: '标题',
 			convertNamePlaceholder: '一句话说清要做什么',
@@ -175,15 +174,12 @@ window.__ModuleLoader__.load({
 			convertContext: '上下文：引用 #{n} 的 {m} 条消息',
 			convertCancel: '取消',
 			convertSubmit: '创建 Task',
-			convertMock: 'spike：将从 #{n} 创建 Task，并带上下文引用（命令未接入）。',
+			convertDone: '已创建 #{n}，来自本 Thread。',
+			convertNoSource: '本 Thread 没有可锚定的账本消息，无法转为 Task。',
 			conflictTitle: '你的回复基于较早的 Thread，已退回',
 			conflictNew: 'Thread 已到 #{head}（新增 {n} 条）',
 			conflictContinue: '基于最新继续写',
-			conflictContext: '查看我当时的上下文',
-			conflictContinueMock: 'spike：已把发送基线更新到 #{head}（不写账本）。',
-			conflictContextMock: 'spike：将展示你在 #{base} 时的上下文（命令未接入）。',
-			replyMock: 'spike：回复将基于 #{seq} 发送并写入账本（命令未接入）。',
-			replyMockNew: 'spike：将新建 Thread 并写入回复（命令未接入）。',
+			conflictContinued: '已把发送基线更新到 #{head}。',
 			replySent: '已写入 Thread #{seq}。',
 			replyFailed: '回复失败：{message}',
 			acceptNote: '工作台验收：已核对 Thread 与证据。',
@@ -192,13 +188,9 @@ window.__ModuleLoader__.load({
 			changesNeedNote: '先把返工理由写在回复框，再点退回。',
 			changesDone: '已退回 #{n}，要求返工。',
 			changesFailed: '退回失败：{message}',
-			followMock: '已关注 #{n}，写入账本。',
-			unfollowMock: '已取消关注 #{n}；完成、受阻或需要你决定时仍会出现在看板。',
-			acceptMock: 'spike：接受 #{n} 将写验收记录并标记完成（命令未接入）。',
-			changesMock: 'spike：退回需要至少 10 字原因并写账本（命令未接入）。',
-			projectSwitchMock: 'spike：项目切换只更新视图标题；按项目读取账本在 M1 接入。',
-			archivedMock: 'spike：归档项目只读；取消归档在 M3 接入。',
-			agentMock: 'spike：成员详情（打开会话 / 发消息 / 记忆与技能）在 M3 接入。',
+			followedTask: '已关注 #{n}，写入账本。',
+			unfollowedTask: '已取消关注 #{n}；完成、受阻或需要你决定时仍会出现在看板。',
+			archivedNote: '归档项目只读；取消归档暂未开放。',
 			agentOpen: '与 {name} 对话',
 			moreActions: '更多操作',
 			agentChat: '直接对话',
@@ -216,7 +208,6 @@ window.__ModuleLoader__.load({
 			teamPulseAgents: '运行中：{names}',
 			newProject: '新建项目',
 			addAgent: '添加成员',
-			newProjectMock: 'spike：新建项目属于 S-01 流程，M1 之后接入。',
 			newProjectTitle: '新建项目',
 			projectName: '项目名',
 			projectGoal: '目标',
@@ -251,7 +242,6 @@ window.__ModuleLoader__.load({
 			projectCreate: '创建项目',
 			projectCreated: '已创建项目 {name}。',
 			projectSwitched: '已切换项目。',
-			addAgentMock: 'spike：添加成员在 M1 之后接入。',
 			addAgentTitle: '添加成员',
 			memberName: '名字',
 			memberRole: '职责',
@@ -308,14 +298,14 @@ window.__ModuleLoader__.load({
 			recruit: '重新招募',
 			profileSaved: '成员资料已保存，下一次唤醒生效。',
 			profileDistilled: '已重新蒸馏并记录新版本。',
-			conversationMock: 'spike：宿主没有可用的 layout.selectPanel(conversation)。',
 			discussSent: '已发送给 Project owner。',
 			taskSent: '已创建 Task。',
 			sendFailed: '发送失败：{message}',
+			duplicateTask: '相同 Task 已存在（#{number}），已为你打开它。',
+			qaNeedsChecklist: 'QA Task 至少需要一条验收清单。',
 			pendingHuman: '待你处理',
 			inboxUnread: '收件箱，{n} 条未读',
 			dismiss: '关闭提示',
-			retry: '重试',
 			crashTitle: '工作台渲染失败',
 			noProject: '未选择项目',
 			archivedCount: '已归档 {n}',
@@ -345,8 +335,7 @@ window.__ModuleLoader__.load({
 			catDone: '已完成',
 			waitOn: '等 {ref}',
 			waitDependency: '依赖未完成',
-			decisionMock: 'spike：决策项需要在收件箱页处理（M1 之后接入），当前只在态势里展示。',
-			quadrantMissing: 'spike：该条目对应的 Task 不在当前 bootstrap 数据里。',
+			quadrantMissing: '该条目对应的 Task 不在当前数据里。',
 			filterLabel: '筛选：{name}',
 			filterClear: '清除筛选',
 			filterInboxExtra: '另有 {n} 条收件箱决策项',
@@ -395,6 +384,7 @@ window.__ModuleLoader__.load({
 			follow: 'Follow',
 			unfollow: 'Unfollow',
 			convert: 'Turn into task',
+			you: 'You',
 			reply: 'Reply to this thread…',
 			replyHint: 'Will send on #{seq}',
 			replyHintNew: 'Will start a new thread',
@@ -423,8 +413,8 @@ window.__ModuleLoader__.load({
 			groupLess: 'Collapse {n}',
 			fromDiscussion: 'Promoted from discussion',
 			loading: 'Loading…',
-			fallbackTitle: 'Demo data',
-			fallbackBody: 'The bootstrap endpoint (/ai-team) is unreachable, so the embedded sample is shown. Sending, following and acceptance only give local feedback; nothing is written to the ledger.',
+			loadFailedTitle: 'Workbench unreachable',
+			loadFailedBody: 'The bootstrap endpoint (/ai-team) cannot be reached; confirm the plugin is enabled and retry.',
 			spike: 'AI Team',
 			spikeTitle: 'Wenyuan Pavilion AI Team workbench: compile, collate, edit; direction, acceptance and ledger.',
 			navAria: 'Page navigation',
@@ -469,7 +459,7 @@ window.__ModuleLoader__.load({
 			decisionSubmitted: 'Decision sent to the team.',
 			inboxEmptyAction: 'Open the board',
 			projectEmptyTitle: 'No projects yet',
-			projectEmptyBody: 'Project creation belongs to S-01; it lands after M1.',
+			projectEmptyBody: 'Create the first project with “New project” in the sidebar.',
 			emptyColumn: 'None',
 			expandDone: 'Show all',
 			collapseDone: 'Collapse',
@@ -491,7 +481,6 @@ window.__ModuleLoader__.load({
 			diff: 'Diff',
 			noDiff: 'No diff provided',
 			taskActions: 'Task actions',
-			mockOnly: 'Demo only; nothing is written',
 			actCancel: 'Cancel task',
 			actReopen: 'Reopen',
 			actReassign: 'Reassign…',
@@ -506,7 +495,6 @@ window.__ModuleLoader__.load({
 			reassignNoTarget: 'No active member is available for reassignment.',
 			actHandoff: 'Hand off…',
 			actDelete: 'Delete',
-			actionMock: 'spike: {action} needs confirmation and a ledger write; enabled when commands land.',
 			convertTitle: 'Turn into task',
 			titleLabel: 'Title',
 			convertNamePlaceholder: 'One line about what needs doing',
@@ -515,15 +503,12 @@ window.__ModuleLoader__.load({
 			convertContext: 'Context: {m} messages from #{n}',
 			convertCancel: 'Cancel',
 			convertSubmit: 'Create task',
-			convertMock: 'spike: will create a task from #{n} with context refs (commands not wired).',
+			convertDone: 'Created #{n} from this thread.',
+			convertNoSource: 'This thread has no ledger messages to anchor; cannot convert.',
 			conflictTitle: 'Your reply was based on an older thread and was returned',
 			conflictNew: 'Thread is at #{head} ({n} new)',
 			conflictContinue: 'Continue from latest',
-			conflictContext: 'See what I had',
-			conflictContinueMock: 'spike: send base moved to #{head} (nothing written).',
-			conflictContextMock: 'spike: will show your context at #{base} (commands not wired).',
-			replyMock: 'spike: reply will be sent on #{seq} and written to the ledger (commands not wired).',
-			replyMockNew: 'spike: will start a thread and write the reply (commands not wired).',
+			conflictContinued: 'Send baseline moved to #{head}.',
 			replySent: 'Written to Thread #{seq}.',
 			replyFailed: 'Reply failed: {message}',
 			acceptNote: 'Workbench acceptance: Thread and evidence reviewed.',
@@ -532,13 +517,9 @@ window.__ModuleLoader__.load({
 			changesNeedNote: 'Write the change request in the reply box first.',
 			changesDone: 'Changes requested on #{n}.',
 			changesFailed: 'Change request failed: {message}',
-			followMock: 'Following #{n}; written to the ledger.',
-			unfollowMock: 'Unfollowed #{n}; completion, blockage or decisions still appear on the board.',
-			acceptMock: 'spike: accepting #{n} will write an acceptance record and mark it done (commands not wired).',
-			changesMock: 'spike: requesting changes needs at least 10 characters and a ledger write (commands not wired).',
-			projectSwitchMock: 'spike: switching projects only updates the header; per-project ledger reads land with M1.',
-			archivedMock: 'spike: archived projects are read-only; unarchive lands with M3.',
-			agentMock: 'spike: member detail (open session / message / memory & skills) lands with M3.',
+			followedTask: 'Following #{n}; written to the ledger.',
+			unfollowedTask: 'Unfollowed #{n}; completion, blockage or decisions still appear on the board.',
+			archivedNote: 'Archived projects are read-only; unarchive is not available yet.',
 			agentOpen: 'Chat with {name}',
 			moreActions: 'More actions',
 			agentChat: 'Direct chat',
@@ -556,7 +537,6 @@ window.__ModuleLoader__.load({
 			teamPulseAgents: 'Running: {names}',
 			newProject: 'New project',
 			addAgent: 'Add member',
-			newProjectMock: 'spike: project creation belongs to S-01 and lands after M1.',
 			newProjectTitle: 'New project',
 			projectName: 'Project name',
 			projectGoal: 'Goal',
@@ -591,7 +571,6 @@ window.__ModuleLoader__.load({
 			projectCreate: 'Create project',
 			projectCreated: 'Created project {name}.',
 			projectSwitched: 'Switched project.',
-			addAgentMock: 'spike: adding members lands after M1.',
 			addAgentTitle: 'Add member',
 			memberName: 'Name',
 			memberRole: 'Role',
@@ -648,18 +627,14 @@ window.__ModuleLoader__.load({
 			recruit: 'Recruit',
 			profileSaved: 'Profile saved; effective on the next wake.',
 			profileDistilled: 'Re-distilled and recorded as a new version.',
-			conversationMock: 'spike: this host has no working layout.selectPanel(conversation).',
 			discussSent: 'Sent to the Project owner.',
 			taskSent: 'Task created.',
 			duplicateTask: 'An identical Task already exists (#{number}); opened it instead.',
 			qaNeedsChecklist: 'A QA Task needs at least one checklist item.',
-			duplicateTask: '相同 Task 已存在（#{number}），已为你打开它。',
-			qaNeedsChecklist: 'QA Task 至少需要一条验收清单。',
 			sendFailed: 'Send failed: {message}',
 			pendingHuman: 'Needs you',
 			inboxUnread: 'Inbox, {n} unread',
 			dismiss: 'Dismiss',
-			retry: 'Retry',
 			crashTitle: 'Workbench failed to render',
 			noProject: 'No project selected',
 			archivedCount: 'Archived {n}',
@@ -689,8 +664,7 @@ window.__ModuleLoader__.load({
 			catDone: 'Done',
 			waitOn: 'waiting on {ref}',
 			waitDependency: 'dependency unfinished',
-			decisionMock: 'spike: decisions are handled on the inbox page (after M1); for now they only show in Situation.',
-			quadrantMissing: 'spike: the Task behind this item is not in the current bootstrap data.',
+			quadrantMissing: 'The Task behind this item is not in the current data.',
 			filterLabel: 'Filter: {name}',
 			filterClear: 'Clear filter',
 			filterInboxExtra: '{n} inbox decision item(s) not on the board',
@@ -706,105 +680,6 @@ window.__ModuleLoader__.load({
 			evidenceCount: '{n} evidence items',
 			doneNoInfo: 'No completion details recorded',
 		};
-
-		const MOCK = (() => {
-			const now = Date.now();
-			const ago = (min) => now - min * 60_000;
-			const thread11 = {
-				taskId: 'tsk_11',
-				headSeq: 6,
-				baseSeq: 4,
-				entries: [
-					{ seq: 1, author: '沈舟', at: ago(18), body: '先复现，再判断是不是同一个根因。' },
-					{ seq: 2, author: '林岚', at: ago(16), body: '我这边跑到第二条就复现了，日志在 /tmp/regression-2.log。' },
-					{ seq: 3, author: '沈舟', at: ago(14), body: '收到，把第三条也跑一遍，我加锁修。' },
-					{ seq: 4, author: '林岚', at: ago(11), body: 'upload.ts:88 的锁范围扩大后，第三条不再失败。' },
-					{ seq: 5, author: '沈舟', at: ago(7), body: '我认领 #11，先把修复提上来。' },
-					{ seq: 6, author: '沈舟', at: ago(5), body: '已提交待验收：3 条用例全绿，回归 214 条通过。' },
-				],
-				changes: [
-					{ who: '沈舟', what: '认领修复', seq: 5 },
-					{ who: '沈舟', what: '提交待验收', seq: 6 },
-				],
-			};
-			return {
-				projects: [
-					{ id: 'prj_main', name: 'Main-Dev', goal: '把这次回归清干净', owner: '沈舟', active: true },
-					{ id: 'prj_bug', name: 'Bug-Check-Fix', goal: '排查 issue 与后续修复', owner: '沈舟' },
-					{ id: 'prj_ui', name: 'UI-UX-AX', goal: '工作台体验与可访问性', owner: '顾言' },
-					{ id: 'prj_old', name: 'Old-Spike', goal: '已结束的第一阶段验证', owner: '顾言', archived: true },
-				],
-				agents: [
-					{ id: 'mem_shenzhou', name: '沈舟', role: '架构 · 管验收标准', status: 'running' },
-					{ id: 'mem_linlan', name: '林岚', role: '研究 · 复跑门禁', status: 'idle' },
-					{ id: 'mem_chenmo', name: '陈默', role: '产品 · 验收', status: 'idle' },
-					{ id: 'mem_guyan', name: '顾言', role: 'UI/UX · 工作台体验', status: 'idle' },
-					{ id: 'mem_xiaoman', name: '小满', role: '开发 · 正在准备记忆', status: 'provisioning' },
-					{ id: 'mem_laozhou', name: '老周', role: '已退役（历史保留）', status: 'retired' },
-				],
-				inbox: [
-					{ id: 'inbox_d1', kind: 'inbox', category: 'decision', title: '决策：首页文案选 A 还是 B', waitingSince: ago(25), read: false },
-					{ id: 'inbox_m1', kind: 'inbox', category: 'mention', title: '林岚在 #16 提到了你', waitingSince: ago(12), read: false },
-				],
-				stream: [
-					{ id: 'str_1', seq: 1, kind: 'human_message', at: ago(15), author: { kind: 'human', name: '你' }, body: '把这次回归里失败的三条都修了，谁该看谁看。' },
-					{
-						id: 'str_2', seq: 2, kind: 'task_card', at: ago(14), author: { kind: 'agent', name: '沈舟' },
-						body: '拆成 5 项，2 项互相依赖。我先复现，其余并行。',
-						taskIds: ['tsk_11', 'tsk_12', 'tsk_13', 'tsk_14', 'tsk_15'],
-					},
-					{
-						id: 'str_3', seq: 3, kind: 'task_card', at: ago(6), author: { kind: 'agent', name: '林岚' },
-						body: '两条已提交待验收，一条已完成；验收前先看证据。',
-						taskIds: ['tsk_16', 'tsk_17', 'tsk_18'],
-					},
-				],
-				tasks: [
-					{ id: 'tsk_11', number: 11, title: '复现三条失败的用例，界定影响面与不修什么', status: 'in_progress', owner: '沈舟', assignee: '沈舟', replies: 2, following: true, blockedBy: [], originRefs: ['str_1'], updatedAt: ago(8), summary: '先复现，再判断是不是同一个根因；不修与本次无关的 2 条 flaky。' },
-					{ id: 'tsk_12', number: 12, title: '登录超时：先加锁再断言，见 upload.ts:88', status: 'pending', owner: '沈舟', assignee: null, replies: 0, following: true, blockedBy: [], originRefs: ['str_2'], updatedAt: ago(11) },
-					{ id: 'tsk_13', number: 13, title: '上传 413：前端表单与后端限制不一致', status: 'pending', owner: '沈舟', assignee: null, replies: 0, following: true, blockedBy: ['tsk_12'], originRefs: ['str_2'], updatedAt: ago(30) },
-					{ id: 'tsk_14', number: 14, title: '回归门禁：复跑 build 与 browser 8/8', status: 'in_progress', owner: '林岚', assignee: '林岚', replies: 1, following: false, blockedBy: [], originRefs: ['str_2'], updatedAt: ago(20) },
-					{ id: 'tsk_15', number: 15, title: '把修法写成可复核的验收证据', status: 'in_progress', owner: '陈默', assignee: '陈默', replies: 0, following: false, blockedBy: [], originRefs: ['str_2'], updatedAt: ago(30) },
-					{
-						id: 'tsk_16', number: 16, title: '上传 413：前后端限制对齐后复验', status: 'pending_acceptance', owner: '沈舟', assignee: '沈舟', replies: 3, following: true, blockedBy: [], originRefs: ['str_3'], updatedAt: ago(5),
-						submission: { summary: '三条用例已修，回归全绿。', evidence: [{ label: 'test/report.xml', ref: 'a1f3' }, { label: 'pnpm test', ref: '214 passed' }], diffStat: '3 files · +48 −12' },
-					},
-					{
-						id: 'tsk_17', number: 17, title: '发布前确认：测试环境 v0.2', status: 'pending_acceptance', owner: '顾言', assignee: '顾言', replies: 2, following: false, blockedBy: [], originRefs: ['str_3'], updatedAt: ago(3), irreversible: true,
-						submission: { summary: '已发布 v0.2 到测试环境，对外可见。', evidence: [{ label: 'release-note.md', ref: 'draft' }], diffStat: '2 files · +6 −2' },
-					},
-					{ id: 'tsk_18', number: 18, title: '看板已完成列展开控件的可见性判断修正', status: 'done', owner: '林岚', assignee: '林岚', replies: 1, following: false, blockedBy: [], originRefs: ['str_3'], updatedAt: ago(5), completedAt: ago(5), acceptedBy: '沈舟', evidenceCount: 2 },
-					{ id: 'tsk_19', number: 19, title: '工作台窄容器三档截图与横向滚动检查', status: 'in_progress', owner: '顾言', assignee: '顾言', replies: 0, following: false, blockedBy: [], updatedAt: ago(40) },
-					{ id: 'tsk_20', number: 20, title: '把回归脚本的失败日志整理成证据', status: 'pending', owner: '沈舟', assignee: '沈舟', handoffTo: '简', replies: 0, following: false, blockedBy: [], updatedAt: ago(10) },
-					{ id: 'tsk_21', number: 21, title: '修复上传 413 的前端限制', status: 'done', owner: '沈舟', assignee: '沈舟', replies: 0, following: false, blockedBy: [], updatedAt: ago(60), completedAt: ago(60), acceptedBy: '你', evidenceCount: 1 },
-					{ id: 'tsk_22', number: 22, title: '回归门禁复跑 8/8', status: 'done', owner: '陈默', assignee: '陈默', replies: 0, following: false, blockedBy: [], updatedAt: ago(120), completedAt: ago(120), acceptedBy: '你', evidenceCount: 3 },
-					{ id: 'tsk_23', number: 23, title: 'Thread 引用与复制动作补齐', status: 'done', owner: '林岚', assignee: '林岚', replies: 0, following: false, blockedBy: [], updatedAt: ago(1440), completedAt: ago(1440), acceptedBy: '沈舟', evidenceCount: 0 },
-					{ id: 'tsk_24', number: 24, title: '工作台三栏骨架首次安装验证', status: 'done', owner: '沈舟', assignee: '沈舟', replies: 0, following: false, blockedBy: [], updatedAt: ago(2880), completedAt: ago(2880), acceptedBy: '你', evidenceCount: 1 },
-				],
-				threads: {
-					tsk_11: thread11,
-					tsk_16: {
-						taskId: 'tsk_16', headSeq: 3,
-						entries: [
-							{ seq: 1, author: '林岚', at: ago(12), body: '三条用例已修，回归全绿。' },
-							{ seq: 2, author: '沈舟', at: ago(8), body: '已提交待验收，证据见 test/report.xml。' },
-							{ seq: 3, author: '林岚', at: ago(6), body: '复跑 build 与 browser 8/8 通过。' },
-						],
-					},
-					tsk_17: {
-						taskId: 'tsk_17', headSeq: 2,
-						entries: [
-							{ seq: 1, author: '顾言', at: ago(10), body: '测试环境已发布 v0.2，对外可见。' },
-							{ seq: 2, author: '顾言', at: ago(4), body: '发布动作不可撤回，请确认影响。' },
-						],
-					},
-					tsk_18: {
-						taskId: 'tsk_18', headSeq: 1,
-						entries: [{ seq: 1, author: '沈舟', at: ago(6), body: '看板已完成列展开逻辑修好了。' }],
-					},
-				},
-			};
-		})();
 
 		const STATUS = {
 			pending: { label: 'stPending', tone: 'idle' },
@@ -837,9 +712,7 @@ window.__ModuleLoader__.load({
 			stalled: 'catStalled',
 			done: 'catDone',
 		};
-		const Q1_ORDER = { irreversible: 0, review: 1, decision: 2, owner_blocked: 3 };
 		const TABS = ['main', 'board', 'situation'];
-
 		const cx = (...parts) => parts.filter(Boolean).join(' ');
 		const tf = (t, key, vars) => String(t(key)).replace(/\{(\w+)\}/g, (match, name) => (
 			vars && Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : match
@@ -896,95 +769,19 @@ window.__ModuleLoader__.load({
 				&& !(Array.isArray(item.ref?.questions) && item.ref.questions.length > 0);
 		}
 
-		/** Derive the read-only quadrants projection from the bootstrap DTO (spike fallback). */
+		/** The host computes quadrants; the client only renders them (single read model). */
 		function deriveQuadrants(data) {
-			const direct = data?.quadrants;
-			if (direct && direct.q1 && direct.q2 && direct.q3 && direct.q4) {
-				const inboxById = new Map((data?.inbox ?? []).map((item) => [item.id, item]));
-				const q1Items = (direct.q1.items ?? []).filter((item) =>
-					item.kind !== 'inbox' || !isInformationalInboxItem(inboxById.get(item.id)));
-				return { ...direct, q1: { ...direct.q1, count: q1Items.length, items: q1Items } };
-			}
-			const tasks = data?.tasks ?? [];
-			const inbox = data?.inbox ?? [];
-			const q1 = [];
-			const q2 = [];
-			const q3 = [];
-			const q4 = [];
-			const used = new Set();
-			const take = (bucket, item) => {
-				if (!item || used.has(item.id)) return;
-				used.add(item.id);
-				bucket.push(item);
-			};
-			const itemOf = (task, category) => ({
-				id: task.id,
-				kind: 'task',
-				category,
-				title: task.title,
-				taskId: task.id,
-				taskNumber: task.number,
-				ownerName: task.owner,
-				assigneeName: task.assignee,
-				waitingSince: task.updatedAt,
-				doneAt: task.completedAt,
-				evidenceCount: task.evidenceCount ?? task.submission?.evidence?.length ?? 0,
-				blockedBy: task.blockedBy,
-				handoffTo: task.handoffTo,
-				acceptedBy: task.acceptedBy,
-			});
-			tasks.forEach((task) => {
-				if (task.status === 'pending_acceptance') take(q1, itemOf(task, task.irreversible ? 'irreversible' : 'review'));
-			});
-			tasks.forEach((task) => {
-				if (task.owner === '你' && task.status === 'pending' && (task.blockedBy?.length || task.handoffTo)) {
-					take(q1, itemOf(task, 'owner_blocked'));
-				}
-			});
-			inbox.forEach((item) => {
-				if (item.category === 'decision' && !used.has(item.id)) {
-					used.add(item.id);
-					q1.push({
-						id: item.id,
-						kind: 'inbox',
-						category: 'decision',
-						title: item.title,
-						taskId: item.taskId,
-						taskNumber: item.taskNumber,
-						waitingSince: item.waitingSince,
-					});
-				}
-			});
-			tasks.forEach((task) => {
-				if (task.status === 'in_progress') take(q2, itemOf(task, 'in_progress'));
-			});
-			tasks.forEach((task) => {
-				if (task.status !== 'pending' || used.has(task.id)) return;
-				if (task.handoffTo) take(q3, itemOf(task, 'handoff'));
-				else if (task.blockedBy?.length) take(q3, itemOf(task, 'blocked'));
-			});
-			tasks.forEach((task) => {
-				if (task.status === 'done') take(q4, itemOf(task, 'done'));
-			});
-			q1.sort((a, b) => (Q1_ORDER[a.category] ?? 9) - (Q1_ORDER[b.category] ?? 9) || (a.waitingSince ?? 0) - (b.waitingSince ?? 0));
-			q2.sort((a, b) => (b.waitingSince ?? 0) - (a.waitingSince ?? 0));
-			q3.sort((a, b) => (a.waitingSince ?? 0) - (b.waitingSince ?? 0));
-			q4.sort((a, b) => (b.doneAt ?? 0) - (a.doneAt ?? 0));
-			return {
-				rev: data?.rev ?? 0,
-				generatedAt: data?.generatedAt ?? Date.now(),
-				q1: { count: q1.length, items: q1.slice(0, 5) },
-				q2: { count: q2.length, items: q2.slice(0, 5) },
-				q3: { count: q3.length, items: q3.slice(0, 5) },
-				q4: { count: Math.min(q4.length, 20), items: q4.slice(0, 5), total: q4.length },
-			};
+			return data?.quadrants ?? null;
 		}
 
 		/** Only the four board columns; `blocked` stays a badge, never a column. */
-		function matchesFilter(task, filter) {
-			if (filter === 'q1') return task.status === 'pending_acceptance' || (task.owner === '你' && task.status === 'pending' && (task.blockedBy?.length || task.handoffTo));
+		function matchesFilter(task, filter, humanId) {
+			if (filter === 'q1') {
+				return task.status === 'pending_acceptance'
+					|| (task.ownerId === humanId && task.status === 'pending' && task.blocked === true);
+			}
 			if (filter === 'q2') return task.status === 'in_progress';
-			if (filter === 'q3') return task.status === 'pending' && (task.blockedBy?.length || task.handoffTo);
+			if (filter === 'q3') return task.status === 'pending' && task.blocked === true;
 			if (filter === 'q4') return task.status === 'done';
 			return true;
 		}
@@ -993,7 +790,7 @@ window.__ModuleLoader__.load({
 			.at-root { height: 100%; min-height: 0; display: flex; flex-direction: column; position: relative; overflow: hidden; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); font-family: var(--dsw-font-family); font-size: 13px; line-height: 21px; container-type: inline-size; container-name: at-wb; }
 			.at-root *, .at-root *::before, .at-root *::after { box-sizing: border-box; }
 			.at-toaststack { position: fixed; right: 18px; bottom: 18px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 7px; max-width: min(360px, calc(100vw - 36px)); pointer-events: none; }
-			.at-toast { pointer-events: auto; display: flex; align-items: center; gap: 8px; max-width: 100%; padding: 7px 9px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); box-shadow: 0 8px 24px rgba(0,0,0,.16); color: var(--dsw-alias-label-primary); font-size: 12px; line-height: 18px; }
+			.at-toast { pointer-events: auto; display: flex; align-items: center; gap: 8px; max-width: 100%; padding: 7px 9px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); box-shadow: var(--dsw-elevation-panel, 0 8px 24px var(--dsw-alias-bg-mask-2)); color: var(--dsw-alias-label-primary); font-size: 12px; line-height: 18px; }
 			.at-toasticon { display: inline-flex; color: var(--dsw-alias-state-business-primary); flex: 0 0 auto; }
 			.at-toasttext { min-width: 0; overflow-wrap: anywhere; }
 			.at-toastclose { border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 14px; line-height: 16px; cursor: pointer; padding: 0 2px; }
@@ -1297,7 +1094,6 @@ window.__ModuleLoader__.load({
 			.at-actions { margin: 12px 0; padding-top: 12px; border-top: 1px solid var(--dsw-alias-border-l1); }
 			.at-actionhead { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
 			.at-actiontitle { color: var(--dsw-alias-label-secondary); font-size: 12px; font-weight: 500; line-height: 18px; }
-			.at-mocktag { color: var(--dsw-alias-label-caption); font-size: 10px; line-height: 16px; }
 			.at-actionrow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 			.at-done { margin: 12px 0 0; padding: 12px; border-left: 2px solid var(--dsw-alias-state-success-primary); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); display: flex; flex-direction: column; gap: 4px; }
 			.at-donehead { display: flex; align-items: center; gap: 6px; color: var(--dsw-alias-state-success-primary); font-size: 12px; font-weight: 500; line-height: 18px; }
@@ -1541,11 +1337,12 @@ window.__ModuleLoader__.load({
 
 		function StreamMessage({ t, item, data, tasks, selected, follows, onOpen, onToggleFollow }) {
 			const author = item.author ?? {};
-			const human = author.kind === 'human' || author.name === '你';
+			// 结构化判定：kind 是权威字段；显示名回退只兼容旧账本流。
+			const human = author.kind === 'human' || (author.kind === undefined && agentFor(data, author.name) === null && author.name === t('you'));
 			const agent = agentFor(data, author.name);
 			const cards = (item.taskIds ?? []).map((id) => tasks.find((task) => task.id === id)).filter(Boolean);
 			return h('article', { className: cx('at-msg', human && 'at-msg-human') },
-				h(Avatar, { name: author.name ?? (human ? '你' : '?'), human }),
+				h(Avatar, { name: author.name ?? (human ? t('you') : '?'), human }),
 				h('div', { className: 'at-msgb' },
 					h('div', { className: 'at-msgh' },
 						h('b', null, author.name ?? '—'),
@@ -1560,10 +1357,58 @@ window.__ModuleLoader__.load({
 		function ToastStack({ t, toasts, onClose }) {
 			if (toasts.length === 0) return null;
 			return h('div', { className: 'at-toaststack', role: 'status', 'aria-live': 'polite' },
-				toasts.map((toast) => h('div', { className: 'at-toast', key: toast.id },
-					h('span', { className: 'at-toasticon', 'aria-hidden': 'true' }, h(Ico, { name: 'inbox', size: 13 })),
-					h('span', { className: 'at-toasttext' }, toast.text),
-					h('button', { className: 'at-toastclose', type: 'button', 'aria-label': t('notifyClose'), onClick: () => onClose(toast.id) }, '×'))));
+				toasts.map((toast) => h(ToastRow, { key: toast.id, toast, t, onClose })));
+		}
+
+		/** One toast row owning its own expiry timer (cleared on unmount). */
+		function ToastRow({ t, toast, onClose }) {
+			React.useEffect(() => {
+				const timer = setTimeout(() => onClose(toast.id), 7000);
+				return () => clearTimeout(timer);
+			}, []);
+			return h('div', { className: 'at-toast' },
+				h('span', { className: 'at-toasticon', 'aria-hidden': 'true' }, h(Ico, { name: 'inbox', size: 13 })),
+				h('span', { className: 'at-toasttext' }, toast.text),
+				h('button', { className: 'at-toastclose', type: 'button', 'aria-label': t('notifyClose'), onClick: () => onClose(toast.id) }, '×'));
+		}
+
+		/**
+		 * Shared modal backdrop: Escape closes, Tab stays inside the dialog.
+		 * Module-level so React sees a stable component type across renders.
+		 */
+		function ModalBack({ onClose, children }) {
+			const backRef = React.useRef(null);
+			const onCloseRef = React.useRef(onClose);
+			onCloseRef.current = onClose;
+			React.useEffect(() => {
+				const onKey = (event) => {
+					if (event.defaultPrevented) return;
+					if (event.key === 'Escape') {
+						event.preventDefault();
+						event.stopPropagation();
+						onCloseRef.current();
+						return;
+					}
+					if (event.key !== 'Tab' || !backRef.current) return;
+					const focusables = backRef.current.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+					if (focusables.length === 0) {
+						event.preventDefault();
+						return;
+					}
+					const first = focusables[0];
+					const last = focusables[focusables.length - 1];
+					if (event.shiftKey && document.activeElement === first) {
+						event.preventDefault();
+						last.focus();
+					} else if (!event.shiftKey && document.activeElement === last) {
+						event.preventDefault();
+						first.focus();
+					}
+				};
+				window.addEventListener('keydown', onKey);
+				return () => window.removeEventListener('keydown', onKey);
+			}, []);
+			return h('div', { className: 'at-modalback', ref: backRef }, children);
 		}
 
 		function EmptyState({ t, icon, title, body, action, compact }) {
@@ -1598,8 +1443,8 @@ window.__ModuleLoader__.load({
 				})));
 		}
 
-		function Board({ t, tasks, selected, follows, doneOpen, onToggleDone, onOpen, onToggleFollow, filter, onClearFilter, q1Extra, onBackMain, onOpenInbox }) {
-			const filtered = (filter === 'all' ? tasks : tasks.filter((task) => matchesFilter(task, filter)))
+		function Board({ t, tasks, selected, follows, doneOpen, onToggleDone, onOpen, onToggleFollow, filter, onClearFilter, q1Extra, onBackMain, onOpenInbox, humanId }) {
+			const filtered = (filter === 'all' ? tasks : tasks.filter((task) => matchesFilter(task, filter, humanId)))
 				.slice()
 				.sort((left, right) => (right.number ?? 0) - (left.number ?? 0));
 			const filterName = filter === 'all' ? '' : t(filter === 'q1' ? 'q1Title' : filter === 'q2' ? 'q2Title' : filter === 'q3' ? 'q3Title' : 'q4Title');
@@ -1959,15 +1804,14 @@ window.__ModuleLoader__.load({
 					}, task.irreversible ? t('acceptIrreversibleCta') : t('acceptCta'))));
 		}
 
-		function ConflictBanner({ t, thread, baseSeq, headSeq, onContinue, onContext }) {
+		function ConflictBanner({ t, thread, baseSeq, headSeq, onContinue }) {
 			const changes = Array.isArray(thread?.changes) ? thread.changes.slice(0, 5) : [];
 			return h('div', { className: 'at-conflict', role: 'alert' },
 				h('div', { className: 'at-conflicttitle' }, t('conflictTitle')),
 				h('div', { className: 'at-conflictnew' }, tf(t, 'conflictNew', { head: headSeq, n: headSeq - baseSeq })),
 				changes.length ? h('ul', { className: 'at-conflictlist' }, changes.map((change) => h('li', { key: (change.seq ?? '') + ':' + (change.what ?? '') }, (change.who ?? '—') + ' #' + (change.seq ?? '') + ' ' + (change.what ?? '')))) : null,
 				h('div', { className: 'at-conflictactions' },
-					h('button', { className: 'at-btn at-btn-quiet', type: 'button', onClick: onContinue }, t('conflictContinue')),
-					h('button', { className: 'at-btn at-btn-quiet', type: 'button', onClick: onContext }, t('conflictContext'))));
+					h('button', { className: 'at-btn at-btn-quiet', type: 'button', onClick: onContinue }, t('conflictContinue'))));
 		}
 
 		function DoneSummary({ t, task }) {
@@ -2000,7 +1844,7 @@ window.__ModuleLoader__.load({
 						h('div', { className: 'at-kvbody' }, task.updatedAt ? fmtDateTime(task.updatedAt) : '—'))));
 		}
 
-		function ThreadPanel({ t, task, thread, project, following, onToggleFollow, onClose, onChat, converting, convert, reply, onReplyChange, onReplySend, replyBase, onContinue, onContext, note, onDismissNote, acceptChecked, onAcceptChecked, qaChecks, onQaCheck, onAccept, onChanges, actions, panelRef, replyRef }) {
+		function ThreadPanel({ t, task, thread, project, following, onToggleFollow, onClose, onChat, converting, convert, reply, onReplyChange, onReplySend, replyBase, onContinue, note, onDismissNote, acceptChecked, onAcceptChecked, qaChecks, onQaCheck, onAccept, onChanges, actions, panelRef, replyRef }) {
 			const headSeq = thread?.headSeq ?? thread?.entries?.length ?? 0;
 			const stale = replyBase !== null && replyBase !== undefined && headSeq > replyBase;
 			const entries = Array.isArray(thread?.entries) ? thread.entries : [];
@@ -2019,7 +1863,7 @@ window.__ModuleLoader__.load({
 				converting
 					? h(ConvertForm, { t, project, task, thread, title: convert.title, dod: convert.dod, onTitle: convert.onTitle, onDod: convert.onDod, onCancel: convert.onCancel, onSubmit: convert.onSubmit })
 					: h('div', { className: 'at-rbody' },
-						stale ? h(ConflictBanner, { t, thread, baseSeq: replyBase, headSeq, onContinue, onContext }) : null,
+						stale ? h(ConflictBanner, { t, thread, baseSeq: replyBase, headSeq, onContinue }) : null,
 						task.status === 'done' ? h(DoneSummary, { t, task }) : h(TaskDetail, { t, task }),
 						entries.length
 							? h('div', { className: 'at-tmsgs' }, entries.map((message, index) => h('div', { key: message.seq ?? index, className: 'at-tmsg' },
@@ -2181,6 +2025,11 @@ window.__ModuleLoader__.load({
 		}
 
 		function Situation({ t, quadrants, tasks, onItem, onViewAll }) {
+			if (!quadrants) {
+				return h('div', { className: 'at-situation', role: 'tabpanel', id: 'at-panel-situation', 'aria-labelledby': 'at-tab-situation' },
+					h('div', { className: 'at-situationinner' },
+						h(EmptyState, { t, icon: 'dot', title: t('situationAria'), body: '' })));
+			}
 			return h('div', { className: 'at-situation', role: 'tabpanel', id: 'at-panel-situation', 'aria-labelledby': 'at-tab-situation' },
 				h('div', { className: 'at-situationinner' },
 					h('div', { className: 'at-qmeta' },
@@ -2285,6 +2134,7 @@ window.__ModuleLoader__.load({
 		function Workbench({ t, ctx }) {
 			const [phase, setPhase] = React.useState('loading');
 			const [data, setData] = React.useState(null);
+			const [loadError, setLoadError] = React.useState('');
 			const [projectId, setProjectId] = React.useState('');
 			const [scope, setScope] = React.useState('project');
 			const [tab, setTab] = React.useState('main');
@@ -2348,58 +2198,76 @@ window.__ModuleLoader__.load({
 			const replyRef = React.useRef(null);
 			const triggerRef = React.useRef(null);
 			const mobileRef = React.useRef(null);
+			// Latest-data mirror for effects that must react to `selected` alone,
+			// and a monotonically increasing load sequence so a stale bootstrap
+			// response can never overwrite a newer one.
+			const dataRef = React.useRef(null);
+			const loadSeqRef = React.useRef(0);
+			const applyData = (next) => {
+				dataRef.current = next;
+				setData(next);
+			};
 
 			React.useEffect(() => {
 				let alive = true;
 				const controller = typeof AbortController === 'function' ? new AbortController() : null;
 				// The package is @suifei/dsh-ai-team; the Host prefix is /ai-team.
 				const query = projectId ? '?project=' + encodeURIComponent(projectId) : '';
-				const paths = ['/ai-team/api/bootstrap' + query];
 				async function load() {
+					const seq = ++loadSeqRef.current;
 					let lastError = null;
-					for (const path of paths) {
-						try {
-							const response = await fetch(path, {
-								headers: { accept: 'application/json' },
-								signal: controller ? controller.signal : undefined,
-							});
-							if (!response.ok) {
-								lastError = new Error('HTTP ' + response.status + ' for ' + path);
-								continue;
-							}
-							const next = normalizePayload(await response.json());
-							if (!next) {
-								lastError = new Error('invalid bootstrap payload from ' + path);
-								continue;
-							}
-							if (!alive) return;
-							setData(next);
-							setPhase('ready');
-							return;
-						} catch (error) {
-							lastError = error;
-							if (!alive || (controller && controller.signal.aborted)) return;
-						}
+					try {
+						const response = await fetch('/ai-team/api/bootstrap' + query, {
+							headers: { accept: 'application/json' },
+							signal: controller ? controller.signal : undefined,
+						});
+						if (!response.ok) throw new Error('HTTP ' + response.status + ' for /ai-team/api/bootstrap');
+						const next = normalizePayload(await response.json());
+						if (!next) throw new Error('invalid bootstrap payload');
+						if (!alive || seq !== loadSeqRef.current) return;
+						applyData(next);
+						setLoadError('');
+						setPhase('ready');
+						return;
+					} catch (error) {
+						lastError = error;
+						if (!alive || (controller && controller.signal.aborted)) return;
 					}
-					if (!alive) return;
-					console.error(PKG + ': bootstrap unavailable, using embedded demo data', lastError);
-					setData(MOCK);
-					setPhase('fallback');
+					if (seq !== loadSeqRef.current) return;
+					// First load: an honest error state with retry. Refresh failure:
+					// keep the current data, only record the diagnostic.
+					if (dataRef.current === null) {
+						console.error(PKG + ': bootstrap unavailable', lastError);
+						setLoadError(lastError?.message ?? String(lastError ?? 'unknown'));
+						setPhase('error');
+					} else {
+						console.error(PKG + ': bootstrap refresh failed, keeping current data', lastError);
+					}
 				}
 				load();
 				// Event-driven refresh only; the Host sends one frame per command and
-				// no heartbeat/timer. EventSource reconnects on its own.
-				const source = typeof EventSource === 'function'
-					? new EventSource('/ai-team/api/projects/' + encodeURIComponent(projectId || 'prj_main') + '/events')
+				// no heartbeat/timer. EventSource reconnects on its own; a project is
+				// required — no magic fallback id here.
+				const source = typeof EventSource === 'function' && projectId
+					? new EventSource('/ai-team/api/projects/' + encodeURIComponent(projectId) + '/events')
 					: null;
-				if (source) source.addEventListener('change', (raw) => {
-					if (!alive) return;
-					try {
-						const frame = JSON.parse(raw.data);
-						pushToast(notificationText(frame?.event));
-					} catch { /* malformed frame ignored */ }
-					load();
-				});
+				if (source) {
+					source.addEventListener('change', (raw) => {
+						if (!alive) return;
+						try {
+							const frame = JSON.parse(raw.data);
+							pushToast(notificationText(frame?.event));
+						} catch (error) {
+							console.error(PKG + ': malformed SSE frame', error);
+						}
+						load();
+					});
+					source.addEventListener('error', () => {
+						// One-shot diagnostic: EventSource reconnects by itself; this row
+						// only makes the console explain why the panel may lag behind.
+						if (alive && dataRef.current === null) console.error(PKG + ': event stream unavailable (retrying)');
+					});
+				}
 				return () => {
 					alive = false;
 					if (controller) controller.abort();
@@ -2441,17 +2309,21 @@ window.__ModuleLoader__.load({
 				if (!selected && data.tasks[0]) setSelected(data.tasks[0].id);
 			}, [data, projectId, selected]);
 
+			// Reset the right-panel editing state only when the selected Task
+			// changes — a background refresh (SSE) must never wipe a draft the
+			// user is typing or QA boxes they already ticked.
 			React.useEffect(() => {
-				const thread = threadFor(data, selected);
+				const current = dataRef.current;
+				const thread = threadFor(current, selected);
 				setReplyBase(thread?.baseSeq ?? null);
 				setAcceptChecked(false);
-				const nextTask = data?.tasks?.find((task) => task.id === selected) ?? data?.tasks?.[0];
+				const nextTask = current?.tasks?.find((task) => task.id === selected) ?? current?.tasks?.[0];
 				setQaChecks((nextTask?.qaChecklist ?? []).map((item) => ({ item, passed: false })));
 				setConverting(false);
 				setCTitle('');
 				setCDod('');
 				setRightNote('');
-			}, [selected, data]);
+			}, [selected]);
 
 			React.useEffect(() => {
 				if (!threadOpen) return;
@@ -2472,6 +2344,8 @@ window.__ModuleLoader__.load({
 				if (!threadOpen) return undefined;
 				const onKey = (event) => {
 					if (event.key !== 'Escape') return;
+					// Host overlays handle Escape first (defaultPrevented); don't swallow.
+					if (event.defaultPrevented) return;
 					event.preventDefault();
 					event.stopPropagation();
 					if (converting) { setConverting(false); return; }
@@ -2481,6 +2355,14 @@ window.__ModuleLoader__.load({
 				return () => window.removeEventListener('keydown', onKey);
 			}, [threadOpen, converting]);
 
+			if (phase === 'error' && !data) {
+				return h('div', { className: 'at-root', role: 'alert' },
+					h('div', { className: 'at-empty' },
+						h('span', { className: 'at-emptyicon', 'aria-hidden': 'true' }, h(Ico, { name: 'alert', size: 28 })),
+						h('div', { className: 'at-emptytitle' }, t('loadFailedTitle')),
+						h('div', { className: 'at-emptybody' }, loadError || t('loadFailedBody')),
+						h('button', { className: 'at-btn', type: 'button', onClick: () => { setPhase('loading'); location.reload(); } }, t('retry'))));
+			}
 			if (phase === 'loading' || !data) return h(Skeleton, { t });
 
 			const projectRecord = data.projects.find((item) => item.id === projectId) ?? data.projects[0] ?? null;
@@ -2488,6 +2370,7 @@ window.__ModuleLoader__.load({
 				...projectRecord,
 				workspacePath: projectRecord.workspacePath || (data.project?.id === projectRecord.id ? data.project.workspacePath ?? '' : ''),
 			};
+			const humanId = (data.members ?? []).find((member) => member.kind === 'human')?.id ?? null;
 			const tasks = data.tasks;
 			const boardTaskCount = tasks.filter((task) => ['pending', 'in_progress', 'pending_acceptance', 'done'].includes(task.status)).length;
 			const selectedTask = tasks.find((task) => task.id === selected) ?? tasks[0] ?? null;
@@ -2525,7 +2408,7 @@ window.__ModuleLoader__.load({
 			async function toggleFollow(card) {
 				if (!card) return;
 				const next = !followingOf(card);
-				const text = next ? tf(t, 'followMock', { n: taskNo(card) }) : tf(t, 'unfollowMock', { n: taskNo(card) });
+				const text = next ? tf(t, 'followedTask', { n: taskNo(card) }) : tf(t, 'unfollowedTask', { n: taskNo(card) });
 				try {
 					await runCommand('task.follow', { taskId: card.id, following: next });
 					setFollows((prev) => ({ ...prev, [card.id]: next }));
@@ -2612,7 +2495,7 @@ window.__ModuleLoader__.load({
 					setReply('');
 					await reloadData(next.id);
 					setProjectId(next.id);
-					say(next.archived ? t('archivedMock') : t('projectSwitched'));
+					say(next.archived ? t('archivedNote') : t('projectSwitched'));
 				} catch (error) {
 					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
 				}
@@ -2716,15 +2599,17 @@ window.__ModuleLoader__.load({
 				buttons.forEach((button) => { if (button.dataset.tab === next) button.focus(); });
 			}
 			async function reloadData(forProject = projectId) {
+				const seq = ++loadSeqRef.current;
 				const query = forProject ? '?project=' + encodeURIComponent(forProject) : '';
 				const response = await fetch('/ai-team/api/bootstrap' + query, { headers: { accept: 'application/json' } });
 				if (!response.ok) throw new Error('HTTP ' + response.status);
 				const next = normalizePayload(await response.json());
-				if (next) setData(next);
+				// A stale response (superseded by a newer load) must not land.
+				if (next && seq === loadSeqRef.current) applyData(next);
 			}
 			async function runCommand(type, payload, targetProject = projectId) {
-				const target = targetProject || 'prj_main';
-				const response = await fetch('/ai-team/api/projects/' + encodeURIComponent(target) + '/commands', {
+				if (!targetProject) throw new Error(t('noProject'));
+				const response = await fetch('/ai-team/api/projects/' + encodeURIComponent(targetProject) + '/commands', {
 					method: 'POST',
 					headers: { 'content-type': 'application/json', accept: 'application/json' },
 					body: JSON.stringify({ type, payload }),
@@ -3103,12 +2988,30 @@ window.__ModuleLoader__.load({
 				}
 				setConverting(true);
 			}
-			function submitConvert() {
+			async function submitConvert() {
 				if (!selectedTask || !cTitle.trim() || !cDod.trim()) return;
-				sayRight(tf(t, 'convertMock', { n: taskNo(selectedTask) }));
-				setConverting(false);
-				setCTitle('');
-				setCDod('');
+				// FR-049 trigger ②: the whole Thread converts, anchored on the
+				// ledger event ids of its entries (dedupe + audit by the Host).
+				const sources = (thread?.entries ?? []).map((entry) => entry.eventId).filter(Boolean);
+				if (sources.length === 0) { sayRight(t('convertNoSource')); return; }
+				try {
+					const result = await runCommand('task.convert', {
+						sourceEventIds: sources,
+						title: cTitle.trim(),
+						doneCriteria: cDod.trim(),
+					});
+					setConverting(false);
+					setCTitle('');
+					setCDod('');
+					sayRight(tf(t, 'convertDone', { n: taskNo(result.task) }));
+					await reloadData();
+				} catch (error) {
+					if (error?.details?.taskId) {
+						const card = tasks.find((task) => task.id === error.details.taskId);
+						if (card) openTaskById(card.id);
+					}
+					sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
 			}
 			async function acceptTask() {
 				if (!selectedTask) return;
@@ -3213,10 +3116,7 @@ window.__ModuleLoader__.load({
 			function continueFromLatest() {
 				const latest = threadHead;
 				setReplyBase(latest);
-				sayRight(tf(t, 'conflictContinueMock', { head: latest }));
-			}
-			function contextAtBase() {
-				sayRight(tf(t, 'conflictContextMock', { base: replyBase ?? 0 }));
+				sayRight(tf(t, 'conflictContinued', { head: latest }));
 			}
 
 			const actions = [];
@@ -3274,7 +3174,7 @@ window.__ModuleLoader__.load({
 												Array.isArray(question.options) && question.options.length
 													? h('span', { className: 'at-inboxoptions' }, question.options.join(' / '))
 													: null,
-												question.recommendation ? h('span', { className: 'at-inboxrecommend' }, '推荐：' + question.recommendation) : null)))
+												question.recommendation ? h('span', { className: 'at-inboxrecommend' }, t('decisionRecommend') + '：' + question.recommendation) : null)))
 										: null,
 									h('div', { className: 'at-inboxmeta' },
 										item.projectName ? item.projectName + ' · ' : '',
@@ -3323,6 +3223,7 @@ window.__ModuleLoader__.load({
 						q1Extra,
 						onOpenInbox: switchInbox,
 						onBackMain: () => setTab('main'),
+						humanId,
 					})
 					: tab === 'situation'
 						? h(Situation, { t, quadrants, tasks, onItem: openQuadrantItem, onViewAll: viewQuadrant })
@@ -3409,7 +3310,6 @@ window.__ModuleLoader__.load({
 									tabIndex: tab === 'situation' ? 0 : -1,
 									onClick: () => selectTab('situation'),
 								}, t('tabSituation')))),
-						phase === 'fallback' ? h('div', { className: 'at-banner', role: 'note' }, h('b', null, t('fallbackTitle') + ' · '), h('span', null, t('fallbackBody'))) : null,
 						note ? h('div', { className: 'at-notewrap' },
 							h('div', { className: 'at-note', role: 'status' },
 								h('span', { className: 'at-notetext' }, note),
@@ -3454,7 +3354,6 @@ window.__ModuleLoader__.load({
 						onReplySend: sendReply,
 						replyBase,
 						onContinue: continueFromLatest,
-						onContext: contextAtBase,
 						note: rightNote,
 						onDismissNote: () => setRightNote(''),
 						acceptChecked,
@@ -3467,7 +3366,7 @@ window.__ModuleLoader__.load({
 						panelRef: rightRef,
 						replyRef,
 					}) : null,
-					addOpen ? h('div', { className: 'at-modalback' },
+					addOpen ? h(ModalBack, { onClose: () => setAddOpen(false) },
 						h('form', {
 							className: 'at-modal',
 							role: 'dialog',
@@ -3502,7 +3401,7 @@ window.__ModuleLoader__.load({
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setAddOpen(false), disabled: mBusy }, t('cancel')),
 								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: mBusy || !mName.trim() }, mBusy ? t('memberAdding') : t('memberCreate'))))) : null,
-					profileAgent ? h('div', { className: 'at-modalback' },
+					profileAgent ? h(ModalBack, { onClose: () => setProfileAgent(null) },
 						h('form', {
 							className: 'at-modal',
 							role: 'dialog',
@@ -3573,7 +3472,7 @@ window.__ModuleLoader__.load({
 								profileAgent.status === 'failed' ? h('button', { className: 'at-btn', type: 'button', onClick: retryProfile, disabled: pBusy }, t('retry')) : null,
 								h('button', { className: 'at-btn', type: 'button', onClick: distillProfile, disabled: pBusy }, t('redistill')),
 								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: pBusy || !pName.trim() }, pBusy ? t('saving') : t('save'))))) : null,
-					workspaceOpen ? h('div', { className: 'at-modalback' },
+					workspaceOpen ? h(ModalBack, { onClose: () => setWorkspaceOpen(false) },
 						h('form', {
 							className: 'at-modal',
 							role: 'dialog',
@@ -3591,7 +3490,7 @@ window.__ModuleLoader__.load({
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setWorkspaceOpen(false), disabled: workspaceBusy }, t('cancel')),
 								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: workspaceBusy || !workspaceDraft.trim() }, workspaceBusy ? t('saving') : t('workspaceSave'))))) : null,
-					newOpen ? h('div', { className: 'at-modalback' },
+					newOpen ? h(ModalBack, { onClose: () => setNewOpen(false) },
 						h('form', {
 							className: 'at-modal',
 							role: 'dialog',
@@ -3653,7 +3552,6 @@ window.__ModuleLoader__.load({
 				name: 'sidebar.panellist', id: 'ai-team', order: 25, label: () => ctx.locale.bind(NS)('panel'),
 			}, PanelIcon));
 			ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: 'ai-team' }, () => h(Boundary, { t }, h(Workbench, { t, ctx }))));
-			console.log(`${PKG}: client workbench spike applied`);
 		}
 
 		return { inject: ['slots', 'locale'], apply };

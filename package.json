@@ -1,6 +1,6 @@
 {
   "name": "@suifei/dsh-ai-team",
-  "version": "0.3.54",
+  "version": "0.3.55",
   "type": "module",
   "description": "文渊阁 (Wenyuan Pavilion) — AI Team mode for DeepSeek Harness: concurrent projects, owned tasks, threads, inbox and an append-only team ledger",
   "license": "MIT",
@@ -31,13 +31,18 @@
     ".": "./index.js",
     "./client": "./client.js",
     "./lib/*": "./lib/*",
+    "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "~3.19.0"
   },
   "files": [
     "index.js",
     "client.js",
     "cordis.patch.yml",
     "icon.svg",
+    "locale/*.json",
     "lib/**/*.js",
     "lib/vendor/skillopt/scripts/**/*",
     "lib/vendor/skillopt/skillopt_sleep/**/*",

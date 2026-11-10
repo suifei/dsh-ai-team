@@ -11,6 +11,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import z from '@deepseek-ai/schemastery';
 import { ProjectRuntime } from './lib/host/project-runtime.js';
 import { ProjectRegistry } from './lib/host/project-registry.js';
 import { ids } from './lib/domain/ids.js';
@@ -28,15 +29,38 @@ import { installFaultAdapter } from './lib/host/fault-adapter.js';
 import { buildModelCatalog } from './lib/host/model-catalog.js';
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeWake, planWakes } from './lib/host/waker.js';
+import { createDiagLogger, defaultDiagDir } from './lib/diaglog.js';
 
 export const name = 'ai-team';
 
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.54';
+const VERSION = '0.3.55';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
+
+const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
+
+/**
+ * Tunable values live in the plugin Config so users edit their patch layer
+ * (the user's patch survives upgrades). Integer fields use `.step(1)`: the
+ * bundled schemastery zod face has no `.int()`.
+ */
+export const Config = z.object({
+	// diaglog level: 'off' silent, 'errors' crash/fail rows only, 'full' all rows
+	diagLevel: z.union(['off', 'errors', 'full']).default('errors'),
+	// directory of the diagnostic JSONL log (one file per day)
+	diagLogDir: z.string().default(defaultDiagDir()),
+	// rotation cap for one diagnostic log file
+	diagLogMaxBytes: z.number().step(1).min(65536).max(16777216).default(1048576),
+	// default SkillOpt backend for skillopt_* tools; 'mock' is the safe shipped
+	// default (no model calls, no live-file writes) — a real backend must be
+	// configured here or passed per call.
+	skilloptBackend: z.union(SKILLOPT_BACKENDS).default('mock'),
+	// per-call timeout for skillopt_* engine runs
+	skilloptTimeoutMs: z.number().step(1).min(10_000).max(600_000).default(120_000),
+});
 
 function send(res, body, status = 200) {
 	if (res.writableEnded) return;
@@ -82,7 +106,7 @@ function errorResponse(res, error) {
  * A torn tail is repaired by the writer; the repair is recorded as a system
  * event so the append-only history explains the gap.
  */
-async function boot() {
+async function boot(diag) {
 	const dataDir = join(dshHome(), 'ai-team', profileName());
 	const registry = ProjectRegistry.load(dataDir);
 	const runtimes = new Map();
@@ -93,11 +117,19 @@ async function boot() {
 			projectName: project.name,
 			projectGoal: project.goal,
 			workspacePath: project.workspacePath ?? '',
+			diag,
 		});
 		runtimes.set(project.id, runtime);
 	}
 	const activeProjectId = registry.activeProjectId;
 	const runtime = runtimes.get(activeProjectId) ?? runtimes.values().next().value;
+	diag?.append({
+		ev: 'boot.done',
+		dataDir,
+		projects: [...runtimes.keys()],
+		activeProjectId,
+		events: [...runtimes.values()].reduce((sum, item) => sum + item.ledger.events.length, 0),
+	});
 	return {
 		...runtime,
 		runtime,
@@ -110,7 +142,15 @@ async function boot() {
 	};
 }
 
-export function apply(ctx) {
+export function apply(ctx, config = {}) {
+	// Diagnostic log first: every later row (boot, wake, PMO, dispatch) lands
+	// here with the configured level ('off'/'errors'/'full', errors shipped).
+	// The `??` chain keeps direct apply() calls (tests) on shipped defaults.
+	const diag = createDiagLogger({
+		dir: config.diagLogDir ?? defaultDiagDir(),
+		maxBytes: config.diagLogMaxBytes ?? 1048576,
+		level: config.diagLevel ?? 'errors',
+	});
 	ctx.effect(() => {
 		const webServer = ctx.get('webServer');
 		if (webServer === undefined) return () => {};
@@ -137,6 +177,7 @@ export function apply(ctx) {
 				const created = await registry.create?.(path, projectRuntime.service.state.projects[projectRuntime.id]?.name ?? '文渊阁');
 				return created ?? null;
 			} catch (error) {
+				diag.append({ ev: 'workspace.fail', projectId: projectRuntime.id, path, message: error?.message ?? String(error) });
 				console.warn('[ai-team] workspace unavailable:', error?.message ?? error);
 				return null;
 			}
@@ -152,7 +193,9 @@ export function apply(ctx) {
 			try {
 				if (typeof titleService.get === 'function' && titleService.get(session)?.title === title) return;
 				titleService.rename(session, title);
+				diag.append({ ev: 'session.title', sessionId: member.sessionId, title, projectId: projectRuntime.id });
 			} catch (error) {
+				diag.append({ ev: 'session.title.fail', sessionId: member.sessionId, message: error?.message ?? String(error) });
 				console.warn('[ai-team] session title failed:', error?.message ?? error);
 			}
 		};
@@ -163,6 +206,7 @@ export function apply(ctx) {
 			try {
 				await workspace.attachSession(sessionId);
 			} catch (error) {
+				diag.append({ ev: 'workspace.attach.fail', sessionId, message: error?.message ?? String(error) });
 				console.warn('[ai-team] member session workspace attach failed:', error?.message ?? error);
 			}
 		};
@@ -180,7 +224,9 @@ export function apply(ctx) {
 				if (session === undefined || session === null || typeof session.append !== 'function') return;
 				session.append('model/selection', { provider: selection.provider, model: selection.model });
 				modelSelectionLogged.set(sessionId, route);
+				diag.append({ ev: 'model.selection', sessionId, route, label: label ?? null });
 			} catch (error) {
+				diag.append({ ev: 'model.selection.fail', sessionId, label: label ?? null, message: error?.message ?? String(error) });
 				console.warn('[ai-team] model selection persist failed:', label ?? sessionId, error?.message ?? error);
 			}
 		};
@@ -189,7 +235,7 @@ export function apply(ctx) {
 			sandboxPolicy: ctx.get('sandboxPolicy'),
 		});
 		const ready = access.ok
-			? Promise.resolve().then(boot)
+			? Promise.resolve().then(() => boot(diag))
 				.then(async (value) => {
 					booted = value;
 					for (const runtime of value.runtimes.values()) {
@@ -200,12 +246,21 @@ export function apply(ctx) {
 								persistModelSelection(member.sessionId, member.config, member.name);
 							}
 						}
-						void pmoTick(runtime).catch((error) => console.warn('[ai-team] PMO tick failed:', error?.message ?? error));
+						// Attach the broadcast/wake hook before the first tick: events
+						// produced by the tick must reach SSE clients immediately.
+						attachRuntime(runtime);
+						void pmoTick(runtime).catch((error) => {
+							diag.append({ ev: 'pmo.tick.fail', projectId: runtime.id, message: error?.message ?? String(error) });
+							console.warn('[ai-team] PMO tick failed:', error?.message ?? error);
+						});
 					}
 					if (pmoTimer === null) {
 						pmoTimer = setInterval(() => {
 							for (const runtime of booted?.runtimes?.values() ?? []) {
-								void pmoTick(runtime).catch((error) => console.warn('[ai-team] PMO tick failed:', error?.message ?? error));
+								void pmoTick(runtime).catch((error) => {
+									diag.append({ ev: 'pmo.tick.fail', projectId: runtime.id, message: error?.message ?? String(error) });
+									console.warn('[ai-team] PMO tick failed:', error?.message ?? error);
+								});
 							}
 						}, 60_000);
 						pmoTimer.unref?.();
@@ -214,20 +269,26 @@ export function apply(ctx) {
 				})
 				.catch((error) => {
 					bootError = error;
+					diag.append({ ev: 'boot.fail', message: error?.message ?? String(error) });
 					console.error('[ai-team] ledger boot failed:', error?.message ?? error);
 					return null;
 				})
 			: Promise.resolve(null);
 		if (!access.ok) {
 			bootError = Object.assign(new Error(access.reason), { code: access.code, status: 503 });
+			diag.append({ ev: 'boot.refused', code: access.code, reason: access.reason });
 			console.error('[ai-team] refused to start:', access.code, access.reason);
 		}
 
 		const sseClients = new Set();
 		const activations = new Map();
 		// DSH exposes a model-request failure waterfall. We classify the failure,
-		// record it, and only own recovery for retryable categories. No timers:
-		// a retry is the DSH loop's own decision; our fallback config applies next wake.
+		// record it, and own the immediate retry only for transient server/network
+		// failures ({ kind: 'retry' } re-dispatches the same request). A fallback
+		// patch rewrites the persisted config, which a live step cannot pick up —
+		// so the turn ends there and the next wake runs on the new route. Rate
+		// limits end the turn too: no backoff clock means an immediate retry just
+		// burns the budget against a throttled route.
 		const offRequestError = typeof ctx.on === 'function'
 			? ctx.on('agent/request-error', async (payload, next) => {
 				if (booted === null) return next();
@@ -242,18 +303,21 @@ export function apply(ctx) {
 						...failure,
 						provider: payload.provider ?? null,
 						model: member.config?.model ?? null,
-					});
-				} catch {
+					}, failureRuntime.id);
+				} catch (error) {
+					console.warn('[ai-team] member failure record failed:', member.id, error?.message ?? error);
 					return next();
 				}
 				if (!failure.retryable) return next();
 				const decision = retryDecision(failure, member.config ?? {}, recorded.member.attempts ?? 1);
 				if (decision.action === 'fallback' && decision.patch !== undefined) {
 					try {
-						await failureRuntime.service.applySystemFallback(member.id, decision.patch, 'llm-fallback');
-					} catch { /* policy/rollback failure must not turn into a retry storm */ }
+						await failureRuntime.service.applySystemFallback(member.id, decision.patch, 'llm-fallback', failureRuntime.id);
+					} catch (error) {
+						console.warn('[ai-team] member fallback failed:', member.id, error?.message ?? error);
+					}
 				}
-				if (decision.action === 'fail') return next();
+				if (decision.action !== 'retry') return next();
 				return { kind: 'retry' };
 			})
 			: () => {};
@@ -271,14 +335,17 @@ export function apply(ctx) {
 				try {
 					await sessions?.flush?.(session);
 				} catch (error) {
+					diag.append({ ev: 'session.flush.fail', sessionId: session?.id ?? null, message: error?.message ?? String(error) });
 					console.warn('[ai-team] member session flush failed:', error?.message ?? error);
 				}
 				if (event?.data?.reason?.kind !== 'completed') return;
 				if (member.lastFailure === undefined || member.lastFailure === null) return;
 				try {
-					await eventRuntime.service.recordMemberRecovery(member.id, member.attempts ?? 0, member.config ?? null);
+					await eventRuntime.service.recordMemberRecovery(member.id, member.attempts ?? 0, member.config ?? null, eventRuntime.id);
 					broadcast(undefined, eventRuntime);
-				} catch { /* recovery is best-effort; the ledger still has the failure */ }
+				} catch (error) {
+					console.warn('[ai-team] member recovery record failed:', member.id, error?.message ?? error);
+				}
 			})
 			: () => {};
 		let llmFaultMode = null;
@@ -287,13 +354,16 @@ export function apply(ctx) {
 			: () => {};
 		let host = null;
 		let hostPromise = null;
-		const wakeKeys = new Set();
+		const wakeKeys = new Map();
 		const activationTasks = new Map();
 		const pmoLastKick = new Map();
 		const pmoLastStall = new Map();
 		const pmoLastHeartbeat = new Map();
 		const pmoLastEscalate = new Map();
 		const pmoLastReview = new Map();
+		// Members resumed from cold sessions produce AgentHandles nobody stored;
+		// track them so teardown can dispose every owned activation.
+		const resumedHandles = new Set();
 		let pmoTimer = null;
 		const projectCwd = (projectRuntime, member) => member?.workspace
 			|| projectRuntime?.service?.state?.projects?.[projectRuntime.id]?.workspacePath
@@ -303,6 +373,12 @@ export function apply(ctx) {
 			if (projectRuntime === null || projectRuntime === undefined) return;
 			const plans = planWakes(projectRuntime.service.state, result, actor);
 			if (plans.length === 0) return;
+			// Window eviction: a key older than this horizon can no longer dedupe
+			// a relevant event, so drop it instead of growing the Map forever.
+			const head = projectRuntime?.ledger?.head?.seq ?? 0;
+			for (const [key, seq] of wakeKeys) {
+				if (Number.isSafeInteger(seq) && head - seq > 500) wakeKeys.delete(key);
+			}
 			const subagents = ctx.get('subagents');
 			const sessions = ctx.get('sessions');
 			const permissionPresets = ctx.get('permissionPresets');
@@ -321,7 +397,7 @@ export function apply(ctx) {
 				if (member === undefined) continue;
 				// Reserve before the async delivery: the HTTP result and the ledger
 				// event both schedule the same plan, and only one may deliver it.
-				wakeKeys.add(plan.key);
+				wakeKeys.set(plan.key, result?.event?.seq ?? head);
 				const cwd = projectCwd(projectRuntime, member);
 				try {
 					// Idle default members have no Agent session yet. A wake must
@@ -356,6 +432,7 @@ export function apply(ctx) {
 							provider: providers[0],
 							preset: 'standard',
 							cwd,
+							trackHandle: (handle) => resumedHandles.add(handle),
 						});
 						const delivered = await runtime.wake(member, { prompt: await wakePrompt(plan, member) });
 						messageId = delivered.messageId ?? null;
@@ -365,14 +442,32 @@ export function apply(ctx) {
 					}
 					await projectRuntime.service.recordWake(plan.memberId, {
 						ok: true, taskId: plan.taskId, reason: plan.reason, messageId,
+					}, projectRuntime.id);
+					diag.append({
+						ev: 'wake.delivered',
+						projectId: projectRuntime.id,
+						memberId: plan.memberId,
+						taskId: plan.taskId ?? null,
+						reason: plan.reason,
+						activated: member.sessionId === undefined || messageId === null ? 'activation' : 'wake',
+						messageId,
 					});
 				} catch (error) {
 					wakeKeys.delete(plan.key);
+					diag.append({
+						ev: 'wake.fail',
+						projectId: projectRuntime.id,
+						memberId: plan.memberId,
+						taskId: plan.taskId ?? null,
+						reason: plan.reason,
+						code: error?.code ?? null,
+						message: error?.message ?? String(error),
+					});
 					console.warn('[ai-team] wake failed:', plan.memberId, error?.code ?? error?.message ?? error);
 					try {
 						await projectRuntime.service.recordWake(plan.memberId, {
 							ok: false, taskId: plan.taskId, reason: plan.reason, error: error?.code ?? error?.message ?? String(error),
-						});
+						}, projectRuntime.id);
 					} catch { /* ledger may be closed */ }
 				}
 			}
@@ -387,7 +482,7 @@ export function apply(ctx) {
 					await titleMemberSession(projectRuntime, member);
 				}
 			}
-			const results = await projectRuntime.service.autoAnswerDecisions();
+			const results = await projectRuntime.service.autoAnswerDecisions(projectRuntime.id);
 			for (const result of results) {
 				const taskId = result?.item?.ref?.taskId;
 				if (typeof taskId === 'string' && result.entry !== null && result.entry !== undefined) {
@@ -449,7 +544,17 @@ export function apply(ctx) {
 					event: { type: 'pmo/stall', payload: { taskId: task.id, bucket: Math.floor(now / 1_800_000) } },
 				}, {});
 			}
-			if (active.length > 0) return;
+			if (active.length > 0) {
+				// Prune per-task clock entries whose task left the active set, so
+				// the five Map keys track live work instead of growing forever.
+				const live = new Set(active.map((task) => task.id));
+				for (const map of [pmoLastReview, pmoLastHeartbeat, pmoLastEscalate, pmoLastStall]) {
+					for (const taskId of map.keys()) {
+						if (!live.has(taskId)) map.delete(taskId);
+					}
+				}
+				return;
+			}
 			const last = pmoLastKick.get(projectRuntime.id) ?? 0;
 			if (now - last < 10 * 60_000) return;
 			pmoLastKick.set(projectRuntime.id, now);
@@ -494,8 +599,12 @@ export function apply(ctx) {
 				const stream = llm.stream({
 					provider: selection.provider,
 					model: selection.model,
-					system: '你是团队的人格蒸馏器。只输出要求的 JSON，不调用工具。',
-					messages: [{ role: 'user', content: [{ type: 'text', text: prompt }] }],
+					// GenerateOptions has no top-level `system` field; the distiller
+					// constraint travels as a system-role message.
+					messages: [
+						{ role: 'system', content: [{ type: 'text', text: '你是团队的人格蒸馏器。只输出要求的 JSON，不调用工具。' }] },
+						{ role: 'user', content: [{ type: 'text', text: prompt }] },
+					],
 					maxTokens: 400,
 				});
 				for await (const chunk of stream) {
@@ -535,6 +644,7 @@ export function apply(ctx) {
 				bundledDir: fileURLToPath(new URL('./', import.meta.url)),
 			}) ?? (() => {});
 		} catch (error) {
+			diag.append({ ev: 'skill.provider.fail', message: error?.message ?? String(error) });
 			console.warn('[ai-team] file skill provider failed:', error?.message ?? error);
 		}
 		const tools = ctx.get('tools');
@@ -542,17 +652,21 @@ export function apply(ctx) {
 		try {
 			const shell = ctx.get('shell');
 			if (tools?.register && shell) {
+				// Backend/timeout come from the plugin Config (patch layer), so an
+				// operator can move the skillopt_* tools off the safe mock default.
 				disposeSkillOpt = applySkillOpt({
 					tools,
 					shell,
 					logger: console,
 				}, {
-					backend: 'mock',
+					backend: config.skilloptBackend ?? 'mock',
 					project: process.cwd(),
-					timeoutMs: 120_000,
+					timeoutMs: config.skilloptTimeoutMs ?? 120_000,
 				}) ?? (() => {});
+				diag.append({ ev: 'skillopt.registered', backend: config.skilloptBackend ?? 'mock', timeoutMs: config.skilloptTimeoutMs ?? 120_000 });
 			}
 		} catch (error) {
+			diag.append({ ev: 'skillopt.fail', message: error?.message ?? String(error) });
 			console.warn('[ai-team] bundled SkillOpt tools failed:', error?.message ?? error);
 		}
 		let disposeTool = () => {};
@@ -572,6 +686,7 @@ export function apply(ctx) {
 				})
 				: () => {};
 		} catch (error) {
+			diag.append({ ev: 'team.tool.fail', message: error?.message ?? String(error) });
 			console.warn('[ai-team] team tool registration failed:', error?.message ?? error);
 		}
 
@@ -591,7 +706,7 @@ export function apply(ctx) {
 				}).then(async (value) => {
 					if (value.created === true && existingHost === undefined) {
 						for (const runtime of booted?.runtimes?.values() ?? []) {
-							await runtime.service.bindHostSession(value.sessionId);
+							await runtime.service.bindHostSession(value.sessionId, runtime.id);
 						}
 					}
 					host = value;
@@ -647,6 +762,7 @@ export function apply(ctx) {
 					provider: providers[0],
 					preset: 'standard',
 					cwd: projectCwd(projectRuntime, member),
+					trackHandle: (handle) => resumedHandles.add(handle),
 				});
 				const result = await runtime.activate(activationMember, {
 					prompt: `${memberIdentity(activationMember)}\n\n${typeof body.payload?.prompt === 'string'
@@ -696,6 +812,7 @@ export function apply(ctx) {
 				broadcast(event, runtime);
 				const actorId = event?.actor?.kind === 'agent' ? event.actor.memberId : undefined;
 				void wakeFromResult(runtime, { event }, actorId === undefined ? {} : { agentId: actorId }).catch((error) => {
+					diag.append({ ev: 'wake.plan.fail', projectId: runtime.id, eventType: event?.type ?? null, message: error?.message ?? String(error) });
 					console.warn('[ai-team] event wake planner failed:', error?.message ?? error);
 				});
 			};
@@ -724,6 +841,7 @@ export function apply(ctx) {
 				// once per Project, without timers or periodic polling.
 				for (const runtime of value.runtimes.values()) {
 					void wakeFromResult(runtime, { event: { type: 'team/startup' } }, {}).catch((error) => {
+						diag.append({ ev: 'wake.plan.fail', projectId: runtime.id, eventType: 'team/startup', message: error?.message ?? String(error) });
 						console.warn('[ai-team] startup wake planner failed:', error?.message ?? error);
 					});
 				}
@@ -793,6 +911,11 @@ export function apply(ctx) {
 					}
 
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/skills-debug') {
+						// Developer diagnostic; gated like the test.* hooks so production
+						// does not expose the installed skill inventory.
+						if (process.env.DSH_AI_TEAM_TEST !== '1') {
+							return send(res, { error: { code: 'E_FORBIDDEN', message: 'debug endpoint is disabled' } }, 403);
+						}
 						const variants = {};
 						for (const [label, options] of [
 							['none', {}],
@@ -1080,6 +1203,7 @@ export function apply(ctx) {
 							});
 							send(res, { ok: true, ...result });
 							void wakeFromResult(runtime, result, { agentId: HUMAN_ID }).catch((error) => {
+								diag.append({ ev: 'wake.plan.fail', projectId: runtime.id, eventType: result?.event?.type ?? null, message: error?.message ?? String(error) });
 								console.warn('[ai-team] wake planner failed:', error?.message ?? error);
 							});
 							return;
@@ -1111,6 +1235,12 @@ export function apply(ctx) {
 				}));
 			}
 			activations.clear();
+			for (const handle of resumedHandles) {
+				cleanup.push(Promise.resolve().then(async () => {
+					try { await handle?.dispose?.(); } catch { /* already gone */ }
+				}));
+			}
+			resumedHandles.clear();
 			if (host !== null) cleanup.push(Promise.resolve().then(async () => {
 				try { await host.dispose?.(); } catch { /* already gone */ }
 			}));

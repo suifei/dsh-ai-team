@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.3.55 — 2026-11-10
+
+按 DSH 官方插件开发资料（cordis-plugin-development / practices / 各包 README）做全量插件实现 review 后的整改：
+
+- **修复类（行为变化）**
+  - 「转为 Task」从本地假动作接通真实账本：右栏 Thread → `task.convert`（sourceEventIds=Thread 条目事件 id），冲突时自动跳转已存在的 Task；移除嵌入的 MOCK 演示数据与 fallback 假反馈，bootstrap 不可达时显示诚实的错误态 + 重试（同能力不再并存简化实现）；
+  - LLM 失败治理语义修正：rate_limit 无 fallback 时不再同路由即时重试烧预算（终态留给下次唤醒）；fallback 补丁写账本后本轮即结束（活体步骤拿不到新路由，原实现仍重试已失败模型）；补丁/恢复/故障记录失败不再静默；
+  - `member.distill` 的蒸馏约束从无效的顶层 `system` 字段改为 system 角色消息（GenerateOptions 无该字段，原约束被静默丢弃）；
+  - retired 成员三条"复活"通道封死：member.bind / member.retry 命令层守卫 + fold 对 session-bound / retry-requested / recovered 的投影防御（retired 必须走 member.rejoin）；
+  - dispatch 校验 agent actor 必须存在于成员表且未退役，QA 门对查不到的 reviewer 改为 fail-closed；
+  - 客户端 '你' 字面判定改结构化 ownerId/kind（宿主 taskCard/bootstrap 增加 ownerId）；刷新不再覆盖正在编辑的表单与 QA 勾选；bootstrap 并发响应按序守卫；宽/窄容器行为不变；
+  - skill provider 对齐 dsh-skill-filesystem 官方语义：`disable-model-invocation`/`user-invocable` 宽松布尔解析（非法拼写整技能丢弃）、description 必填、官方 rank（project 100/200、user 400、bundled 600）、支持平铺 `<name>.md`；
+  - wake 冷恢复产生的 AgentHandle 纳入插件自有清理（teardown 不再遗留成员激活）；wakeKeys 改 seq 水位窗口淘汰，pmo 时钟表随任务失活修剪；系统事件 projectId 由调用方传入（多项目不再错挂 keys[0]）；projects.json 损坏时保留现场文件再回退默认；writer 跨段前对旧段 fsync、批内查重不再全量拷贝；fold stream/thread 有序追加替代全量排序；
+  - `member-tools` 补声明 askHuman 一直在读的 `title` 参数（原 schema 无此字段且 additionalProperties:false，标题永远传不进来）。
+- **规程符合类**
+  - 新增 `lib/diaglog.js`（off/errors/full 三档，发布默认 errors）+ Config 面（diagLevel/diagLogDir/diagLogMaxBytes/skilloptBackend/skilloptTimeoutMs）；dispatch 入口/失败/耗时、wake、PMO 自动决策、member 故障与恢复、boot、ledger 修复全部有埋点；
+  - skill provider 注册位置与 rank 对齐官方（bundled 最后，用户目录压过随包副本）；
+  - 插件显示元数据补齐 `locale/en.json` + `locale/zh.json`（meta.title/description）并导出；
+  - `/ai-team/api/skills-debug` 调试端点改由 `DSH_AI_TEAM_TEST=1` 门控；
+  - 客户端 locale 死键/演示残留键清理，四处模态补 Escape 关闭与 Tab 焦点圈闭，toast 计时器随组件卸载清理。
+
 ## 0.3.54 — 2026-11-10
 
 - 默认花名册扩到 6 名 Agent：新增 **知微（UX 设计）**——以用户体验为第一核心研究目标 UI/UE；**观澜（业务）**——从运营/用户视角洞察真实需求并提出 UX 改进意见；

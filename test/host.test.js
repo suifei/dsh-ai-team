@@ -302,12 +302,15 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 
 		assert.equal(requestErrorListeners.length, 1);
 		let nextCalls = 0;
+		// Corrected semantics (review M5.1): a rate limit with no fallback route
+		// ends the turn instead of hammering the same throttled route with
+		// immediate retries. The failure is still recorded for the wake planner.
 		const retry = await requestErrorListeners[0](
 			{ agent: { id: memberSessionId }, provider: 'p1', failure: { status: 429, code: 'RATE_LIMIT', message: 'rate limit' } },
 			async () => { nextCalls += 1; return undefined; },
 		);
-		assert.equal(retry.kind, 'retry');
-		assert.equal(nextCalls, 0);
+		assert.equal(retry, undefined);
+		assert.equal(nextCalls, 1);
 		const afterRate = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
 		assert.equal(afterRate.agents.find((agent) => agent.name === '临时成员').lastFailure.category, 'rate_limit');
 		assert.equal(afterRate.agents.find((agent) => agent.name === '临时成员').attempts, 1);
@@ -327,7 +330,8 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 			async () => { nextCalls += 1; return undefined; },
 		);
 		assert.equal(terminal, undefined);
-		assert.equal(nextCalls, 1);
+		// nextCalls now counts the rate-limit turn above plus this auth failure.
+		assert.equal(nextCalls, 2);
 		const afterAuth = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
 		assert.equal(afterAuth.agents.find((agent) => agent.name === '临时成员').status, 'failed');
 		assert.equal(afterAuth.agents.find((agent) => agent.name === '临时成员').lastFailure.category, 'auth');
