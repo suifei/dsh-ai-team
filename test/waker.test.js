@@ -68,6 +68,19 @@ test('PMO escalates a Task that stays in progress for 60 minutes to its owner', 
 	assert.match(plans[0].prompt, /拆分 Task/);
 });
 
+test('escalation also convenes the Project owner when the handoff sits elsewhere', () => {
+	const handoff = {
+		...state,
+		members: { ...state.members, a9: { id: 'a9', name: '墨渊', kind: 'agent', status: 'idle', role: '主理人' } },
+		projects: { p1: { id: 'p1', ownerMemberId: 'a9' } },
+	};
+	const plans = planWakes(handoff, { event: { type: 'pmo/escalate', payload: { taskId: 't2', bucket: 42 } } }, {});
+	assert.deepEqual(plans.map((item) => [item.memberId, item.reason]).sort(), [
+		['a1', 'pmo_escalate'],
+		['a9', 'pmo_escalate'],
+	]);
+});
+
 test('PMO heartbeat wakes the assignee to post visible progress', () => {
 	const plans = planWakes(state, { event: { type: 'pmo/heartbeat', payload: { taskId: 't2', memberId: 'a2', bucket: 42 } } }, {});
 	assert.deepEqual(plans.map((item) => [item.memberId, item.reason]), [['a2', 'pmo_heartbeat']]);
