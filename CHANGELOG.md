@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.53 — 2026-11-10
+
+修复全新环境安装三连问题（严重）：
+
+- **`{{model}}` 无值**：成员/宿主 session 只把 provider/model 挂在活体 Agent options 上；进程重启后恢复的 session 两者皆无，prompt 渲染失败。现在 activation/wake/boot 都会把 `model/selection` 写入 session 日志，路由跨重启持久有效；
+- **插件开关破坏宿主**：卸载清理此前是 fire-and-forget，旧组合未清理完新组合已激活。现在 disposer 完全等待宿主/激活/账本清理收尾，且绝不抛错；
+- **首次安装即坏**：`boot()` 同步异常或 skill provider/team tool 注册异常会让组合激活失败。现在全部降级为警告，插件激活永不失败。
+
 ## 0.3.52 — 2026-11-10
 
 - bootstrap 返回全部 Task 的 Thread 映射，修复卡片显示 6 条回复但右栏打开为空的错位；

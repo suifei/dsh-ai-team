@@ -34,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.52';
+const VERSION = '0.3.53';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -166,12 +166,30 @@ export function apply(ctx) {
 				console.warn('[ai-team] member session workspace attach failed:', error?.message ?? error);
 			}
 		};
+		// A restored member session has no live AgentOptions; without a recorded
+		// model/selection event its prompt renders with an unresolvable {{model}}.
+		const modelSelectionLogged = new Map();
+		const persistModelSelection = (sessionId, selection, label) => {
+			if (typeof sessionId !== 'string' || sessionId === '') return;
+			if (typeof selection?.provider !== 'string' || selection.provider === ''
+				|| typeof selection?.model !== 'string' || selection.model === '') return;
+			const route = `${selection.provider}/${selection.model}`;
+			if (modelSelectionLogged.get(sessionId) === route) return;
+			try {
+				const session = ctx.get('sessions')?.get?.(sessionId);
+				if (session === undefined || session === null || typeof session.append !== 'function') return;
+				session.append('model/selection', { provider: selection.provider, model: selection.model });
+				modelSelectionLogged.set(sessionId, route);
+			} catch (error) {
+				console.warn('[ai-team] model selection persist failed:', label ?? sessionId, error?.message ?? error);
+			}
+		};
 		const access = validatePermissionProfile({
 			permissionPresets: ctx.get('permissionPresets'),
 			sandboxPolicy: ctx.get('sandboxPolicy'),
 		});
 		const ready = access.ok
-			? boot()
+			? Promise.resolve().then(boot)
 				.then(async (value) => {
 					booted = value;
 					for (const runtime of value.runtimes.values()) {
@@ -179,6 +197,7 @@ export function apply(ctx) {
 							if (member.kind === 'agent' && typeof member.sessionId === 'string') {
 								await attachMemberWorkspace(runtime, member.sessionId);
 								await titleMemberSession(runtime, member);
+								persistModelSelection(member.sessionId, member.config, member.name);
 							}
 						}
 						void pmoTick(runtime).catch((error) => console.warn('[ai-team] PMO tick failed:', error?.message ?? error));
@@ -342,6 +361,7 @@ export function apply(ctx) {
 						messageId = delivered.messageId ?? null;
 						// A cold session cannot be renamed before wake; retry once it is live.
 						await titleMemberSession(projectRuntime, member);
+						persistModelSelection(member.sessionId, member.config, member.name);
 					}
 					await projectRuntime.service.recordWake(plan.memberId, {
 						ok: true, taskId: plan.taskId, reason: plan.reason, messageId,
@@ -505,11 +525,18 @@ export function apply(ctx) {
 		};
 
 		const skillsService = ctx.get('skills');
-		const disposeSkillProvider = installFileSkillProvider(skillsService, {
-			dshHome: dshHome(),
-			projectCwd: process.cwd(),
-			bundledDir: fileURLToPath(new URL('./', import.meta.url)),
-		});
+		let disposeSkillProvider = () => {};
+		try {
+			// A vendor failure must never fail composition activation: that left
+			// fresh installs with a half-activated host until a process restart.
+			disposeSkillProvider = installFileSkillProvider(skillsService, {
+				dshHome: dshHome(),
+				projectCwd: process.cwd(),
+				bundledDir: fileURLToPath(new URL('./', import.meta.url)),
+			}) ?? (() => {});
+		} catch (error) {
+			console.warn('[ai-team] file skill provider failed:', error?.message ?? error);
+		}
 		const tools = ctx.get('tools');
 		let disposeSkillOpt = () => {};
 		try {
@@ -528,20 +555,25 @@ export function apply(ctx) {
 		} catch (error) {
 			console.warn('[ai-team] bundled SkillOpt tools failed:', error?.message ?? error);
 		}
-		const disposeTool = tools?.register
-			? tools.register(createTeamTool({
-				getState: (exec) => runtimeForAgent(exec?.agent?.id)?.service.state
-					?? booted?.service.state
-					?? { projects: {}, members: {}, tasks: {}, threads: {}, inbox: {} },
-				dispatch: (command, exec) => {
-					const runtime = runtimeForAgent(exec?.agent?.id) ?? projectRuntime(command?.projectId) ?? null;
-					if (runtime === null) return Promise.reject(new Error('no Project runtime'));
-					return runtime.service.dispatch(command);
-				},
-			}), {
-				when: (activation) => runtimeForAgent(activation?.agent?.id) !== null,
-			})
-			: () => {};
+		let disposeTool = () => {};
+		try {
+			disposeTool = tools?.register
+				? tools.register(createTeamTool({
+					getState: (exec) => runtimeForAgent(exec?.agent?.id)?.service.state
+						?? booted?.service.state
+						?? { projects: {}, members: {}, tasks: {}, threads: {}, inbox: {} },
+					dispatch: (command, exec) => {
+						const runtime = runtimeForAgent(exec?.agent?.id) ?? projectRuntime(command?.projectId) ?? null;
+						if (runtime === null) return Promise.reject(new Error('no Project runtime'));
+						return runtime.service.dispatch(command);
+					},
+				}), {
+					when: (activation) => runtimeForAgent(activation?.agent?.id) !== null,
+				})
+				: () => {};
+		} catch (error) {
+			console.warn('[ai-team] team tool registration failed:', error?.message ?? error);
+		}
 
 		const ensureParent = async () => {
 			if (host !== null) return host;
@@ -553,6 +585,7 @@ export function apply(ctx) {
 					agents: ctx.get('agents'),
 					agentDefaultModel: ctx.get('agentDefaultModel'),
 					workspaceRegistry: ctx.get('workspaceRegistry'),
+					sessions: ctx.get('sessions'),
 					cwd: booted?.dataDir ?? process.cwd(),
 					resumeSessionId: existingHost,
 				}).then(async (value) => {
@@ -632,6 +665,7 @@ export function apply(ctx) {
 				}
 				activations.set(result.childId, result.activation);
 				await attachMemberWorkspace(projectRuntime, result.childId);
+				persistModelSelection(result.childId, activationMember.config, member.name);
 				return {
 					ok: true,
 					member: bound.member,
@@ -1062,16 +1096,24 @@ export function apply(ctx) {
 		});
 
 		return () => {
+			// Teardown must fully settle before the loader activates the next
+			// composition: a racing parent-agent dispose left the previous
+			// session-controller graph half-disposed and broke plugin toggles.
+			const cleanup = [];
 			for (const client of sseClients) {
 				try { client.res.end(); } catch { /* socket already gone */ }
 			}
 			sseClients.clear();
 			if (pmoTimer !== null) { clearInterval(pmoTimer); pmoTimer = null; }
 			for (const activation of activations.values()) {
-				try { activation.dispose?.().catch?.(() => {}); } catch { /* already gone */ }
+				cleanup.push(Promise.resolve().then(async () => {
+					try { await activation.dispose?.(); } catch { /* already gone */ }
+				}));
 			}
 			activations.clear();
-			if (host !== null) void host.dispose?.();
+			if (host !== null) cleanup.push(Promise.resolve().then(async () => {
+				try { await host.dispose?.(); } catch { /* already gone */ }
+			}));
 			try { disposePermissionGuard(); } catch { /* already disposed */ }
 			try { offLlmFault(); } catch { /* already disposed */ }
 			try { disposeSkillProvider(); } catch { /* already disposed */ }
@@ -1080,7 +1122,12 @@ export function apply(ctx) {
 			offSessionEvent();
 			disposeTool();
 			dispose();
-			for (const runtime of booted?.runtimes?.values() ?? []) runtime.close();
+			for (const runtime of booted?.runtimes?.values() ?? []) {
+				cleanup.push(Promise.resolve().then(async () => {
+					try { await runtime.close(); } catch { /* ledger already closed */ }
+				}));
+			}
+			return Promise.allSettled(cleanup).then(() => undefined);
 		};
 	}, 'ai-team: workbench routes');
 }
