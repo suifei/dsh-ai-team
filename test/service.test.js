@@ -210,6 +210,7 @@ test('TeamService drives a real ledger from project setup to accepted task and t
 		assert.equal(boot.tasks.length, 1);
 		assert.equal(boot.tasks[0].status, 'done');
 		assert.equal(boot.thread.headSeq, 3);
+		assert.equal(boot.threads[taskId].headSeq, 3);
 		assert.equal(boot.agents.length, 2);
 
 		const converted = await service.dispatch({

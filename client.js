@@ -24,7 +24,7 @@ window.__ModuleLoader__.load({
 
 		const zh = {
 			panel: '文渊阁',
-			back: '对话',
+			back: '项目总览',
 			inbox: '收件箱',
 			board: '任务看板',
 			projects: '项目',
@@ -45,9 +45,13 @@ window.__ModuleLoader__.load({
 			send: '发送',
 			createTask: '创建 Task',
 			enterHint: 'Ctrl/⌘ + Enter 发送',
-			thread: '讨论',
-			closeThread: '关闭讨论',
-			threadChat: '对话',
+			thread: '任务记录',
+			closeThread: '关闭任务记录',
+			threadChat: 'Agent 会话',
+			taskDetail: '任务详情',
+			resultDefinition: '结果定义',
+			qaProgress: 'QA {done}/{total}',
+			updated: '更新',
 			follow: '关注',
 			unfollow: '取消关注',
 			convert: '转为 Task',
@@ -130,7 +134,7 @@ window.__ModuleLoader__.load({
 			expandDone: '展开全部',
 			collapseDone: '收起',
 			threadEmptyTitle: '还没有消息',
-			threadEmptyBody: '先写下完成判据，再开始执行。',
+			threadEmptyBody: '还没有任务记录；可在下方回复，或打开 Agent 会话查看完整上下文。',
 			acceptance: '验收',
 			candidate: '候选验收',
 			acceptEligible: '你从未认领过该任务，且不是执行者，所以可以由你验收。',
@@ -360,7 +364,7 @@ window.__ModuleLoader__.load({
 		};
 		const en = {
 			panel: 'Wenyuan Pavilion',
-			back: 'Chat',
+			back: 'Overview',
 			inbox: 'Inbox',
 			board: 'All tasks',
 			projects: 'Projects',
@@ -381,9 +385,13 @@ window.__ModuleLoader__.load({
 			send: 'Send',
 			createTask: 'Create task',
 			enterHint: 'Ctrl/⌘ + Enter to send',
-			thread: 'Discussion',
-			closeThread: 'Close discussion',
-			threadChat: 'Chat',
+			thread: 'Task record',
+			closeThread: 'Close task record',
+			threadChat: 'Agent session',
+			taskDetail: 'Task details',
+			resultDefinition: 'Definition of done',
+			qaProgress: 'QA {done}/{total}',
+			updated: 'Updated',
 			follow: 'Follow',
 			unfollow: 'Unfollow',
 			convert: 'Turn into task',
@@ -466,7 +474,7 @@ window.__ModuleLoader__.load({
 			expandDone: 'Show all',
 			collapseDone: 'Collapse',
 			threadEmptyTitle: 'No messages yet',
-			threadEmptyBody: 'Write the definition of done before starting.',
+			threadEmptyBody: 'No task record yet. Reply below, or open the Agent session for full context.',
 			acceptance: 'Acceptance',
 			candidate: 'Candidate',
 			acceptEligible: 'You never claimed this task and are not its executor, so acceptance is yours.',
@@ -1252,6 +1260,9 @@ window.__ModuleLoader__.load({
 			.at-iconbtn { width: 28px; padding: 0; }
 			.at-rnote { flex: 0 0 auto; display: flex; align-items: flex-start; gap: 8px; margin: 8px 10px 0; padding: 6px 8px; border-left: 2px solid var(--dsw-alias-state-business-primary); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-secondary); font-size: 11px; line-height: 16px; }
 			.at-rbody { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 14px 12px; scrollbar-width: thin; scrollbar-color: var(--dsw-alias-scrollbar-bg-l1) transparent; }
+			.at-taskdetail { margin: 10px 0 4px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); }
+			.at-taskdetailsum { padding: 8px 10px; cursor: pointer; color: var(--dsw-alias-label-secondary); font-size: 12px; font-weight: 500; line-height: 18px; }
+			.at-taskdetailbody { display: flex; flex-direction: column; gap: 6px; padding: 0 10px 10px; }
 			.at-tmsgs { display: flex; flex-direction: column; }
 			.at-tmsg { padding: 10px 0; border-bottom: 1px solid var(--dsw-alias-border-l1); }
 			.at-tmsg:last-child { border-bottom: 0; }
@@ -1972,6 +1983,23 @@ window.__ModuleLoader__.load({
 				task.submission?.summary ? h('p', { className: 'at-donetext' }, task.submission.summary) : null);
 		}
 
+		function TaskDetail({ t, task }) {
+			const qa = Array.isArray(task.qaChecklist) ? task.qaChecklist : [];
+			const passed = Array.isArray(task.qaChecks) ? task.qaChecks.filter((item) => item.passed === true).length : 0;
+			return h('details', { className: 'at-taskdetail', open: task.status !== 'done' },
+				h('summary', { className: 'at-taskdetailsum' }, t('taskDetail')),
+				h('div', { className: 'at-taskdetailbody' },
+					h('div', { className: 'at-kv' },
+						h('span', { className: 'at-kvlabel' }, t('resultDefinition')),
+						h('div', { className: 'at-kvbody' }, task.resultDefinition || t('noSummary'))),
+					qa.length > 0 ? h('div', { className: 'at-kv' },
+						h('span', { className: 'at-kvlabel' }, t('qaChecklist')),
+						h('div', { className: 'at-kvbody' }, tf(t, 'qaProgress', { done: passed, total: qa.length }) + ' · ' + qa.join(' / '))) : null,
+					h('div', { className: 'at-kv' },
+						h('span', { className: 'at-kvlabel' }, t('updated')),
+						h('div', { className: 'at-kvbody' }, task.updatedAt ? fmtDateTime(task.updatedAt) : '—'))));
+		}
+
 		function ThreadPanel({ t, task, thread, project, following, onToggleFollow, onClose, onChat, converting, convert, reply, onReplyChange, onReplySend, replyBase, onContinue, onContext, note, onDismissNote, acceptChecked, onAcceptChecked, qaChecks, onQaCheck, onAccept, onChanges, actions, panelRef, replyRef }) {
 			const headSeq = thread?.headSeq ?? thread?.entries?.length ?? 0;
 			const stale = replyBase !== null && replyBase !== undefined && headSeq > replyBase;
@@ -1992,7 +2020,7 @@ window.__ModuleLoader__.load({
 					? h(ConvertForm, { t, project, task, thread, title: convert.title, dod: convert.dod, onTitle: convert.onTitle, onDod: convert.onDod, onCancel: convert.onCancel, onSubmit: convert.onSubmit })
 					: h('div', { className: 'at-rbody' },
 						stale ? h(ConflictBanner, { t, thread, baseSeq: replyBase, headSeq, onContinue, onContext }) : null,
-						task.status === 'done' ? h(DoneSummary, { t, task }) : null,
+						task.status === 'done' ? h(DoneSummary, { t, task }) : h(TaskDetail, { t, task }),
 						entries.length
 							? h('div', { className: 'at-tmsgs' }, entries.map((message, index) => h('div', { key: message.seq ?? index, className: 'at-tmsg' },
 								h('div', { className: 'at-tmh' },
