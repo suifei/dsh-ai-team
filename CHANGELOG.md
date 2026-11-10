@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.50 — 2026-11-10
+
+- PMO 自动决策覆盖无结构化问题的 `decision_required`：按当前 Task/Thread 最高价值路径推进并 ack，不再留 unread；
+- 收件箱不再因为 Agent 只发 decision_required、不带 questions 而卡住。
+
 ## 0.3.49 — 2026-11-10
 
 - PMO 每分钟同步 agent session 标题为 `Agent（角色）`，覆盖历史任务标题；
