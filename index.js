@@ -30,6 +30,7 @@ import { buildModelCatalog } from './lib/host/model-catalog.js';
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeWake, planWakes } from './lib/host/waker.js';
 import { aggregatePeople } from './lib/host/people-view.js';
+import { riskView } from './lib/host/risk-view.js';
 import { isInformationalThreadMention } from './lib/domain/inbox.js';
 import { createDiagLogger, defaultDiagDir } from './lib/diaglog.js';
 
@@ -38,7 +39,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.58';
+const VERSION = '0.3.59';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -1015,6 +1016,20 @@ export function apply(ctx, config = {}) {
 						const registryEntries = booted.registry.list();
 						const people = aggregatePeople(registryEntries, [...booted.runtimes.values()]);
 						return send(res, { ok: true, people });
+					}
+					// 风险清单（R-07）：当前项目账本的三类风险只读投影（受阻/失败/待决超时）。
+					if (req.method === 'GET' && url.pathname === '/ai-team/api/risks') {
+						const requested = url.searchParams.get('project');
+						const runtime = (requested === null ? null : projectRuntime(requested)) ?? currentRuntime();
+						if (runtime === null || runtime === undefined) {
+							return send(res, { ok: true, risks: { rev: 0, generatedAt: Date.now(), blocked: [], failures: [], staleDecisions: [], counts: { blocked: 0, failures: 0, staleDecisions: 0 } } });
+						}
+						const staleHours = Number.parseFloat(url.searchParams.get('staleHours') ?? '');
+						const risks = riskView(runtime.service.state, {
+							now: Date.now(),
+							staleHours: Number.isFinite(staleHours) && staleHours > 0 ? staleHours : 24,
+						});
+						return send(res, { ok: true, projectId: runtime.id, risks });
 					}
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/health') {
 						const head = booted.ledger.head;

@@ -264,6 +264,43 @@ window.__ModuleLoader__.load({
 			reseatSession: '重置会话',
 			reseatConfirm: '将关闭该成员的旧会话，并在当前项目工作目录里重建一个新会话（旧会话的 cwd 是创建时钉死的，无法原地修改）。确定？',
 			reseatDone: '会话已在当前项目工作目录重建。',
+			decisionNotePlaceholder: '补充说明（可选，随决策写入 Thread）',
+			decisionFollowUp: '看项目进展',
+			followUpMissing: '主对话里还没有决策之后的新消息。',
+			riskTitle: '风险清单',
+			riskBlocked: '受阻',
+			riskStaleHours: '待决 {n} 小时',
+			riskCounts: '受阻 {blocked} · 失败 {failures} · 待决超时 {stale}',
+			followUpMissing: '主对话里还没有决策之后的新消息。',
+			permissionBadge: '完全权限',
+			permissionNote: '该成员以完全权限、只在本项目的工作目录里运行。请只在可信目录创建项目。',
+			obTitle: '开工三步',
+			obStep1: '① 给项目一个工作目录',
+			obStep1Done: '① 工作目录已就绪',
+			obStep2: '② 认识你的成员（右侧 AGENTS 列表，可改名可增减）',
+			obStep3: '③ 说出第一句话',
+			obExample: '把这次回归里失败的三条都修了',
+			obFill: '填入示例',
+			teamQuiet: '团队安静：没有需要处理的事，健康。',
+			teamBusy: '团队推进中：{n} 个任务在做。',
+			teamNeedsYou: '有 {n} 件事等你处理或放行。',
+			failureAuth: 'API key 无效或没有权限',
+			failureBilling: '账户余额或配额不足',
+			failureRateLimit: '请求太频繁，被限流',
+			failureNetwork: '网络连接失败',
+			failureServer: '模型服务端出错',
+			failureModelUnavailable: '指定模型不存在或不可用',
+			failureContextOverflow: '上下文超出模型窗口',
+			failurePolicy: '内容被安全策略拒绝',
+			failureUnknown: '未知失败',
+			shortcutTitle: '键盘快捷键',
+			shortcutInbox: '收件箱',
+			shortcutBoard: '任务看板',
+			shortcutPeople: '人员池',
+			shortcutHome: '对话',
+			shortcutComposer: '聚焦输入框',
+			shortcutClose: '关闭线程 / 浮层',
+			close: '关闭',
 			memberProfileTitle: '成员资料',
 			memberProfileTitleName: '成员资料 · {name}',
 			memberProfileMeta: '{status} · 资料 v{version} · 蒸馏 v{distill}',
@@ -313,6 +350,7 @@ window.__ModuleLoader__.load({
 			peopleTitle: '人员池',
 			peopleEmpty: '还没有成员；先在项目里添加。',
 			peopleProjects: '{n} 个项目',
+			refresh: '刷新',
 			peopleActiveTasks: '{n} 个活跃任务',
 			peopleFailure: '最近失败 ×{n}',
 			peopleOpenProject: '打开项目',
@@ -602,6 +640,43 @@ window.__ModuleLoader__.load({
 			reseatSession: 'Reset session',
 			reseatConfirm: 'This closes the member\'s old session and rebuilds a new one in the current project workspace (a session\'s cwd is pinned at creation and cannot be changed in place). Continue?',
 			reseatDone: 'Session rebuilt in the current project workspace.',
+			decisionNotePlaceholder: 'Extra note (optional, recorded on the thread)',
+			decisionFollowUp: 'See project progress',
+			followUpMissing: 'No new stream messages since that decision yet.',
+			riskTitle: 'Risk list',
+			riskBlocked: 'Blocked',
+			riskStaleHours: 'pending {n}h',
+			riskCounts: 'blocked {blocked} · failures {failures} · stale {stale}',
+			followUpMissing: 'No new stream messages since that decision yet.',
+			permissionBadge: 'full access',
+			permissionNote: 'This member runs with full permissions, only inside this project\'s workspace. Create projects in trusted directories only.',
+			obTitle: 'Three steps to start',
+			obStep1: '① Set the project workspace',
+			obStep1Done: '① Workspace is ready',
+			obStep2: '② Meet your members (AGENTS list on the right; rename or adjust freely)',
+			obStep3: '③ Say the first sentence',
+			obExample: 'Fix the three failing regressions from this run',
+			obFill: 'Use example',
+			teamQuiet: 'Team is quiet: nothing needs you right now. Healthy.',
+			teamBusy: 'Team is moving: {n} task(s) in progress.',
+			teamNeedsYou: '{n} thing(s) need your decision or release.',
+			failureAuth: 'API key invalid or unauthorized',
+			failureBilling: 'Insufficient balance or quota',
+			failureRateLimit: 'Rate limited — too many requests',
+			failureNetwork: 'Network connection failed',
+			failureServer: 'Model server error',
+			failureModelUnavailable: 'Requested model not found or unavailable',
+			failureContextOverflow: 'Context exceeds the model window',
+			failurePolicy: 'Content rejected by safety policy',
+			failureUnknown: 'Unknown failure',
+			shortcutTitle: 'Keyboard shortcuts',
+			shortcutInbox: 'Inbox',
+			shortcutBoard: 'Task board',
+			shortcutPeople: 'People',
+			shortcutHome: 'Conversation',
+			shortcutComposer: 'Focus composer',
+			shortcutClose: 'Close thread / overlay',
+			close: 'Close',
 			memberProfileTitle: 'Member profile',
 			memberProfileTitleName: 'Member profile · {name}',
 			memberProfileMeta: '{status} · profile v{version} · distill v{distill}',
@@ -651,6 +726,7 @@ window.__ModuleLoader__.load({
 			peopleTitle: 'People',
 			peopleEmpty: 'No members yet; add them in a project.',
 			peopleProjects: '{n} project(s)',
+			refresh: 'Refresh',
 			peopleActiveTasks: '{n} active task(s)',
 			peopleFailure: '{n} recent failure(s)',
 			peopleOpenProject: 'Open project',
@@ -732,6 +808,13 @@ window.__ModuleLoader__.load({
 		};
 		const TABS = ['main', 'board', 'situation'];
 		const cx = (...parts) => parts.filter(Boolean).join(' ');
+		// R-04 失败人话化：账本事件语言（member/llm-failed 的 category）转译为
+		// 用户语言 + 固定建议动作句式（谁/卡在哪/原因/你可以做什么）。
+		const failKey = (category) => 'failure' + String(category ?? 'unknown')
+			.split('_')
+			.map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+			.join('');
+		const failureHuman = (t, category) => t(failKey(category ?? 'unknown'));
 		const tf = (t, key, vars) => String(t(key)).replace(/\{(\w+)\}/g, (match, name) => (
 			vars && Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : match
 		));
@@ -1160,6 +1243,21 @@ window.__ModuleLoader__.load({
 			.at-peoplestate { color: var(--dsw-alias-label-tertiary); font-size: 11px; }
 			.at-peopletasks { margin-left: auto; color: var(--dsw-alias-label-caption); font-size: 11px; font-variant-numeric: tabular-nums; }
 			.at-peoplefail { color: var(--dsw-alias-state-error-primary); font-size: 11px; }
+			.at-onboard { max-width: 520px; margin: 0 auto; padding: 14px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); display: flex; flex-direction: column; gap: 8px; }
+			.at-onboardtitle { color: var(--dsw-alias-label-primary); font-size: 13px; font-weight: 500; }
+			.at-obstep { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
+			.at-obstep.at-obdone { color: var(--dsw-alias-label-tertiary); }
+			.at-obmark { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--dsw-alias-border-l2); color: var(--dsw-alias-label-caption); font-size: 11px; flex: 0 0 auto; }
+			.at-obstep.at-obdone .at-obmark { border-color: var(--dsw-alias-state-success-primary); color: var(--dsw-alias-state-success-primary); }
+			.at-oblabel { flex: 1 1 auto; min-width: 0; }
+			.at-peoplehead { display: flex; align-items: center; gap: 8px; margin: 0 12px 8px; }
+			.at-peoplecount { color: var(--dsw-alias-label-caption); font-size: 11px; margin-right: auto; }
+			.at-permbadge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--dsw-alias-state-warn-primary); color: var(--dsw-alias-state-warn-label); font-size: 10.5px; }
+			.at-msg-highlight { border-left: 2px solid var(--dsw-alias-state-business-primary); padding-left: 10px; }
+			.at-decisionnote { width: 100%; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 18px; resize: vertical; }
+			.at-shortcuts { width: 100%; border-collapse: collapse; }
+			.at-shortcuts td { padding: 4px 6px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+			.at-shortcuts kbd { display: inline-block; min-width: 34px; padding: 1px 6px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); font-family: var(--dsw-font-family); font-size: 11px; text-align: center; }
 			.at-crashtitle { font-size: 14px; font-weight: 500; line-height: 22px; }
 			.at-crashbody { max-width: 60ch; margin: 0; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
 			@container at-center (max-width: 759px) {
@@ -1367,17 +1465,19 @@ window.__ModuleLoader__.load({
 			);
 		}
 
-		function StreamMessage({ t, item, data, tasks, selected, follows, onOpen, onToggleFollow }) {
+		function StreamMessage({ t, item, data, tasks, selected, follows, highlight, onOpenProfile, onOpen, onToggleFollow }) {
 			const author = item.author ?? {};
 			// 结构化判定：kind 是权威字段；显示名回退只兼容旧账本流。
 			const human = author.kind === 'human' || (author.kind === undefined && agentFor(data, author.name) === null && author.name === t('you'));
 			const agent = agentFor(data, author.name);
 			const cards = (item.taskIds ?? []).map((id) => tasks.find((task) => task.id === id)).filter(Boolean);
-			return h('article', { className: cx('at-msg', human && 'at-msg-human') },
+			return h('article', { className: cx('at-msg', human && 'at-msg-human', highlight && 'at-msg-highlight') },
 				h(Avatar, { name: author.name ?? (human ? t('you') : '?'), human }),
 				h('div', { className: 'at-msgb' },
 					h('div', { className: 'at-msgh' },
-						h('b', null, author.name ?? '—'),
+						// R-03 入口统一：点成员名 = 打开成员面板（与左栏/人员池一致）。
+						agent ? h('button', { className: 'at-agentname', type: 'button', onClick: () => onOpenProfile(agent), title: agent.name }, author.name ?? '—')
+							: h('b', null, author.name ?? '—'),
 						agent ? h('span', { className: 'at-role' }, agent.role) : null,
 						h('time', { dateTime: iso(item.at) }, fmtTime(item.at)),
 					),
@@ -1688,6 +1788,7 @@ window.__ModuleLoader__.load({
 		function InboxDecision({ t, item, onSubmit }) {
 			const questions = Array.isArray(item.ref?.questions) ? item.ref.questions : [];
 			const [answers, setAnswers] = React.useState(() => questions.map(() => ''));
+			const [note, setNote] = React.useState('');
 			const [busy, setBusy] = React.useState(false);
 			const setAnswer = (index, value) => setAnswers((prev) => prev.map((entry, i) => i === index ? value : entry));
 			const recommendations = questions.map((question) => typeof question.recommendation === 'string' ? question.recommendation.trim() : '');
@@ -1698,7 +1799,8 @@ window.__ModuleLoader__.load({
 				if (!complete || busy) return;
 				setBusy(true);
 				try {
-					await onSubmit(item, questions.map((question, index) => ({ id: question.id, value: answers[index].trim() })));
+					// R-06：可选补充说明随决策一起入 Thread/收件箱存档。
+					await onSubmit(item, questions.map((question, index) => ({ id: question.id, value: answers[index].trim() })), note.trim());
 				} finally {
 					setBusy(false);
 				}
@@ -1717,6 +1819,14 @@ window.__ModuleLoader__.load({
 					question.recommendation ? h('div', { className: 'at-decisionrecommend' },
 						h('span', null, t('decisionRecommend') + '：' + question.recommendation),
 						h('button', { className: 'at-adopt', type: 'button', onClick: () => setAnswer(index, question.recommendation) }, t('decisionAdopt'))) : null))),
+				h('textarea', {
+					className: 'at-decisionnote',
+					value: note,
+					placeholder: t('decisionNotePlaceholder'),
+					'aria-label': t('decisionNotePlaceholder'),
+					onChange: (event) => setNote(event.target.value),
+					rows: 2,
+				}),
 				h('button', { className: 'at-btn at-btn-primary at-btn-small', type: 'button', disabled: !complete || busy, onClick: submit }, busy ? t('saving') : t('decisionSubmit')));
 		}
 
@@ -1724,7 +1834,7 @@ window.__ModuleLoader__.load({
 		 * 人员池总览（全局层，11-管理视角 §2）：按"人"聚合各项目身份。
 		 * 数据 = GET /ai-team/api/people（各项目账本 members/tasks 的只读聚合）。
 		 */
-		function PeoplePage({ t, people, error, loading, onOpenProject }) {
+		function PeoplePage({ t, people, error, loading, onOpenProject, onRefresh, localNames, onOpenPerson, onChatPerson }) {
 			if (error) return h('div', { className: 'at-stream', role: 'alert' },
 				h('div', { className: 'at-streaminner' }, h(EmptyState, { t, icon: 'alert', title: t('peopleTitle'), body: tf(t, 'peopleLoadFailed', { message: error }) })));
 			// loading 用中心区域骨架（流内行），不用整页 Skeleton——本组件位于
@@ -1739,7 +1849,11 @@ window.__ModuleLoader__.load({
 			if (!people || people.length === 0) return h('div', { className: 'at-stream', role: 'region', 'aria-label': t('peopleTitle') },
 				h('div', { className: 'at-streaminner' }, h(EmptyState, { t, icon: 'layers', title: t('peopleTitle'), body: t('peopleEmpty') })));
 			return h('div', { className: 'at-stream', role: 'region', 'aria-label': t('peopleTitle') },
-				h('div', { className: 'at-streaminner' }, people.map((person) => {
+				h('div', { className: 'at-streaminner' },
+					h('div', { className: 'at-peoplehead' },
+						h('span', { className: 'at-peoplecount' }, loading ? t('loading') : tf(t, 'peopleProjects', { n: people.length })),
+						h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: onRefresh, disabled: loading }, t('refresh'))),
+					people.map((person) => {
 					const badges = [
 						tf(t, 'peopleProjects', { n: person.projects.length }),
 						tf(t, 'peopleActiveTasks', { n: person.activeTasks }),
@@ -1753,16 +1867,40 @@ window.__ModuleLoader__.load({
 							h('span', { className: 'at-peoplebadges' }, badges.join(' · '))),
 						h('div', { className: 'at-peopleprojects' }, person.projects.map((row) => {
 							const failed = row.lastFailure !== undefined && row.lastFailure !== null;
+							const localHere = localNames.has(person.name);
 							return h('div', { key: row.projectId, className: 'at-peopleproject' },
 								h('span', { className: 'at-peopleprojectname' }, row.projectName),
 								row.talentPool
 									? h('span', { className: 'at-peoplestate' }, t('talentPool'))
 									: h('span', { className: 'at-peoplestate' }, t(AGENT_STATUS[row.status] ?? 'agentIdle')),
 								h('span', { className: 'at-peopletasks' }, tf(t, 'peopleActiveTasks', { n: row.activeTasks })),
-								failed ? h('span', { className: 'at-peoplefail' }, tf(t, 'peopleFailure', { n: 1 }) + ' · ' + (row.lastFailure.category ?? '')) : null,
+								failed ? h('span', { className: 'at-peoplefail', title: row.lastFailure.message ?? '' }, tf(t, 'peopleFailure', { n: 1 }) + ' · ' + failureHuman(t, row.lastFailure.category)) : null,
+								// R-03 入口统一：在本项目内才能直达资料/私信（跨项目先切项目）。
+								localHere ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => onOpenPerson(person.name) }, t('memberProfileTitle')) : null,
+								localHere ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => onChatPerson(person.name) }, t('agentChat')) : null,
 								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => onOpenProject(row.projectId) }, t('peopleOpenProject')));
 						})));
 				})));
+		}
+
+		/**
+		 * R-01 onboarding 三步（空项目主对话内嵌）：设目录 → 认识成员 → 第一
+		 * 句话。完成态存会话内，不做持久化（避免新增存储）。
+		 */
+		function Onboarding({ t, project, agents, onSetWorkspace, onExample }) {
+			const step1Done = Boolean(project?.workspacePath);
+			const step2Done = agents.length > 0;
+			const step = (mark, done, label, action) => h('div', { className: cx('at-obstep', done && 'at-obdone') },
+				h('span', { className: 'at-obmark', 'aria-hidden': 'true' }, done ? '✓' : mark),
+				h('span', { className: 'at-oblabel' }, label),
+				action ?? null);
+			return h('div', { className: 'at-onboard', role: 'group', 'aria-label': t('obTitle') },
+				h('div', { className: 'at-onboardtitle' }, t('obTitle')),
+				step('1', step1Done, t(step1Done ? 'obStep1Done' : 'obStep1'),
+					!step1Done ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: onSetWorkspace }, t('workspaceChoose')) : null),
+				step('2', step2Done, t('obStep2')),
+				step('3', false, t('obStep3'),
+					h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: onExample }, t('obFill'))));
 		}
 
 		function MemberView({ t, agent, tasks, onBack, onOpenTask, onOpenChat, onOpenProfile }) {
@@ -2055,7 +2193,7 @@ window.__ModuleLoader__.load({
 							h('button', { className: 'at-send', type: 'button', disabled: !reply.trim(), onClick: onReplySend }, t('send'))))) : null);
 		}
 
-		function Composer({ t, mode, draft, definition, qaChecklist, disabled, qaRequired, onQaRequired, onDefinition, onQaChecklist, onMode, onDraft, onSend }) {
+		function Composer({ t, mode, draft, definition, qaChecklist, disabled, qaRequired, onQaRequired, onDefinition, onQaChecklist, onMode, onDraft, onSend, inputRef }) {
 			const send = () => {
 				if (!draft.trim() || disabled) return;
 				if (mode === 'task' && (!definition.trim() || (qaRequired && !qaChecklist.trim()))) return;
@@ -2065,6 +2203,7 @@ window.__ModuleLoader__.load({
 				h('div', { className: 'at-composerinner' },
 					h('div', { className: cx('at-box', mode === 'task' && 'at-taskmode') },
 						h('textarea', {
+							ref: inputRef,
 							value: draft,
 							rows: 2,
 							disabled,
@@ -2172,10 +2311,18 @@ window.__ModuleLoader__.load({
 					h('div', { className: 'at-situationinner' },
 						h(EmptyState, { t, icon: 'dot', title: t('situationAria'), body: '' })));
 			}
+			// R-04：「团队安静」与「团队停滞」必须是两种语感——安静是健康，
+			// 停滞（等你/等验收/受阻）是要处理的事。
+			const needsYou = quadrants.q1.count + quadrants.q3.count;
+			const mood = needsYou > 0
+				? tf(t, 'teamNeedsYou', { n: needsYou })
+				: quadrants.q2.count > 0
+					? tf(t, 'teamBusy', { n: quadrants.q2.count })
+					: t('teamQuiet');
 			return h('div', { className: 'at-situation', role: 'tabpanel', id: 'at-panel-situation', 'aria-labelledby': 'at-tab-situation' },
 				h('div', { className: 'at-situationinner' },
 					h('div', { className: 'at-qmeta' },
-						h('span', null, tf(t, 'quadrantMeta', { time: fmtTime(quadrants.generatedAt) })),
+						h('span', null, mood + ' · ' + tf(t, 'quadrantMeta', { time: fmtTime(quadrants.generatedAt) })),
 						quadrants.rev ? h('span', null, 'rev ' + quadrants.rev) : null),
 					h('div', { className: 'at-quadrants' }, QUADRANTS.map((quadrant) => {
 						const block = quadrants[quadrant.key] ?? { count: 0, items: [] };
@@ -2336,12 +2483,33 @@ window.__ModuleLoader__.load({
 			const [peopleLoading, setPeopleLoading] = React.useState(false);
 			// 人员池拉取序号：并发/乱序响应只认最新一次。
 			const peopleSeqRef = React.useRef(0);
+			// 风险清单（R-07）：进入收件箱时拉取当前项目三类风险。
+			const [risksData, setRisksData] = React.useState(null);
+			const riskSeqRef = React.useRef(0);
+			function loadRisks() {
+				const seq = ++riskSeqRef.current;
+				setPeopleLoading(true);
+				fetch('/ai-team/api/risks' + (projectId ? '?project=' + encodeURIComponent(projectId) : ''), { headers: { accept: 'application/json' } })
+					.then(async (response) => {
+						const payload = await response.json().catch(() => null);
+						if (!response.ok) throw new Error(payload?.error?.message ?? ('HTTP ' + response.status));
+						if (seq !== riskSeqRef.current) return;
+						setRisksData(payload?.risks ?? null);
+					})
+					.catch(() => { if (seq === riskSeqRef.current) setRisksData(null); })
+					.finally(() => { if (seq === riskSeqRef.current) setPeopleLoading(false); });
+			}
+			// 最新 scope 镜像：SSE 回调在 effect 闭包里拿不到最新值。
+			const scopeRef = React.useRef(scope);
+			scopeRef.current = scope;
 			const [nBusy, setNBusy] = React.useState(false);
 			const [nError, setNError] = React.useState('');
 			const [pSuccessor, setPSuccessor] = React.useState('');
 			const [pBusy, setPBusy] = React.useState(false);
 			const [pError, setPError] = React.useState('');
 			const [replyBase, setReplyBase] = React.useState(null);
+			// R-06 决策回流高亮：主对话中被指认的 stream 消息 id。
+			const [streamHighlight, setStreamHighlight] = React.useState(null);
 			// 自绘确认/输入对话框（替代原生 prompt/confirm，观感与宿主一致）。
 			// dialog: { mode: 'confirm'|'prompt'|'choice', title, body, placeholder,
 			//           value, options, resolve } — resolve(false|null|字符串)。
@@ -2368,6 +2536,10 @@ window.__ModuleLoader__.load({
 			const replyRef = React.useRef(null);
 			const triggerRef = React.useRef(null);
 			const mobileRef = React.useRef(null);
+			// R-08 快捷键：composer 聚焦句柄 + `?` 帮助浮层开关。
+			const composerInputRef = React.useRef(null);
+			const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
+			const gPrefixRef = React.useRef(0);
 			// Latest-data mirror for effects that must react to `selected` alone,
 			// and a monotonically increasing load sequence so a stale bootstrap
 			// response can never overwrite a newer one.
@@ -2430,6 +2602,9 @@ window.__ModuleLoader__.load({
 						} catch (error) {
 							console.error(PKG + ': malformed SSE frame', error);
 						}
+						// R-05：人员池驻留时，任何团队变化都触发重拉（无定时器，
+						// 事件驱动刷新——与宿主 SSE 合帧节奏一致）。
+						if (scopeRef.current === 'people') loadPeople();
 						load();
 					});
 					source.addEventListener('error', () => {
@@ -2526,6 +2701,43 @@ window.__ModuleLoader__.load({
 				window.addEventListener('keydown', onKey);
 				return () => window.removeEventListener('keydown', onKey);
 			}, [threadOpen, converting]);
+
+			// R-08 快捷键体系（渐进增强）：`g` 前缀导航（i 收件箱 / b 看板 /
+			// p 人员 / c 对话）、`/` 聚焦 composer、`?` 帮助浮层。规则：
+			// ① 焦点在输入控件时旁路；② 模态栈非空时让位；③ 序列窗口 600ms。
+			React.useEffect(() => {
+				const onKey = (event) => {
+					if (event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey) return;
+					const tag = document.activeElement?.tagName;
+					if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+					if (MODAL_STACK.length > 0) return;
+					if (event.key === '/') {
+						event.preventDefault();
+						event.stopPropagation();
+						if (composerInputRef.current && typeof composerInputRef.current.focus === 'function') composerInputRef.current.focus();
+						return;
+					}
+					if (event.key === '?') {
+						event.preventDefault();
+						event.stopPropagation();
+						setShortcutsOpen(true);
+						return;
+					}
+					if (event.key.toLowerCase() !== 'g') return;
+					if (Date.now() - gPrefixRef.current > 600) {
+						gPrefixRef.current = Date.now();
+						return;
+					}
+					gPrefixRef.current = 0;
+					const key = event.key.toLowerCase();
+					if (key === 'i') { event.preventDefault(); switchInbox(); }
+					else if (key === 'b') { event.preventDefault(); switchBoard(); }
+					else if (key === 'p') { event.preventDefault(); openPeople(); }
+					else if (key === 'c') { event.preventDefault(); goConversation(); }
+				};
+				window.addEventListener('keydown', onKey);
+				return () => window.removeEventListener('keydown', onKey);
+			}, []);
 
 			if (phase === 'error' && !data) {
 				return h('div', { className: 'at-root', role: 'alert' },
@@ -2646,6 +2858,7 @@ window.__ModuleLoader__.load({
 				setScope('inbox');
 				setThreadOpen(false);
 				setNote('');
+				loadRisks();
 			}
 			function openPeople() {
 				closeMobile();
@@ -2653,6 +2866,10 @@ window.__ModuleLoader__.load({
 				setScope('people');
 				setThreadOpen(false);
 				setNote('');
+				loadPeople();
+			}
+			// R-05：可复用的拉取（页头刷新按钮与 toast 触发共用），序号守卫防乱序。
+			function loadPeople() {
 				const seq = ++peopleSeqRef.current;
 				setPeopleLoading(true);
 				setPeopleError('');
@@ -3118,14 +3335,29 @@ window.__ModuleLoader__.load({
 				setThreadOpen(true);
 				setRightNote('');
 			}
-			async function answerDecision(item, answers) {
+			async function answerDecision(item, answers, note) {
 				try {
-					await runCommand('decision.answer', { itemId: item.id, answers }, item.projectId ?? projectId);
+					await runCommand('decision.answer', { itemId: item.id, answers, ...(note ? { note } : {}) }, item.projectId ?? projectId);
 					say(t('decisionSubmitted'));
 					await reloadData();
 				} catch (error) {
 					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
 				}
+			}
+			// R-06 决策回流：切到决策所在项目 → 主对话 → 高亮决策之后的首条非 Human
+			// 消息（团队接下来的动作）。不做滚动（全局规格 #6），只用左缘强调条。
+			async function followUpDecision(item) {
+				if (item.projectId && item.projectId !== projectId) {
+					const switched = await switchProject({ id: item.projectId, name: item.projectName });
+					if (!switched) return;
+				}
+				setScope('project');
+				setTab('main');
+				setMemberViewId(null);
+				setThreadOpen(false);
+				const anchorAt = item.ackedAt ?? item.updatedAt ?? item.createdAt ?? 0;
+				const hit = (data.stream ?? []).find((entry) => (entry.at ?? 0) >= anchorAt && entry.author?.kind !== 'human');
+				setStreamHighlight(hit?.id ?? null);
 			}
 			async function reopenDecision(item) {
 				try {
@@ -3380,7 +3612,7 @@ window.__ModuleLoader__.load({
 				peopleActive: scope === 'people',
 				onProject: switchProject,
 				onNewProject: () => { closeMobile(); openNewProject(); },
-				onAgent: (agent) => { closeMobile(); void openAgentChat(agent); },
+				onAgent: (agent) => { closeMobile(); openProfile(agent); },
 				onAgentMore: (agent) => { closeMobile(); openProfile(agent); },
 				onAgentChat: (agent) => { closeMobile(); void openAgentChat(agent); },
 				onAddAgent: () => { closeMobile(); openAddAgent(); },
@@ -3393,6 +3625,16 @@ window.__ModuleLoader__.load({
 					people: peopleData,
 					error: peopleError,
 					loading: peopleLoading,
+					onRefresh: loadPeople,
+					localNames: new Set((data.agents ?? []).map((agent) => agent.name)),
+					onOpenPerson: (personName) => {
+						const agent = data.agents.find((candidate) => candidate.name === personName);
+						if (agent) { closeMobile(); openProfile(agent); } else say(t('quadrantMissing'));
+					},
+					onChatPerson: (personName) => {
+						const agent = data.agents.find((candidate) => candidate.name === personName);
+						if (agent) { closeMobile(); void openAgentChat(agent); } else say(t('quadrantMissing'));
+					},
 					onOpenProject: (targetId) => {
 						const target = data.projects.find((project) => project.id === targetId);
 						if (target) void switchProject(target);
@@ -3402,6 +3644,34 @@ window.__ModuleLoader__.load({
 				: inInbox
 				? h('div', { className: 'at-stream', role: 'region', 'aria-label': t('inboxTitle') },
 					h('div', { className: 'at-streaminner' },
+						// R-07 风险分区（三类需要 Human 注意的风险，进入收件箱时拉取）。
+						risksData && (risksData.counts.blocked + risksData.counts.failures + risksData.counts.staleDecisions) > 0
+							? h('details', { className: 'at-people', open: true },
+								h('summary', { className: 'at-peoplesum' },
+									h('span', { className: 'at-peoplename' }, t('riskTitle')),
+									h('span', { className: 'at-peoplebadges' }, tf(t, 'riskCounts', {
+										blocked: risksData.counts.blocked,
+										failures: risksData.counts.failures,
+										stale: risksData.counts.staleDecisions,
+									}))),
+								h('div', { className: 'at-peopleprojects' },
+									risksData.blocked.map((row) => h('div', { key: 'b' + row.taskId, className: 'at-peopleproject' },
+										h('span', { className: 'at-peopleprojectname' }, '#' + (row.taskNumber ?? row.taskId) + ' ' + row.title),
+										h('span', { className: 'at-peoplestate' }, t('riskBlocked')),
+										h('span', { className: 'at-peoplefail' }, t('dependsOn') + ' ' + row.blockedBy.map((id) => '#' + id).join('、')),
+										h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => openInboxTask({ ref: { taskId: row.taskId }, projectId: projectId }) }, t('inboxOpenTask')))),
+									risksData.failures.map((row) => h('div', { key: 'f' + row.memberId, className: 'at-peopleproject' },
+										h('span', { className: 'at-peopleprojectname' }, row.name),
+										h('span', { className: 'at-peoplefail' }, failureHuman(t, row.category ?? 'unknown') + (row.message ? ' · ' + row.message : '')),
+										h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => {
+											const agent = data.agents.find((candidate) => candidate.name === row.name);
+											if (agent) { closeMobile(); openProfile(agent); } else say(t('quadrantMissing'));
+										} }, t('memberProfileTitle')))),
+									risksData.staleDecisions.map((row) => h('div', { key: 's' + row.itemId, className: 'at-peopleproject' },
+										h('span', { className: 'at-peopleprojectname' }, row.title),
+										h('span', { className: 'at-peoplefail' }, tf(t, 'riskStaleHours', { n: row.waitingHours })),
+										row.taskId ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => openInboxTask({ ref: { taskId: row.taskId }, projectId: projectId }) }, t('inboxOpenTask')) : null))))
+							: null,
 						inboxItems.length
 							? inboxItems.map((item) => h('div', { key: item.id, className: cx('at-inboxitem', item.state !== 'unread' && 'at-inboxdone') },
 								h('div', { className: 'at-inboxbody' },
@@ -3413,7 +3683,7 @@ window.__ModuleLoader__.load({
 												: t('inboxItemTitle')),
 									Array.isArray(item.ref?.questions) && item.ref.questions.length
 										? item.state === 'unread'
-											? h(InboxDecision, { t, item, onSubmit: answerDecision })
+											? h(InboxDecision, { t, item, onSubmit: (target, answers, note) => answerDecision(target, answers, note) })
 											: h('ol', { className: 'at-inboxquestions' }, item.ref.questions.map((question, index) => h('li', { key: question.id ?? index },
 												h('span', { className: 'at-inboxquestion' }, question.text),
 												Array.isArray(question.options) && question.options.length
@@ -3423,7 +3693,9 @@ window.__ModuleLoader__.load({
 										: null,
 									h('div', { className: 'at-inboxmeta' },
 										item.projectName ? item.projectName + ' · ' : '',
-										item.ref?.category ? item.ref.category + ' · ' : '',
+										item.ref?.category
+											? failureHuman(t, item.ref.category) + ' · '
+											: '',
 										item.ref?.memberName ?? (item.ref?.memberId ? item.ref.memberId : ''),
 										' · ',
 										fmtTime(item.createdAt)),
@@ -3433,6 +3705,8 @@ window.__ModuleLoader__.load({
 									item.type === 'decision_required' && item.state !== 'unread' && Array.isArray(item.ref?.questions) && item.ref.questions.length
 										? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => reopenDecision(item) }, t('decisionReopen'))
 										: null,
+									// R-06 决策回流：处理完回到项目现场，看团队接下来的动作。
+									item.state !== 'unread' ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => { void followUpDecision(item); } }, t('decisionFollowUp')) : null,
 									item.state === 'unread' && !(item.type === 'decision_required' && Array.isArray(item.ref?.questions) && item.ref.questions.length)
 										? h('button', { className: 'at-btn at-btn-small at-btn-primary', type: 'button', onClick: () => ackInbox(item) }, t('inboxAck'))
 										: null)))
@@ -3484,14 +3758,17 @@ window.__ModuleLoader__.load({
 										tasks,
 										selected,
 										follows: followingOf,
+										highlight: streamHighlight === item.id,
+										onOpenProfile,
 										onOpen: openTask,
 										onToggleFollow: toggleFollow,
 									}))
-									: h(EmptyState, {
+									: h(Onboarding, {
 										t,
-										title: t('emptyStreamTitle'),
-										body: t('emptyStreamBody'),
-										action: { label: t('fillExample'), onClick: () => setDraft(t('emptyStreamExample')) },
+										project,
+										agents: data.agents,
+										onSetWorkspace: openWorkspaceEditor,
+										onExample: () => setDraft(t('emptyStreamExample')),
 									})));
 
 			return h('div', { className: 'at-root', role: 'region', 'aria-label': t('panel') },
@@ -3564,7 +3841,9 @@ window.__ModuleLoader__.load({
 							t,
 							mode,
 							draft,
-							disabled: !project || !project.workspacePath,
+							// R-04：无目录只限制「任务」模式（执行需要工作目录），讨论仍可发；
+							// 输入框本体不禁用，保持轻入口可用。
+							disabled: mode === 'task' && (!project || !project.workspacePath),
 							qaRequired: qaTask,
 							definition: taskDefinition,
 							qaChecklist: qaChecklistText,
@@ -3574,6 +3853,7 @@ window.__ModuleLoader__.load({
 							onMode: setMode,
 							onDraft: setDraft,
 							onSend: send,
+							inputRef: composerInputRef,
 						}) : null),
 					threadOpen && selectedTask ? h(ThreadPanel, {
 						t,
@@ -3642,6 +3922,7 @@ window.__ModuleLoader__.load({
 							h('label', { className: 'at-check' },
 								h('input', { type: 'checkbox', checked: mOwner, onChange: (event) => setMOwner(event.target.checked) }),
 								h('span', null, t('memberOwner'))),
+							h('div', { className: 'at-modalmeta' }, t('permissionNote')),
 							mError ? h('div', { className: 'at-modalerror', role: 'alert' }, mError) : null,
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setAddOpen(false), disabled: mBusy }, t('cancel')),
@@ -3661,6 +3942,10 @@ window.__ModuleLoader__.load({
 								version: profileAgent.profileVersion ?? 1,
 								distill: profileAgent.distillVersion ?? 0,
 							})),
+							// R-02 权限可见性：把守卫背后的运行事实亮给用户（P6 诚实边界）。
+							h('div', { className: 'at-permbadge', title: t('permissionNote') },
+								t('permissionBadge') + ' @ ' + (project?.workspacePath || '—')),
+							h('div', { className: 'at-modalmeta' }, t('permissionNote')),
 							(profileAgent.skills?.length || profileAgent.notes?.length)
 								? h('div', { className: 'at-modalmeta' },
 									(profileAgent.skills?.length ? t('memberSkills') + '：' + profileAgent.skills.join('、') : ''),
@@ -3757,7 +4042,17 @@ window.__ModuleLoader__.load({
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setNewOpen(false), disabled: nBusy }, t('cancel')),
 								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: nBusy || !nName.trim() || !nWorkspace.trim() }, nBusy ? t('saving') : t('projectCreate'))))) : null,
-					dialog ? h(WorkbenchDialog, { key: dialogSeqRef.current, t, dialog }) : null));
+					dialog ? h(WorkbenchDialog, { key: dialogSeqRef.current, t, dialog }) : null,
+					shortcutsOpen ? h(ModalBack, { onClose: () => setShortcutsOpen(false) },
+						h('div', { className: 'at-modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': t('shortcutTitle') },
+							h('h2', { className: 'at-modaltitle' }, t('shortcutTitle')),
+							h('table', { className: 'at-shortcuts' },
+								h('tbody', null,
+									[['g i', 'shortcutInbox'], ['g b', 'shortcutBoard'], ['g p', 'shortcutPeople'], ['g c', 'shortcutHome'], ['/', 'shortcutComposer'], ['Esc', 'shortcutClose']].map(([keys, key]) => h('tr', { key: keys },
+										h('td', null, h('kbd', null, keys)),
+										h('td', null, t(key)))))),
+							h('div', { className: 'at-modalactions' },
+								h('button', { className: 'at-btn', type: 'button', onClick: () => setShortcutsOpen(false) }, t('close'))))) : null));
 		}
 
 		function PavilionMark({ size = 18 }) {
