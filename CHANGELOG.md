@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.56 — 2026-11-10
+
+遗留项跟进轮：五项未整改全部落地（论证 / 评估补优 / 弥补 / 一手证据改进 / 规模化优化）。
+
+- **checkpoint 接线（论证后落地）**：`openLedger` 新增 `checkpoint` 选项并接入 395 行既有 checkpoint 模块（此前为生产死代码）。实证（`.ptc/tools/bench-checkpoint.mjs`，2 万事件合成账本）：boot 从 493ms 降到 205ms（**-58%**）；5 万事件 1147ms → 522ms（-54%）；checkpoint 体积恒定 210KB。检查点齐平时跳过全量 readAll（账本事件列表惰性化，不再随事件数常驻内存），尾部存在时一次读盘续放投影。保存节奏：boot 落地板 + 每 500 次追加 + close 前必落（防抖下限 50）；primary 损坏回退 backup，再退全量重放；保存失败可见告警且绝不影响追加。`ProjectRuntime.open` 默认启用；`ledger.recovery` 暴露恢复方式供诊断。
+- **投影封顶（长迭代不膨胀）**：`state.stream` 封顶最近 500 条（新增 `streamTotal` 精确计数）、每个 Thread entries 封顶最近 500 条（headSeq 保持单调精确）；`FOLD_STATE_VERSION` 升到 2。完整历史仍在账本事件里可重放。bootstrap 进一步按窗口切尾（stream 200、每线程 50，带 `entryTotal`）。
+- **SSE 合帧**：同一 Project 250ms 窗口内的多条账本事件合并为一次快照帧（原来每条事件全量重算 board+quadrants 并整帧广播是平方级放大）；帧内 event 取窗口末条，客户端 rev 守卫幂等。
+- **右栏改为全宽度覆盖层**（评估后优化）：原宽容器为第三网格列（384px），开/关线程面板会挤压中栏并整栏重排，违反全局规格 #6「板块展开不得改变阅读状态」；统一为 absolute 覆盖（窄容器既有行为），任意宽度零重排，窄档视觉不变。
+- **原生 prompt/confirm 全部替换**为自绘 `WorkbenchDialog`（复用 ModalBack：Escape 关闭 + Tab 焦点圈闭）：离开团队、改派（下拉选择）、取消理由、重开理由、删除确认共 5 处；观感与宿主一致。
+- **skillopt_adopt 归因门（一手证据）**：引擎每轮 run 把验证所用 backend 写进 `staging/<ts>/diagnostics.json`（cycle.py）；adopt 执行前读取并 fail-closed——mock 验证的提案拒绝落地（分数是合成信号）、diagnostics 缺失或无 backend 字段同样拒绝并指引重跑。真实后端放行。`adoptGuardVerdict` 可导出测试，新增 5 项单测。
+
 ## 0.3.55 — 2026-11-10
 
 按 DSH 官方插件开发资料（cordis-plugin-development / practices / 各包 README）做全量插件实现 review 后的整改：

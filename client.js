@@ -265,6 +265,7 @@ window.__ModuleLoader__.load({
 			memberAdding: '正在创建…',
 			memberAdded: '成员已创建并激活。',
 			cancel: '取消',
+			dialogConfirm: '确定',
 			memberProfileTitle: '成员资料',
 			memberProfileTitleName: '成员资料 · {name}',
 			memberProfileMeta: '{status} · 资料 v{version} · 蒸馏 v{distill}',
@@ -594,6 +595,7 @@ window.__ModuleLoader__.load({
 			memberAdding: 'Creating…',
 			memberAdded: 'Member created and activated.',
 			cancel: 'Cancel',
+			dialogConfirm: 'OK',
 			memberProfileTitle: 'Member profile',
 			memberProfileTitleName: 'Member profile · {name}',
 			memberProfileMeta: '{status} · profile v{version} · distill v{distill}',
@@ -805,10 +807,11 @@ window.__ModuleLoader__.load({
 			.at-mobilesummary::-webkit-details-marker { display: none; }
 			.at-mobilepop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 30; width: min(320px, calc(100vw - 32px)); width: min(320px, calc(100cqw - 16px)); max-height: 70vh; overflow-y: auto; overflow-x: hidden; padding: 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-1); box-shadow: var(--dsw-elevation-panel, 0 8px 24px var(--dsw-alias-bg-mask-2)); }
 			.at-grid { flex: 1; min-height: 0; min-width: 0; position: relative; display: grid; grid-template-columns: 248px minmax(0, 1fr); }
-			.at-grid.at-withthread { grid-template-columns: 248px minmax(0, 1fr) 384px; }
 			.at-left { min-width: 0; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 8px 8px 12px; border-right: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-base); scrollbar-width: thin; scrollbar-color: var(--dsw-alias-scrollbar-bg-l1) transparent; }
 			.at-center { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--dsw-alias-bg-base); container-type: inline-size; container-name: at-center; }
-			.at-right { min-width: 0; min-height: 0; display: flex; flex-direction: column; border-left: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-layer-1); }
+			/* 右栏是覆盖层（fixed 语义的 absolute 覆盖，不占网格列）：任何宽度下
+			   开/关线程面板都不挤压中栏、不触发整栏重排（规格 #6）。 */
+			.at-right { position: absolute; top: 0; right: 0; bottom: 0; z-index: 10; min-width: 0; min-height: 0; width: min(420px, 100%); display: flex; flex-direction: column; border-left: 1px solid var(--dsw-alias-border-l1); background: var(--dsw-alias-bg-layer-1); box-shadow: var(--dsw-elevation-panel, 0 8px 24px var(--dsw-alias-bg-mask-2)); }
 			.at-nav { display: flex; flex-direction: column; gap: 1px; }
 			.at-navrow { width: 100%; min-height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; line-height: 18px; text-align: left; cursor: pointer; }
 			.at-navrow:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
@@ -1138,13 +1141,13 @@ window.__ModuleLoader__.load({
 			}
 			@container at-wb (max-width: 1119px) {
 				.at-grid, .at-grid.at-withthread { grid-template-columns: 200px minmax(0, 1fr); }
-				.at-right { position: absolute; top: 0; right: 0; bottom: 0; z-index: 10; width: min(420px, 100%); border-left: 1px solid var(--dsw-alias-border-l1); box-shadow: var(--dsw-elevation-panel, 0 8px 24px var(--dsw-alias-bg-mask-2)); }
+				.at-right { width: min(420px, 100%); }
 				.at-boardwrap { padding: 12px; }
 				.at-board { gap: 8px; }
 			}
 			@container at-wb (max-width: 959px) {
 				.at-grid, .at-grid.at-withthread { grid-template-columns: 200px minmax(0, 1fr); }
-				.at-right { top: 0; right: 0; bottom: 0; width: 100%; max-width: none; border-left: 0; }
+				.at-right { width: 100%; max-width: none; border-left: 0; box-shadow: none; }
 				.at-board { grid-template-columns: minmax(0, 1fr); }
 				.at-quadrants { grid-template-columns: minmax(0, 1fr); }
 				.at-chead { padding: 10px 12px 0; }
@@ -1409,6 +1412,38 @@ window.__ModuleLoader__.load({
 				return () => window.removeEventListener('keydown', onKey);
 			}, []);
 			return h('div', { className: 'at-modalback', ref: backRef }, children);
+		}
+
+		/**
+		 * 自绘确认/输入对话框（替代原生 confirm/prompt）：confirm 布尔、
+		 * prompt 文本、choice 选项。模块级组件 + 调用方自增 key 保证每次
+		 * 新对话框重建（输入初始值生效）。
+		 */
+		function WorkbenchDialog({ t, dialog }) {
+			const [value, setValue] = React.useState(dialog.value ?? '');
+			const cancel = () => dialog.resolve(dialog.mode === 'confirm' ? false : null);
+			const submit = () => dialog.resolve(dialog.mode === 'confirm' ? true : value.trim());
+			const canSubmit = dialog.mode === 'confirm' || value.trim() !== '';
+			return h(ModalBack, { onClose: cancel },
+				h('div', { className: 'at-modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': dialog.title },
+					h('h2', { className: 'at-modaltitle' }, dialog.title),
+					dialog.body ? h('p', { className: 'at-modalmeta' }, dialog.body) : null,
+					dialog.mode === 'prompt'
+						? h('input', {
+							value,
+							onChange: (event) => setValue(event.target.value),
+							placeholder: dialog.placeholder ?? '',
+							autoFocus: true,
+							onKeyDown: (event) => { if (event.key === 'Enter' && canSubmit) submit(); },
+						})
+						: null,
+					dialog.mode === 'choice'
+						? h('select', { value, onChange: (event) => setValue(event.target.value), autoFocus: true },
+							(dialog.options ?? []).map((option) => h('option', { key: option, value: option }, option)))
+						: null,
+					h('div', { className: 'at-modalactions' },
+						h('button', { className: 'at-btn', type: 'button', onClick: cancel }, t('cancel')),
+						h('button', { className: 'at-btn at-btn-primary', type: 'button', onClick: submit, disabled: !canSubmit }, t('dialogConfirm')))));
 		}
 
 		function EmptyState({ t, icon, title, body, action, compact }) {
@@ -2194,6 +2229,28 @@ window.__ModuleLoader__.load({
 			const [pBusy, setPBusy] = React.useState(false);
 			const [pError, setPError] = React.useState('');
 			const [replyBase, setReplyBase] = React.useState(null);
+			// 自绘确认/输入对话框（替代原生 prompt/confirm，观感与宿主一致）。
+			// dialog: { mode: 'confirm'|'prompt'|'choice', title, body, placeholder,
+			//           value, options, resolve } — resolve(false|null|字符串)。
+			const [dialog, setDialog] = React.useState(null);
+			const dialogSeqRef = React.useRef(0);
+			// 每次打开新对话框自增 key：WorkbenchDialog 以全新实例挂载，
+			// 输入框的初始值（useState 初值）随之生效。
+			const askConfirm = (title, body) => new Promise((resolve) => {
+				dialogSeqRef.current += 1;
+				setDialog({ mode: 'confirm', title, body, resolve });
+			});
+			const askPrompt = (title, { placeholder = '', value = '', options = null } = {}) => new Promise((resolve) => {
+				dialogSeqRef.current += 1;
+				setDialog({
+					mode: options === null ? 'prompt' : 'choice',
+					title,
+					placeholder,
+					value: value ?? (options && options.length > 0 ? options[0] : ''),
+					options,
+					resolve,
+				});
+			});
 			const rightRef = React.useRef(null);
 			const replyRef = React.useRef(null);
 			const triggerRef = React.useRef(null);
@@ -2849,7 +2906,7 @@ window.__ModuleLoader__.load({
 			}
 			async function leaveProfile() {
 				if (!profileAgent || pBusy) return;
-				if (typeof window.confirm === 'function' && !window.confirm(t('leaveConfirm'))) return;
+				if (!(await askConfirm(t('leaveTeam'), t('leaveConfirm')))) return;
 				setPBusy(true);
 				setPError('');
 				try {
@@ -3056,9 +3113,10 @@ window.__ModuleLoader__.load({
 					sayRight(t('reassignNoTarget'));
 					return;
 				}
-				const answer = typeof window.prompt === 'function'
-					? window.prompt(t('reassignPrompt') + '\n' + options.map((agent) => agent.name).join('、'), options[0].name)
-					: null;
+				const answer = await askPrompt(t('reassignPrompt'), {
+					options: options.map((agent) => agent.name),
+					value: options[0].name,
+				});
 				if (answer === null) return;
 				const target = options.find((agent) => agent.name === answer.trim() || agent.id === answer.trim());
 				if (target === undefined) {
@@ -3080,7 +3138,7 @@ window.__ModuleLoader__.load({
 			}
 			async function cancelSelected() {
 				if (!selectedTask) return;
-				const reason = typeof window.prompt === 'function' ? window.prompt(t('cancelPrompt'), '') : null;
+				const reason = await askPrompt(t('cancelPrompt'));
 				if (reason === null) return;
 				try {
 					await runCommand('task.cancel', { taskId: selectedTask.id, expectedRevision: selectedTask.revision, reason });
@@ -3092,7 +3150,7 @@ window.__ModuleLoader__.load({
 			}
 			async function reopenSelected() {
 				if (!selectedTask) return;
-				const reason = typeof window.prompt === 'function' ? window.prompt(t('reopenPrompt'), '') : null;
+				const reason = await askPrompt(t('reopenPrompt'));
 				if (reason === null) return;
 				try {
 					await runCommand('task.reopen', { taskId: selectedTask.id, expectedRevision: selectedTask.revision, reason });
@@ -3104,7 +3162,7 @@ window.__ModuleLoader__.load({
 			}
 			async function deleteSelected() {
 				if (!selectedTask) return;
-				if (typeof window.confirm === 'function' && !window.confirm(t('deleteConfirm'))) return;
+				if (!(await askConfirm(t('actDelete'), t('deleteConfirm')))) return;
 				try {
 					await runCommand('task.delete', { taskId: selectedTask.id, expectedRevision: selectedTask.revision });
 					sayRight(tf(t, 'deleteDone', { n: taskNo(selectedTask) }));
@@ -3510,7 +3568,8 @@ window.__ModuleLoader__.load({
 							nError ? h('div', { className: 'at-modalerror', role: 'alert' }, nError) : null,
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setNewOpen(false), disabled: nBusy }, t('cancel')),
-								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: nBusy || !nName.trim() || !nWorkspace.trim() }, nBusy ? t('saving') : t('projectCreate'))))) : null));
+								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: nBusy || !nName.trim() || !nWorkspace.trim() }, nBusy ? t('saving') : t('projectCreate'))))) : null,
+					dialog ? h(WorkbenchDialog, { key: dialogSeqRef.current, t, dialog }) : null));
 		}
 
 		function PavilionMark({ size = 18 }) {

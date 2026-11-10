@@ -36,7 +36,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.55';
+const VERSION = '0.3.56';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -128,7 +128,7 @@ async function boot(diag) {
 		dataDir,
 		projects: [...runtimes.keys()],
 		activeProjectId,
-		events: [...runtimes.values()].reduce((sum, item) => sum + item.ledger.events.length, 0),
+		events: [...runtimes.values()].reduce((sum, item) => sum + item.ledger.headSeq, 0),
 	});
 	return {
 		...runtime,
@@ -847,7 +847,7 @@ export function apply(ctx, config = {}) {
 				}
 			}
 		}).catch(() => {});
-		const broadcast = (event, runtime = currentRuntime()) => {
+		const broadcastNow = (event, runtime = currentRuntime()) => {
 			if (runtime === null || runtime === undefined) return;
 			const payload = {
 				...snapshot(runtime),
@@ -868,6 +868,25 @@ export function apply(ctx, config = {}) {
 					sseClients.delete(client);
 				}
 			}
+		};
+		// 合帧：一条 wake 链会连发 2-4 条账本事件，每条都全量重算 board+quadrants
+		// 并整帧广播是平方级放大。按 Project 250ms 窗口合并为一次快照帧；
+		// 帧内 event 取窗口最后一条（客户端 toast 仍有通知，rev 守卫保证幂等）。
+		const pendingFrames = new Map();
+		const broadcast = (event, runtime = currentRuntime()) => {
+			if (runtime === null || runtime === undefined) return;
+			const queued = pendingFrames.get(runtime.id);
+			if (queued !== undefined) {
+				queued.lastEvent = event ?? queued.lastEvent;
+				return;
+			}
+			const entry = { runtime, lastEvent: event ?? null };
+			pendingFrames.set(runtime.id, entry);
+			entry.timer = setTimeout(() => {
+				pendingFrames.delete(runtime.id);
+				broadcastNow(entry.lastEvent ?? undefined, entry.runtime);
+			}, 250);
+			entry.timer.unref?.();
 		};
 
 		async function activateProject(nextProjectId, projectName, projectGoal, workspacePath = '') {
@@ -945,10 +964,10 @@ export function apply(ctx, config = {}) {
 							version: VERSION,
 							projectId: booted.activeProjectId,
 							activeProjectId: booted.activeProjectId,
-							ledger: { events: booted.ledger.events.length, head },
+							ledger: { events: booted.ledger.headSeq, head },
 							projects: [...booted.runtimes.values()].map((runtime) => ({
 								id: runtime.id,
-								events: runtime.ledger.events.length,
+								events: runtime.ledger.headSeq,
 								head: runtime.ledger.head.seq,
 								active: runtime.id === booted.activeProjectId,
 							})),
@@ -1228,6 +1247,10 @@ export function apply(ctx, config = {}) {
 				try { client.res.end(); } catch { /* socket already gone */ }
 			}
 			sseClients.clear();
+			for (const entry of pendingFrames.values()) {
+				try { clearTimeout(entry.timer); } catch { /* already fired */ }
+			}
+			pendingFrames.clear();
 			if (pmoTimer !== null) { clearInterval(pmoTimer); pmoTimer = null; }
 			for (const activation of activations.values()) {
 				cleanup.push(Promise.resolve().then(async () => {
