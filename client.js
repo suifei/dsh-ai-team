@@ -974,6 +974,8 @@ window.__ModuleLoader__.load({
 			.at-agentrole { min-width: 0; color: var(--dsw-alias-label-caption); font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 			.at-inboxitem { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 11px 13px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-layer-2); }
 			.at-inboxitem.at-inboxdone { opacity: 0.62; }
+			.at-inboxitem.at-inboxstale { border-left: 2px solid var(--dsw-alias-state-warn-primary); }
+			.at-inboxitem.at-inboxstale2 { border-left: 3px solid var(--dsw-alias-state-error-primary); }
 			.at-inboxbody { min-width: 0; flex: 1; }
 			.at-inboxquestions { margin: 6px 0 2px; padding-left: 20px; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 19px; }
 			.at-inboxquestions li { margin: 3px 0; }
@@ -2537,6 +2539,17 @@ window.__ModuleLoader__.load({
 					})
 					.catch(() => setTaskEventsData(null));
 			}
+			// R-09 待验收跨项目队列。
+			const [pendingRows, setPendingRows] = React.useState(null);
+			function loadPending() {
+				fetch('/ai-team/api/pending-acceptance', { headers: { accept: 'application/json' } })
+					.then(async (response) => {
+						const payload = await response.json().catch(() => null);
+						if (!response.ok) throw new Error(payload?.error?.message ?? ('HTTP ' + response.status));
+						setPendingRows(Array.isArray(payload?.rows) ? payload.rows : []);
+					})
+					.catch(() => setPendingRows([]));
+			}
 			function loadRisks() {
 				const seq = ++riskSeqRef.current;
 				setPeopleLoading(true);
@@ -2812,6 +2825,13 @@ window.__ModuleLoader__.load({
 			const thread = threadFor(data, selectedTask?.id);
 			const quadrants = deriveQuadrants(data);
 			const inboxItems = (data.inbox ?? []).filter((item) => !isInformationalInboxItem(item));
+			// R-13 老化分档（纯前端派生）：决策项 >24h 加深、>72h 升错误色。
+			const inboxAge = (item) => {
+				const created = item.createdAt ?? 0;
+				if (!Number.isFinite(created) || created <= 0) return '';
+				const age = Date.now() - created;
+				return age > 72 * 60 * 60 * 1000 ? 'at-inboxstale2' : age > 24 * 60 * 60 * 1000 ? 'at-inboxstale' : '';
+			};
 			const inboxUnread = inboxItems.filter((item) => item.state === 'unread').length;
 			const q1Extra = inboxItems.filter((item) => item.requiresDecision === true && item.state === 'unread').length;
 			const threadHead = thread?.headSeq ?? thread?.entries?.length ?? 0;
@@ -2909,6 +2929,7 @@ window.__ModuleLoader__.load({
 				setScope('inbox');
 				setThreadOpen(false);
 				setNote('');
+				loadPending();
 				loadRisks();
 			}
 			function openPeople() {
@@ -3695,6 +3716,19 @@ window.__ModuleLoader__.load({
 				: inInbox
 				? h('div', { className: 'at-stream', role: 'region', 'aria-label': t('inboxTitle') },
 					h('div', { className: 'at-streaminner' },
+						// R-09 待验收跨项目队列。
+						pendingRows !== null && pendingRows.length > 0
+							? h('details', { className: 'at-people', open: true },
+								h('summary', { className: 'at-peoplesum' },
+									h('span', { className: 'at-peoplename' }, t('pendingTitle')),
+									h('span', { className: 'at-peoplebadges' }, tf(t, 'peopleProjects', { n: new Set(pendingRows.map((row) => row.projectId)).size }))),
+								h('div', { className: 'at-peopleprojects' },
+									pendingRows.map((row) => h('div', { key: row.taskId + ':' + row.projectId, className: 'at-peopleproject' },
+										h('span', { className: 'at-peopleprojectname' }, '#' + (row.taskNumber ?? row.taskId) + ' ' + row.title),
+										row.category === 'irreversible' ? h('span', { className: 'at-peoplefail' }, t('irreversibleBadge')) : null,
+										h('span', { className: 'at-peoplestate' }, row.projectName),
+										h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => openInboxTask({ ref: { taskId: row.taskId }, projectId: row.projectId }) }, t('inboxOpenTask'))))))
+							: null,
 						// R-07 风险分区（三类需要 Human 注意的风险，进入收件箱时拉取）。
 						risksData && (risksData.counts.blocked + risksData.counts.failures + risksData.counts.staleDecisions) > 0
 							? h('details', { className: 'at-people', open: true },
@@ -3724,7 +3758,7 @@ window.__ModuleLoader__.load({
 										row.taskId ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => openInboxTask({ ref: { taskId: row.taskId }, projectId: projectId }) }, t('inboxOpenTask')) : null))))
 							: null,
 						inboxItems.length
-							? inboxItems.map((item) => h('div', { key: item.id, className: cx('at-inboxitem', item.state !== 'unread' && 'at-inboxdone') },
+							? inboxItems.map((item) => h('div', { key: item.id, className: cx('at-inboxitem', inboxAge(item), item.state !== 'unread' && 'at-inboxdone') },
 								h('div', { className: 'at-inboxbody' },
 									h('div', { className: 'at-inboxtitle' },
 										item.type === 'decision_required'
