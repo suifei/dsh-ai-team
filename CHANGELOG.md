@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.58 — 2026-11-10
+
+复审轮（对照官方资料复查前三轮整改引入的代码 + 全文角落），两份并行复审报告的发现全部整改：
+
+- **修复类**
+  - 【高危·实证复现】checkpoint 竞态：写队列只串行化批次本身，B 批次可在 A 的 facade 续体推进 state 之前提交——旧实现按 `writer.head` 落盘会持久化"state 落后于 lastSeq"的检查点，崩溃重开零尾放**静默吞掉投影**。改为按 fold 已应用前缀水位（`state.lastSeq/lastHash`）落盘，重开尾放从水位+1 自洽重放；新增并发批间触发 + 崩溃重开回归测试（[test/checkpoint-race.test.js](test/checkpoint-race.test.js)）。
+  - 【致命】客户端两处本轮回归：`inPeople` 在声明前引用（TDZ，工作台每次渲染崩溃）；`WorkbenchDialog` resolve 后不复位 state（确认/输入对话框永久驻留挡住整页）。均已修，并补 confirm 按钮初始焦点、三模式统一 Enter 提交。
+  - `resumedHandles` Set→Map 后 teardown 迭代漏改（冷唤醒成员句柄卸载时从不 dispose）——改 `values()`。
+  - 「人员池」loading 态误用整页 Skeleton（中心列嵌套出第二个工作台）——改中心区域行骨架；人员池拉取加序号守卫；打开项目失败给提示；收件箱跳任务在切项目失败时中止。
+  - wake 链路 `projectCwd` 的账本目录兜底**彻底移除**（`projectWorkspace` 显式取项目目录）：无目录项目不 wake（`wake.skip` 留痕），activate 不 fail-open——同时给出历史游离会话（如 mem_lead 的 e7575995）的正规重建入口「重置会话」（先释放旧句柄再在工作目录重建；workspace 校验先于句柄释放）。
+  - `failure-policy`：fallback 判定提前于重试预算（maxAttempts=1 时备用路由不再永远不可达）；`waker` 对 failed 成员不自动唤醒（恢复走 member.retry / Human 重试，注释声明）；`postStream` 返回的 seq 改用账本事件 seq（原幻影计数并发下与投影不一致）；bootstrap 的 selected thread 与 threads 同一 50 条窗口（`entryTotal`）；'h1' 幽灵兜底 id 三处清为 `humanId()`。
+- **规程类**
+  - diag 契约闭合：dispatch 前置校验失败也落 `dispatch.fail`；HTTP 层失败统一落 `route.reject`（errors 白名单不再是死键）；activate 拒绝/重建落 `activate.reject`/`member.reseat`；`activateProject` 透传 diag（自建项目的 ledger.open/checkpoint/repair 行不再缺失）。
+  - skillopt adopt 归因门补 `.latest` 指针的 manifest 校验（残指针按扫描回退，报因准确）。
+  - people-view 空名成员按 id 独立成行；failures 字段语义文档化（展示口径）。
+  - 客户端死键再清 5×2（agents/boardAria/projectEmptyBody/actHandoff/teamPulseCount）；CSS 清理（.at-check 同名覆盖改 `.at-modal .at-check` 作用域、.at-withthread 死选择器×3、.at-composerbox 死类名、冗余断点行）。
+
 ## 0.3.57 — 2026-11-10
 
 管理视角信息架构（docs/11）：先把边界事实核清楚，再按"事按项目、人与待决按全局"调整呈现，不新增领域数据。

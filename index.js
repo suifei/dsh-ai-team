@@ -30,6 +30,7 @@ import { buildModelCatalog } from './lib/host/model-catalog.js';
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeWake, planWakes } from './lib/host/waker.js';
 import { aggregatePeople } from './lib/host/people-view.js';
+import { isInformationalThreadMention } from './lib/domain/inbox.js';
 import { createDiagLogger, defaultDiagDir } from './lib/diaglog.js';
 
 export const name = 'ai-team';
@@ -37,7 +38,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.57';
+const VERSION = '0.3.58';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -96,12 +97,6 @@ function profileName() {
 	return process.env.DSH_PROFILE || 'default';
 }
 
-function errorResponse(res, error) {
-	const code = typeof error?.code === 'string' ? error.code : 'INTERNAL';
-	const status = typeof error?.status === 'number' ? error.status : (code === 'E_STORAGE' ? 503 : 409);
-	send(res, { error: { code, message: error?.message ?? 'command failed', details: error?.details ?? null } }, status);
-}
-
 /**
  * Open the default Project ledger and seed the Human + Project skeleton once.
  * A torn tail is repaired by the writer; the repair is recorded as a system
@@ -152,6 +147,17 @@ export function apply(ctx, config = {}) {
 		maxBytes: config.diagLogMaxBytes ?? 1048576,
 		level: config.diagLevel ?? 'errors',
 	});
+	// HTTP 层失败/拒绝的统一落点（route.reject 在 errors 白名单内）。
+	const errorResponse = (res, error) => {
+		diag.append({
+			ev: 'route.reject',
+			code: typeof error?.code === 'string' ? error.code : 'INTERNAL',
+			message: error?.message ?? String(error ?? 'command failed'),
+		});
+		const code = typeof error?.code === 'string' ? error.code : 'INTERNAL';
+		const status = typeof error?.status === 'number' ? error.status : (code === 'E_STORAGE' ? 503 : 409);
+		send(res, { error: { code, message: error?.message ?? 'command failed', details: error?.details ?? null } }, status);
+	};
 	ctx.effect(() => {
 		const webServer = ctx.get('webServer');
 		if (webServer === undefined) return () => {};
@@ -363,13 +369,15 @@ export function apply(ctx, config = {}) {
 		const pmoLastEscalate = new Map();
 		const pmoLastReview = new Map();
 		// Members resumed from cold sessions produce AgentHandles nobody stored;
-		// track them so teardown can dispose every owned activation.
-		const resumedHandles = new Set();
+		// track them by session id so teardown — and session reseat — can
+		// dispose exactly the handle they own.
+		const resumedHandles = new Map();
 		let pmoTimer = null;
-		const projectCwd = (projectRuntime, member) => member?.workspace
+		// 项目工作目录（显式，无兜底）：null 表示尚未设置。历史版本在此处用
+		// runtime.dir（账本目录）兜底，曾把成员会话 cwd 钉进插件数据目录。
+		const projectWorkspace = (projectRuntime, member) => member?.workspace
 			|| projectRuntime?.service?.state?.projects?.[projectRuntime.id]?.workspacePath
-			|| projectRuntime?.dir
-			|| undefined;
+			|| null;
 		const wakeFromResult = async (projectRuntime, result, actor = {}) => {
 			if (projectRuntime === null || projectRuntime === undefined) return;
 			const plans = planWakes(projectRuntime.service.state, result, actor);
@@ -399,7 +407,14 @@ export function apply(ctx, config = {}) {
 				// Reserve before the async delivery: the HTTP result and the ledger
 				// event both schedule the same plan, and only one may deliver it.
 				wakeKeys.set(plan.key, result?.event?.seq ?? head);
-				const cwd = projectCwd(projectRuntime, member);
+				// 无工作目录的项目不 wake（与 activate 的 fail-closed 同一不变量）：
+				// 冷恢复/直连唤醒都会在会话原 cwd 里干活，不该落到插件数据目录。
+				const projectWorkspacePath = projectWorkspace(projectRuntime, member);
+				if (projectWorkspacePath === null || projectWorkspacePath.trim?.() === '') {
+					diag?.append({ ev: 'wake.skip', projectId: projectRuntime.id, memberId: plan.memberId, reason: 'E_WORKSPACE_REQUIRED' });
+					continue;
+				}
+				const cwd = projectWorkspacePath;
 				try {
 					// Idle default members have no Agent session yet. A wake must
 					// activate them first; otherwise the first Human message is
@@ -433,7 +448,7 @@ export function apply(ctx, config = {}) {
 							provider: providers[0],
 							preset: 'standard',
 							cwd,
-							trackHandle: (handle) => resumedHandles.add(handle),
+							trackHandle: (sessionId, handle) => resumedHandles.set(sessionId, handle),
 						});
 						const delivered = await runtime.wake(member, { prompt: await wakePrompt(plan, member) });
 						messageId = delivered.messageId ?? null;
@@ -726,9 +741,11 @@ export function apply(ctx, config = {}) {
 			if (member.status === 'running' && body.payload?.force !== true) return { error: { code: 'E_INVALID_STATE', message: 'member is already running' }, status: 409 };
 			// 无目录项目 fail-closed：成员绝不落到宿主默认目录或插件数据目录
 			// （projectCwd 的 dir 兜底）里执行。显式判工作目录，不吃兜底。
+			// 先于 reseat 释放旧句柄——否则无目录的 force 会先杀句柄再 409。
 			const workspacePath = projectRuntime?.service?.state?.projects?.[projectRuntime.id]?.workspacePath;
 			const effectiveDir = member?.workspace || (typeof workspacePath === 'string' ? workspacePath.trim() : '');
 			if (effectiveDir === '') {
+				diag?.append({ ev: 'activate.reject', projectId: projectRuntime.id, memberId: member.id, code: 'E_WORKSPACE_REQUIRED' });
 				return {
 					error: {
 						code: 'E_WORKSPACE_REQUIRED',
@@ -737,15 +754,36 @@ export function apply(ctx, config = {}) {
 					status: 409,
 				};
 			}
+			// 会话重建（reseat）：成员已有会话且本次为 force 时，先释放旧会话的
+			// 运行时句柄（activation / resume handle），旧 DSH 会话本体由宿主持
+			// 久管理，插件不再持有或唤醒它；新会话落在当前项目工作目录。这是
+			// 修复历史"账本目录兜底 cwd"游离会话的唯一路径（会话 cwd 创建时
+			// 钉死，resume 不覆盖，DSH 不提供原地改 cwd 的 API）。
+			if (typeof member.sessionId === 'string' && member.sessionId !== '' && body.payload?.force === true) {
+				const staleId = member.sessionId;
+				const staleActivation = activations.get(staleId);
+				if (staleActivation !== undefined) {
+					activations.delete(staleId);
+					try { await staleActivation.dispose?.(); } catch { /* already gone */ }
+				}
+				const staleHandle = resumedHandles.get(staleId);
+				if (staleHandle !== undefined) {
+					resumedHandles.delete(staleId);
+					try { await staleHandle.dispose?.(); } catch { /* already gone */ }
+				}
+				diag?.append({ ev: 'member.reseat', memberId: member.id, oldSessionId: staleId, projectId: projectRuntime.id });
+			}
 			const subagents = ctx.get('subagents');
 			const sessions = ctx.get('sessions');
 			const permissionPresets = ctx.get('permissionPresets');
 			const sandboxPolicy = ctx.get('sandboxPolicy');
 			if (subagents === undefined || sessions === undefined || permissionPresets === undefined || sandboxPolicy === undefined) {
+				diag?.append({ ev: 'activate.reject', projectId: projectRuntime.id, memberId: member.id, code: 'E_RUNTIME_UNAVAILABLE' });
 				return { error: { code: 'E_RUNTIME_UNAVAILABLE', message: 'member runtime services are unavailable' }, status: 503 };
 			}
 			const providers = typeof subagents.list === 'function' ? subagents.list() : [];
 			if (providers.length === 0) {
+				diag?.append({ ev: 'activate.reject', projectId: projectRuntime.id, memberId: member.id, code: 'E_RUNTIME_UNAVAILABLE', detail: 'no provider' });
 				return { error: { code: 'E_RUNTIME_UNAVAILABLE', message: 'no subagent provider is registered' }, status: 503 };
 			}
 			try {
@@ -776,12 +814,12 @@ export function apply(ctx, config = {}) {
 					provider: providers[0],
 					preset: 'standard',
 					cwd: effectiveDir,
-					trackHandle: (handle) => resumedHandles.add(handle),
+					trackHandle: (sessionId, handle) => resumedHandles.set(sessionId, handle),
 				});
 				const result = await runtime.activate(activationMember, {
 					prompt: `${memberIdentity(activationMember)}\n\n${typeof body.payload?.prompt === 'string'
 						? body.payload.prompt
-						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: projectCwd(projectRuntime, activationMember) })}${await loadSkillContext(activationMember, projectRuntime.dir)}`,
+						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: effectiveDir })}${await loadSkillContext(activationMember, projectRuntime.dir)}`,
 				});
 				let bound;
 				try {
@@ -914,6 +952,7 @@ export function apply(ctx, config = {}) {
 					projectName,
 					projectGoal,
 					workspacePath,
+					diag,
 				});
 				booted.runtimes.set(nextProjectId, next);
 				attachRuntime(next);
@@ -1050,11 +1089,22 @@ export function apply(ctx, config = {}) {
 						const requestedRuntime = requested === null ? null : projectRuntime(requested);
 						const bootstrapRuntime = requestedRuntime ?? currentRuntime();
 						const bootstrap = bootstrapRuntime.service.bootstrap(bootstrapRuntime.id);
+						// 跨项目收件箱聚合：其它项目只读 state.inbox 过滤（此前对每个
+						// 项目整调 bootstrap——board+quadrants+threads 全算，O(项目数×
+						// 全视图)/请求）。
 						const inbox = [];
 						for (const runtime of booted.runtimes.values()) {
 							const projectName = booted.registry.list().find((project) => project.id === runtime.id)?.name ?? runtime.id;
-							const view = runtime.id === bootstrapRuntime.id ? bootstrap : runtime.service.bootstrap(runtime.id);
-							for (const item of view.inbox ?? []) {
+							if (runtime.id === bootstrapRuntime.id) {
+								for (const item of bootstrap.inbox ?? []) {
+									inbox.push({ ...item, projectId: runtime.id, projectName });
+								}
+								continue;
+							}
+							const humanId = runtime.service.humanId();
+							for (const item of Object.values(runtime.service.state.inbox ?? {})) {
+								if (humanId === null || item.memberId !== humanId) continue;
+								if (isInformationalThreadMention(item)) continue;
 								inbox.push({ ...item, projectId: runtime.id, projectName });
 							}
 						}
@@ -1280,7 +1330,7 @@ export function apply(ctx, config = {}) {
 				}));
 			}
 			activations.clear();
-			for (const handle of resumedHandles) {
+			for (const handle of resumedHandles.values()) {
 				cleanup.push(Promise.resolve().then(async () => {
 					try { await handle?.dispose?.(); } catch { /* already gone */ }
 				}));

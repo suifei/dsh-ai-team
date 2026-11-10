@@ -62,6 +62,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 	const sessionEventListeners = [];
 	const wakeCalls = [];
 	const memberAgents = new Map();
+	const disposedHandles = [];
 	let toolRegistration = null;
 	const root = await mkdtemp(join(tmpdir(), 'ai-team-host-'));
 	const previousHome = process.env.DSH_HOME;
@@ -113,11 +114,11 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 							},
 						};
 						memberAgents.set(options.sessionId, agent);
-						return { agent, dispose: async () => {} };
+						return { agent, dispose: async () => { disposedHandles.push(options.sessionId); } };
 					},
 					resume: async ({ resumeSessionId }) => ({
 						agent: memberAgents.get(resumeSessionId),
-						dispose: async () => {},
+						dispose: async () => { disposedHandles.push(resumeSessionId); },
 					}),
 				};
 			}
@@ -282,8 +283,26 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.ok(toolRegistration !== null);
 		assert.equal(toolRegistration.options.when({ agent: { id: memberSessionId } }), true);
 		assert.equal(toolRegistration.options.when({ agent: { id: 'other' } }), false);
-		const toolTasks = await toolRegistration.definition.execute({ action: 'tasks' }, { agent: { id: memberSessionId } });
+
+		// 会话重建（reseat）：force 重建同一成员 → 旧句柄被 dispose、绑定切换到新会话。
+		const reseat = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ type: 'member.activate', payload: { memberId: 'a1', force: true } }),
+		});
+		assert.equal(reseat.status, 200, await reseat.clone().text());
+		const reseated = await reseat.json();
+		assert.equal(reseated.member.status, 'running');
+		assert.notEqual(reseated.member.sessionId, memberSessionId, 'reseat binds a NEW session');
+		assert.ok(disposedHandles.includes(memberSessionId), 'old activation handle disposed before rebuild');
+
+		// reseat 后成员绑定的是新会话：工具可见性随新会话走。
+		const toolTasks = await toolRegistration.definition.execute({ action: 'tasks' }, { agent: { id: reseated.member.sessionId } });
 		assert.equal(toolTasks.ok, true);
+		const toolTasksOld = await toolRegistration.definition.execute({ action: 'tasks' }, { agent: { id: memberSessionId } });
+		assert.equal(toolTasksOld.ok, false, 'old session is no longer a team member');
+		// reseat 之后的下游断言一律使用新会话 id。
+		const reseatedSessionId = reseated.member.sessionId;
 
 		const agentTask = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
 			method: 'POST',
@@ -297,7 +316,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		const agentTaskBody = await agentTask.json();
 		await new Promise((resolve) => setTimeout(resolve, 300));
 		assert.equal(wakeCalls.length, 1);
-		assert.equal(wakeCalls[0].targetId, memberSessionId);
+		assert.equal(wakeCalls[0].targetId, reseatedSessionId);
 		assert.match(wakeCalls[0].content[0].text, new RegExp(agentTaskBody.task.id));
 
 		assert.equal(requestErrorListeners.length, 1);
@@ -306,7 +325,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		// ends the turn instead of hammering the same throttled route with
 		// immediate retries. The failure is still recorded for the wake planner.
 		const retry = await requestErrorListeners[0](
-			{ agent: { id: memberSessionId }, provider: 'p1', failure: { status: 429, code: 'RATE_LIMIT', message: 'rate limit' } },
+			{ agent: { id: reseatedSessionId }, provider: 'p1', failure: { status: 429, code: 'RATE_LIMIT', message: 'rate limit' } },
 			async () => { nextCalls += 1; return undefined; },
 		);
 		assert.equal(retry, undefined);
@@ -317,7 +336,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 
 		assert.equal(sessionEventListeners.length, 1);
 		await sessionEventListeners[0](
-			{ id: memberSessionId },
+			{ id: reseatedSessionId },
 			{ type: 'turn/end', data: { reason: { kind: 'completed' } } },
 		);
 		const afterRecovery = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
@@ -326,7 +345,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.ok(afterRecovery.agents.find((agent) => agent.name === '临时成员').lastRecoveredAt !== undefined);
 
 		const terminal = await requestErrorListeners[0](
-			{ agent: { id: memberSessionId }, provider: 'p1', failure: { status: 401, code: 'INVALID_API_KEY', message: 'bad key' } },
+			{ agent: { id: reseatedSessionId }, provider: 'p1', failure: { status: 401, code: 'INVALID_API_KEY', message: 'bad key' } },
 			async () => { nextCalls += 1; return undefined; },
 		);
 		assert.equal(terminal, undefined);

@@ -29,7 +29,6 @@ window.__ModuleLoader__.load({
 			inbox: '收件箱',
 			board: '任务看板',
 			projects: '项目',
-			agents: 'Agents',
 			main: '主对话',
 			boardTab: '看板',
 			tabSituation: '态势',
@@ -95,8 +94,7 @@ window.__ModuleLoader__.load({
 			projectsAria: '项目',
 			agentsAria: '成员',
 			streamAria: '主对话',
-			boardAria: '任务看板',
-			situationAria: '项目态势',
+						situationAria: '项目态势',
 			threadAria: '任务讨论',
 			composerAria: '写一条消息',
 			modeAria: '发送模式',
@@ -130,8 +128,7 @@ window.__ModuleLoader__.load({
 			decisionSubmit: '提交决策',
 			decisionSubmitted: '决策已提交给团队。',
 			inboxEmptyAction: '看任务看板',			projectEmptyTitle: '还没有项目',
-			projectEmptyBody: '用左栏「新建项目」创建第一个项目。',
-			emptyColumn: '暂无',
+						emptyColumn: '暂无',
 			expandDone: '展开全部',
 			collapseDone: '收起',
 			threadEmptyTitle: '还没有消息',
@@ -164,8 +161,7 @@ window.__ModuleLoader__.load({
 			reassignPrompt: '把 accountable owner 改派给（输入名字）：',
 			reassignDone: '已把 #{n} 改派给 {name}。',
 			reassignNoTarget: '没有可改派的活跃成员。',
-			actHandoff: '交接…',
-			actDelete: '删除',
+						actDelete: '删除',
 			convertTitle: '转为 Task',
 			titleLabel: '标题',
 			convertNamePlaceholder: '一句话说清要做什么',
@@ -202,8 +198,7 @@ window.__ModuleLoader__.load({
 			taskOwner: '负责人',
 			taskAssignee: '执行',
 			teamPulseTitle: '团队动态',
-			teamPulseCount: '{n} 个 Task 正在推进',
-			teamPulseWorking: '成员已接单',
+						teamPulseWorking: '成员已接单',
 			teamPulseStarting: '成员已唤醒，正在拆解任务…',
 			teamPulseAgents: '运行中：{names}',
 			newProject: '新建项目',
@@ -266,6 +261,9 @@ window.__ModuleLoader__.load({
 			memberAdded: '成员已创建并激活。',
 			cancel: '取消',
 			dialogConfirm: '确定',
+			reseatSession: '重置会话',
+			reseatConfirm: '将关闭该成员的旧会话，并在当前项目工作目录里重建一个新会话（旧会话的 cwd 是创建时钉死的，无法原地修改）。确定？',
+			reseatDone: '会话已在当前项目工作目录重建。',
 			memberProfileTitle: '成员资料',
 			memberProfileTitleName: '成员资料 · {name}',
 			memberProfileMeta: '{status} · 资料 v{version} · 蒸馏 v{distill}',
@@ -368,8 +366,7 @@ window.__ModuleLoader__.load({
 			inbox: 'Inbox',
 			board: 'All tasks',
 			projects: 'Projects',
-			agents: 'Agents',
-			main: 'Main',
+						main: 'Main',
 			boardTab: 'Board',
 			tabSituation: 'Situation',
 			tabsAria: 'Project views',
@@ -434,8 +431,7 @@ window.__ModuleLoader__.load({
 			projectsAria: 'Projects',
 			agentsAria: 'Agents',
 			streamAria: 'Main stream',
-			boardAria: 'Task board',
-			situationAria: 'Project situation',
+						situationAria: 'Project situation',
 			threadAria: 'Task discussion',
 			composerAria: 'Write a message',
 			modeAria: 'Send mode',
@@ -470,8 +466,7 @@ window.__ModuleLoader__.load({
 			decisionSubmitted: 'Decision sent to the team.',
 			inboxEmptyAction: 'Open the board',
 			projectEmptyTitle: 'No projects yet',
-			projectEmptyBody: 'Create the first project with “New project” in the sidebar.',
-			emptyColumn: 'None',
+						emptyColumn: 'None',
 			expandDone: 'Show all',
 			collapseDone: 'Collapse',
 			threadEmptyTitle: 'No messages yet',
@@ -504,8 +499,7 @@ window.__ModuleLoader__.load({
 			reassignPrompt: 'Reassign the accountable owner to (name):',
 			reassignDone: 'Reassigned #{n} to {name}.',
 			reassignNoTarget: 'No active member is available for reassignment.',
-			actHandoff: 'Hand off…',
-			actDelete: 'Delete',
+						actDelete: 'Delete',
 			convertTitle: 'Turn into task',
 			titleLabel: 'Title',
 			convertNamePlaceholder: 'One line about what needs doing',
@@ -542,8 +536,7 @@ window.__ModuleLoader__.load({
 			taskOwner: 'Owner',
 			taskAssignee: 'Assignee',
 			teamPulseTitle: 'Team activity',
-			teamPulseCount: '{n} Task(s) in motion',
-			teamPulseWorking: 'Members picked up the work',
+						teamPulseWorking: 'Members picked up the work',
 			teamPulseStarting: 'Members are awake and breaking the work down…',
 			teamPulseAgents: 'Running: {names}',
 			newProject: 'New project',
@@ -606,6 +599,9 @@ window.__ModuleLoader__.load({
 			memberAdded: 'Member created and activated.',
 			cancel: 'Cancel',
 			dialogConfirm: 'OK',
+			reseatSession: 'Reset session',
+			reseatConfirm: 'This closes the member\'s old session and rebuilds a new one in the current project workspace (a session\'s cwd is pinned at creation and cannot be changed in place). Continue?',
+			reseatDone: 'Session rebuilt in the current project workspace.',
 			memberProfileTitle: 'Member profile',
 			memberProfileTitleName: 'Member profile · {name}',
 			memberProfileMeta: '{status} · profile v{version} · distill v{distill}',
@@ -1134,8 +1130,8 @@ window.__ModuleLoader__.load({
 			.at-modal { width: min(420px, 100%); max-height: 86vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; background: var(--dsw-alias-bg-layer-2); }
 			.at-modaltitle { margin: 0 0 2px; font-size: 15px; font-weight: 600; color: var(--dsw-alias-label-primary); }
 			.at-modalmeta { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
-			.at-check { display: flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
-			.at-check input { accent-color: var(--dsw-alias-state-business-primary); }
+			.at-modal .at-check { display: flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+			.at-modal .at-check input { accent-color: var(--dsw-alias-state-business-primary); }
 			.at-modalerror { color: var(--dsw-alias-state-error-primary); font-size: 11.5px; line-height: 16px; }
 			.at-inlineadd { display: flex; align-items: center; gap: 6px; }
 			.at-inlineadd input { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; }
@@ -1173,13 +1169,13 @@ window.__ModuleLoader__.load({
 				.at-board { grid-template-columns: minmax(0, 1fr); }
 			}
 			@container at-wb (max-width: 1119px) {
-				.at-grid, .at-grid.at-withthread { grid-template-columns: 200px minmax(0, 1fr); }
+				.at-grid { grid-template-columns: 200px minmax(0, 1fr); }
 				.at-right { width: min(420px, 100%); }
 				.at-boardwrap { padding: 12px; }
 				.at-board { gap: 8px; }
 			}
 			@container at-wb (max-width: 959px) {
-				.at-grid, .at-grid.at-withthread { grid-template-columns: 200px minmax(0, 1fr); }
+				.at-grid { grid-template-columns: 200px minmax(0, 1fr); }
 				.at-right { width: 100%; max-width: none; border-left: 0; box-shadow: none; }
 				.at-board { grid-template-columns: minmax(0, 1fr); }
 				.at-quadrants { grid-template-columns: minmax(0, 1fr); }
@@ -1191,7 +1187,7 @@ window.__ModuleLoader__.load({
 				.at-situation { padding: 12px 12px 16px; }
 			}
 			@container at-wb (max-width: 719px) {
-				.at-grid, .at-grid.at-withthread { grid-template-columns: minmax(0, 1fr); }
+				.at-grid { grid-template-columns: minmax(0, 1fr); }
 				.at-left { display: none; }
 				.at-mobile { display: block; }
 				.at-top { padding: 0 8px; gap: 6px; }
@@ -1408,17 +1404,25 @@ window.__ModuleLoader__.load({
 				h('button', { className: 'at-toastclose', type: 'button', 'aria-label': t('notifyClose'), onClick: () => onClose(toast.id) }, '×'));
 		}
 
+		/** 模态栈：多模态同开时只有栈顶响应 Escape（后开先关）。 */
+		const MODAL_STACK = [];
+
 		/**
-		 * Shared modal backdrop: Escape closes, Tab stays inside the dialog.
-		 * Module-level so React sees a stable component type across renders.
+		 * Shared modal backdrop: Escape closes the TOP modal only, Tab stays
+		 * inside the dialog. Module-level so React sees a stable component
+		 * type across renders.
 		 */
 		function ModalBack({ onClose, children }) {
 			const backRef = React.useRef(null);
 			const onCloseRef = React.useRef(onClose);
 			onCloseRef.current = onClose;
 			React.useEffect(() => {
+				const modalId = Symbol('at-modal');
+				MODAL_STACK.push(modalId);
 				const onKey = (event) => {
 					if (event.defaultPrevented) return;
+					// 非栈顶（被更晚打开的模态覆盖）时让位：Escape/Tab 都不处理。
+					if (MODAL_STACK[MODAL_STACK.length - 1] !== modalId) return;
 					if (event.key === 'Escape') {
 						event.preventDefault();
 						event.stopPropagation();
@@ -1442,7 +1446,11 @@ window.__ModuleLoader__.load({
 					}
 				};
 				window.addEventListener('keydown', onKey);
-				return () => window.removeEventListener('keydown', onKey);
+				return () => {
+					window.removeEventListener('keydown', onKey);
+					const index = MODAL_STACK.indexOf(modalId);
+					if (index >= 0) MODAL_STACK.splice(index, 1);
+				};
 			}, []);
 			return h('div', { className: 'at-modalback', ref: backRef }, children);
 		}
@@ -1452,13 +1460,29 @@ window.__ModuleLoader__.load({
 		 * prompt 文本、choice 选项。模块级组件 + 调用方自增 key 保证每次
 		 * 新对话框重建（输入初始值生效）。
 		 */
-		function WorkbenchDialog({ t, dialog }) {
+		function WorkbenchDialog({ t, dialog, onDismiss }) {
 			const [value, setValue] = React.useState(dialog.value ?? '');
-			const cancel = () => dialog.resolve(dialog.mode === 'confirm' ? false : null);
-			const submit = () => dialog.resolve(dialog.mode === 'confirm' ? true : value.trim());
+			const settle = (result) => {
+				dialog.resolve(result);
+				onDismiss();
+			};
+			const cancel = () => settle(dialog.mode === 'confirm' ? false : null);
+			const submit = () => settle(dialog.mode === 'confirm' ? true : value.trim());
 			const canSubmit = dialog.mode === 'confirm' || value.trim() !== '';
 			return h(ModalBack, { onClose: cancel },
-				h('div', { className: 'at-modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': dialog.title },
+				h('div', {
+					className: 'at-modal',
+					role: 'dialog',
+					'aria-modal': 'true',
+					'aria-label': dialog.title,
+					onKeyDown: (event) => {
+						// 三模式统一：Enter=确认（与原生 prompt 风格一致）。
+						if (event.key === 'Enter' && event.target.tagName !== 'TEXTAREA' && canSubmit) {
+							event.preventDefault();
+							submit();
+						}
+					},
+				},
 					h('h2', { className: 'at-modaltitle' }, dialog.title),
 					dialog.body ? h('p', { className: 'at-modalmeta' }, dialog.body) : null,
 					dialog.mode === 'prompt'
@@ -1467,7 +1491,6 @@ window.__ModuleLoader__.load({
 							onChange: (event) => setValue(event.target.value),
 							placeholder: dialog.placeholder ?? '',
 							autoFocus: true,
-							onKeyDown: (event) => { if (event.key === 'Enter' && canSubmit) submit(); },
 						})
 						: null,
 					dialog.mode === 'choice'
@@ -1476,7 +1499,7 @@ window.__ModuleLoader__.load({
 						: null,
 					h('div', { className: 'at-modalactions' },
 						h('button', { className: 'at-btn', type: 'button', onClick: cancel }, t('cancel')),
-						h('button', { className: 'at-btn at-btn-primary', type: 'button', onClick: submit, disabled: !canSubmit }, t('dialogConfirm')))));
+						h('button', { className: 'at-btn at-btn-primary', type: 'button', onClick: submit, disabled: !canSubmit, autoFocus: dialog.mode === 'confirm' }, t('dialogConfirm')))));
 		}
 
 		function EmptyState({ t, icon, title, body, action, compact }) {
@@ -1704,7 +1727,15 @@ window.__ModuleLoader__.load({
 		function PeoplePage({ t, people, error, loading, onOpenProject }) {
 			if (error) return h('div', { className: 'at-stream', role: 'alert' },
 				h('div', { className: 'at-streaminner' }, h(EmptyState, { t, icon: 'alert', title: t('peopleTitle'), body: tf(t, 'peopleLoadFailed', { message: error }) })));
-			if (loading && !people) return h(Skeleton, { t });
+			// loading 用中心区域骨架（流内行），不用整页 Skeleton——本组件位于
+			// at-center 槽位，整页骨架会嵌套出第二个工作台并干扰容器查询。
+			if (loading && !people) {
+				return h('div', { className: 'at-stream', role: 'status', 'aria-busy': 'true' },
+					h('div', { className: 'at-streaminner' },
+						h('div', { className: 'at-skel at-skel-line', style: { width: '40%' } }),
+						h('div', { className: 'at-skel at-skel-line', style: { width: '70%' } }),
+						h('div', { className: 'at-skel at-skel-line', style: { width: '55%' } })));
+			}
 			if (!people || people.length === 0) return h('div', { className: 'at-stream', role: 'region', 'aria-label': t('peopleTitle') },
 				h('div', { className: 'at-streaminner' }, h(EmptyState, { t, icon: 'layers', title: t('peopleTitle'), body: t('peopleEmpty') })));
 			return h('div', { className: 'at-stream', role: 'region', 'aria-label': t('peopleTitle') },
@@ -2032,7 +2063,7 @@ window.__ModuleLoader__.load({
 			};
 			return h('div', { className: 'at-composer' },
 				h('div', { className: 'at-composerinner' },
-					h('div', { className: cx('at-box', 'at-composerbox', mode === 'task' && 'at-taskmode') },
+					h('div', { className: cx('at-box', mode === 'task' && 'at-taskmode') },
 						h('textarea', {
 							value: draft,
 							rows: 2,
@@ -2303,6 +2334,8 @@ window.__ModuleLoader__.load({
 			const [peopleData, setPeopleData] = React.useState(null);
 			const [peopleError, setPeopleError] = React.useState('');
 			const [peopleLoading, setPeopleLoading] = React.useState(false);
+			// 人员池拉取序号：并发/乱序响应只认最新一次。
+			const peopleSeqRef = React.useRef(0);
 			const [nBusy, setNBusy] = React.useState(false);
 			const [nError, setNError] = React.useState('');
 			const [pSuccessor, setPSuccessor] = React.useState('');
@@ -2483,6 +2516,8 @@ window.__ModuleLoader__.load({
 					if (event.key !== 'Escape') return;
 					// Host overlays handle Escape first (defaultPrevented); don't swallow.
 					if (event.defaultPrevented) return;
+					// 插件自身的模态（确认/表单）是更上层：让位，先关模态。
+					if (MODAL_STACK.length > 0) return;
 					event.preventDefault();
 					event.stopPropagation();
 					if (converting) { setConverting(false); return; }
@@ -2618,16 +2653,22 @@ window.__ModuleLoader__.load({
 				setScope('people');
 				setThreadOpen(false);
 				setNote('');
+				const seq = ++peopleSeqRef.current;
 				setPeopleLoading(true);
 				setPeopleError('');
 				fetch('/ai-team/api/people', { headers: { accept: 'application/json' } })
 					.then(async (response) => {
 						const payload = await response.json().catch(() => null);
 						if (!response.ok) throw new Error(payload?.error?.message ?? ('HTTP ' + response.status));
+						if (seq !== peopleSeqRef.current) return;
 						setPeopleData(Array.isArray(payload?.people) ? payload.people : []);
 					})
-					.catch((error) => setPeopleError(error?.message ?? String(error)))
-					.finally(() => setPeopleLoading(false));
+					.catch((error) => {
+						if (seq === peopleSeqRef.current) setPeopleError(error?.message ?? String(error));
+					})
+					.finally(() => {
+						if (seq === peopleSeqRef.current) setPeopleLoading(false);
+					});
 			}
 			function switchBoard() {
 				closeMobile();
@@ -2638,7 +2679,7 @@ window.__ModuleLoader__.load({
 			}
 			async function switchProject(next) {
 				closeMobile();
-				if (next.id === projectId && scope === 'project') return;
+				if (next.id === projectId && scope === 'project') return true;
 				try {
 					await runCommand('project.activate', { projectId: next.id });
 					setScope('project');
@@ -2650,8 +2691,10 @@ window.__ModuleLoader__.load({
 					await reloadData(next.id);
 					setProjectId(next.id);
 					say(next.archived ? t('archivedNote') : t('projectSwitched'));
+					return true;
 				} catch (error) {
 					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+					return false;
 				}
 			}
 			function openNewProject() {
@@ -2981,6 +3024,29 @@ window.__ModuleLoader__.load({
 					setPBusy(false);
 				}
 			}
+			// 会话重建（reseat）：旧会话 cwd 是创建时钉死的（历史账本目录兜底
+			// 或先建项目后设目录的成员），resume 不覆盖；force 重建让新会话落
+			// 在当前项目工作目录。
+			async function reseatProfile() {
+				if (!profileAgent || pBusy) return;
+				if (!(await askConfirm(t('reseatSession'), t('reseatConfirm')))) return;
+				setPBusy(true);
+				setPError('');
+				try {
+					const result = await runCommand('member.activate', {
+						memberId: profileAgent.id,
+						force: true,
+						prompt: '你的会话已在当前项目工作目录重建。先读 tasks/inbox 与项目简报，再继续未完成的工作；不要修改无关文件。',
+					});
+					setProfileAgent(result.member);
+					say(t('reseatDone'));
+					await reloadData();
+				} catch (error) {
+					setPError(error?.message ?? String(error));
+				} finally {
+					setPBusy(false);
+				}
+			}
 			async function distillProfile() {
 				if (!profileAgent || pBusy) return;
 				setPBusy(true);
@@ -3042,7 +3108,10 @@ window.__ModuleLoader__.load({
 			}
 			async function openInboxTask(item) {
 				if (item.projectId && item.projectId !== projectId) {
-					await switchProject({ id: item.projectId, name: item.projectName });
+					const switched = await switchProject({ id: item.projectId, name: item.projectName });
+					// 切换失败（含 project.activate 被拒）时中止：不把 selected 指向
+					// 本项目里不存在的任务卡（否则 effect 会误开第一张卡）。
+					if (!switched) return;
 				}
 				setScope('project');
 				setSelected(item.ref?.taskId ?? '');
@@ -3290,6 +3359,7 @@ window.__ModuleLoader__.load({
 			}
 
 			const inInbox = scope === 'inbox';
+			const inPeople = scope === 'people';
 			const memberViewAgent = data.agents.find((agent) => agent.id === memberViewId) ?? null;
 			const memberViewTasks = memberViewAgent === null ? [] : tasks.filter((task) => task.ownerId === memberViewAgent.id || task.assigneeId === memberViewAgent.id);
 			const headerTitle = inPeople ? t('peopleTitle') : inInbox ? t('inboxTitle') : project ? '# ' + project.name : t('noProject');
@@ -3316,7 +3386,6 @@ window.__ModuleLoader__.load({
 				onAddAgent: () => { closeMobile(); openAddAgent(); },
 				onRecruit: (agent) => { closeMobile(); recruit(agent); },
 			};
-			const inPeople = scope === 'people';
 
 			const body = inPeople
 				? h(PeoplePage, {
@@ -3327,6 +3396,7 @@ window.__ModuleLoader__.load({
 					onOpenProject: (targetId) => {
 						const target = data.projects.find((project) => project.id === targetId);
 						if (target) void switchProject(target);
+						else say(t('quadrantMissing'));
 					},
 				})
 				: inInbox
@@ -3645,6 +3715,7 @@ window.__ModuleLoader__.load({
 								h('button', { className: 'at-btn', type: 'button', onClick: () => { const target = profileAgent; setProfileAgent(null); void openAgentChat(target); } }, t('agentChat')),
 								h('button', { className: 'at-btn', type: 'button', onClick: leaveProfile, disabled: pBusy }, t('leaveTeam')),
 								profileAgent.status === 'failed' ? h('button', { className: 'at-btn', type: 'button', onClick: retryProfile, disabled: pBusy }, t('retry')) : null,
+								profileAgent.sessionId ? h('button', { className: 'at-btn', type: 'button', title: t('reseatConfirm'), onClick: reseatProfile, disabled: pBusy }, t('reseatSession')) : null,
 								h('button', { className: 'at-btn', type: 'button', onClick: distillProfile, disabled: pBusy }, t('redistill')),
 								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: pBusy || !pName.trim() }, pBusy ? t('saving') : t('save'))))) : null,
 					workspaceOpen ? h(ModalBack, { onClose: () => setWorkspaceOpen(false) },
