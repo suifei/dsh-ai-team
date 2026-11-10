@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.60 — 2026-11-11
+
+执行计划第二批（管理视角算法与账本工具面，docs/phase1-2026-11-10/12-详细执行计划 T-201~T-210 部分）：
+
+- **R-07 风险清单投影**：`riskView`（受阻任务/失败成员/待决超时三类，纯函数零新事件）+ `GET /ai-team/api/risks`，4 项单测；
+- **R-09 待验收跨项目队列**：`GET /ai-team/api/pending-acceptance` 聚合路由 + 收件箱页「等你验收」分区（行级跳转任务，irreversible 徽章标注）；
+- **R-10 成员负载**：`people-view` 扩展 inProgress/pendingAcceptance/pending/blocked 计数（owner/assignee 双责任位），人员池行内徽章展示；
+- **R-11 项目周报双解读**：`weeklyView` 纯投影（正向=完成清单/一次通过；负向=返工清单/Human 介入）+ `GET /projects/:id/weekly`；
+- **R-15 账本工具面**：`lib/ledger/tools.js`（audit/stats/export 自包含导出包）+ `bin/ledger-tools.mjs` CLI（独立进程校验 hash 链，篡改账本 exit 非零有测试）；不做 gc/压缩（D1 裁定 append-only 即历史不可变）；
+- **R-17 person 别名键**：`aggregatePeople` 可选别名桶（`people-aliases.json` 视图层绑定）+ `POST /api/people-aliases`；
+- **R-18 任务事件历史**：`GET /projects/:id/tasks/:taskId/events` 只读路由 + 任务详情「任务事件历史」折叠（seq/type/时间/actor 后缀人话行）；
+- **R-04 补充**：任务卡 irreversible「不可撤回」徽章（看板/卡片视图）；
+- **R-13 收件箱老化**：决策项 >24h warn 左缘条、>72h error 左缘条（纯前端派生）。
+
 ## 0.3.59 — 2026-11-10
 
 执行计划第一批（P0 八条）落实（docs/phase1-2026-11-10/12-详细执行计划 T-101~T-108）：
