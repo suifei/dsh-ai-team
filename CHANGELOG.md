@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.49 — 2026-11-10
+
+- PMO 每分钟同步 agent session 标题为 `Agent（角色）`，覆盖历史任务标题；
+- 标题已是目标值时不再写 title 事件，避免重复日志。
+
 ## 0.3.48 — 2026-11-10
 
 - 改回“一个 Agent 一个持久 session”：新 Task 复用原 session，不再每任务新开；

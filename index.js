@@ -34,7 +34,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.48';
+const VERSION = '0.3.49';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -148,8 +148,10 @@ export function apply(ctx) {
 			const titleService = ctx.get('sessionTitle');
 			const session = sessions?.get?.(member.sessionId);
 			if (session === undefined || session === null || typeof titleService?.rename !== 'function') return;
+			const title = memberSessionTitle(member);
 			try {
-				titleService.rename(session, memberSessionTitle(member));
+				if (typeof titleService.get === 'function' && titleService.get(session)?.title === title) return;
+				titleService.rename(session, title);
 			} catch (error) {
 				console.warn('[ai-team] session title failed:', error?.message ?? error);
 			}
@@ -358,6 +360,11 @@ export function apply(ctx) {
 			const state = projectRuntime.service.state;
 			const project = state.projects?.[projectRuntime.id];
 			if (project === undefined || project.pmoAuto === false || project.status === 'archived') return;
+			for (const member of Object.values(state.members ?? {})) {
+				if (member.kind === 'agent' && typeof member.sessionId === 'string') {
+					await titleMemberSession(projectRuntime, member);
+				}
+			}
 			const results = await projectRuntime.service.autoAnswerDecisions();
 			for (const result of results) {
 				const taskId = result?.item?.ref?.taskId;
