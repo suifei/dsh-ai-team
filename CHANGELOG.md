@@ -1,5 +1,11 @@
 # Changelog
 
+﻿# Changelog
+
+## 0.3.72 - 2026-11-11
+
+- 项目头按钮栏布局修复：路径独占一行、按钮行自动换行并紧凑化（6 控件溢出错位，用户截图实证）。
+
 ## 0.3.71 — 2026-11-11
 
 - **【致命】工作台 #310 崩溃修复（用户实证）**：批量取消的忙碌标志 useState 被放在了 Workbench 的 Skeleton early-return **之后**——loading→ready 重渲染时 hooks 数量增多，触发 React #310 白屏。移到 early-return 之前的 state 区。渲染 E2E 的 React mock 同步加 **#310 守卫**：同一组件跨渲染 hooks 数量增多立即抛错（并在 0.3.69 类改动合入前即拦截）。
