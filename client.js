@@ -1089,8 +1089,9 @@ window.__ModuleLoader__.load({
 			.at-chead { flex: 0 0 auto; padding: 14px 18px 0; }
 			.at-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; color: var(--dsw-alias-label-primary); font-size: 16px; font-weight: 600; line-height: 22px; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 			.at-goal { min-width: 0; margin-top: 2px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-			.at-workspacebar { display: flex; align-items: center; gap: 8px; min-width: 0; margin-top: 4px; }
-			.at-workspacepath { flex: 1 1 auto; min-width: 0; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+			.at-workspacebar { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-width: 0; margin-top: 4px; }
+			.at-workspacepath { flex: 1 1 100%; min-width: 0; color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+			.at-workspacebar .at-btn, .at-workspacebar .at-pmobtn, .at-workspacebar .at-workspacebtn { padding-inline: 8px; font-size: 11px; line-height: 16px; white-space: nowrap; }
 			.at-workspacebtn { flex: 0 0 auto; padding: 2px 7px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-secondary); font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; }
 			.at-workspacebtn:hover { color: var(--dsw-alias-label-primary); border-color: var(--dsw-alias-label-tertiary); }
 			.at-pmobtn { flex: 0 0 auto; padding: 2px 7px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; white-space: nowrap; }
