@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.90 - 2026-11-12
+
+**Darwin Phase 2 自动 hill-climbing 循环（`skillopt_optimize`）**
+
+- 每轮：rubric 诊断最大加权短板 → 独立生成器产出候选（子代理，仅改该维度）→ 写入 → paired 独立 judge 多数决 → keep 保留 / revert 回滚 → results.tsv 追加。
+- 约束：单维改动、150% 体积上限、连续 2 轮 margin 全 slight/tie 触顶 break（HL-4 见好就收）、judge 不可用即回滚（未验证改动绝不保留）。
+- 版本化双模式：项目是**干净 git 仓库**时 commit/revert（新提交回滚，不用 reset --hard）；否则 `.skillopt-sleep/backups/*.bak` 文件备份恢复。
+- 结果记录 `<project>/.skillopt-sleep/results.tsv`（9 列，与 darwin 格式一致）；keep/revert 记 `eval_mode=paired`。
+- 测试：`test/skillopt-optimize.test.js` 9 项（短板诊断与平局、plateau 判据、候选校验、keep/revert/跳过/回滚/触顶、TSV 9 列）。
+
+
 ## 0.3.89 - 2026-11-12
 
 **完全对齐 darwin-skill v2.1（9 维 rubric + 独立 judge）**

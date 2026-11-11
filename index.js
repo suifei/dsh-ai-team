@@ -28,6 +28,8 @@ import { apply as applySkillOpt } from './lib/vendor/skillopt/src/index.js';
 import { createAdoptGate, wrapToolsWithAdoptGate } from './lib/skillopt/adopt-gate.js';
 import { formatRubric, scoreSkillRubric } from './lib/skillopt/rubric.js';
 import { makeJudge, makeReadPair } from './lib/skillopt/gate-wiring.js';
+import { runOptimizeLoop } from './lib/skillopt/optimizer.js';
+import { makeGenerator, makeResultAppender, makeVcs } from './lib/skillopt/optimize-wiring.js';
 import { createMemberPermissionGuard } from './lib/host/permission-guard.js';
 import { installFaultAdapter } from './lib/host/fault-adapter.js';
 import { buildModelCatalog } from './lib/host/model-catalog.js';
@@ -44,7 +46,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell'];
 
-const VERSION = '0.3.89';
+const VERSION = '0.3.90';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -851,13 +853,59 @@ export function apply(ctx, config = {}) {
 						].filter(Boolean).join('\n');
 					},
 				});
-				const disposeExtra = () => {
-					try { disposeSkillOpt?.(); } catch { /* already disposed */ }
-					try { rubricTool?.(); } catch { /* noop */ }
-					try { judgeTool?.(); } catch { /* noop */ }
-				};
+				// Darwin Phase 2：自动 hill-climbing（诊断→生成→写入→judge→keep/revert）。
+				// 同一轮只改一个维度，版本化走干净 git 仓库，否则 .bak 备份。
+				const optimizeTool = tools.register({
+					name: 'skillopt_optimize',
+					description: 'Run the Darwin hill-climbing loop on one SKILL.md: weakest-dimension diagnosis, generated candidate, paired independent judge, keep/revert, results.tsv.',
+					parameters: {
+						project: { type: 'string', description: 'Project directory' },
+						skillPath: { type: 'string', description: 'Path to SKILL.md to optimize' },
+						rounds: { type: 'number', description: 'Max rounds (default 3)' },
+					},
+					output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: String(value) }] },
+					async execute(args) {
+						const project = typeof args?.project === 'string' && args.project !== '' ? args.project : process.cwd();
+						const skillPath = typeof args?.skillPath === 'string' && args.skillPath !== '' ? args.skillPath : join(project, 'SKILL.md');
+						if (!existsSync(skillPath)) return `[skillopt optimize] SKILL.md not found: ${skillPath}`;
+						const rounds = Number.isSafeInteger(args?.rounds) ? Math.max(1, Math.min(5, args.rounds)) : 3;
+						const vcs = await makeVcs({ shell, projectDir: project });
+						const result = await runOptimizeLoop({
+							skillPath,
+							rounds,
+							readText: async (path) => readFileSync(path, 'utf8'),
+							writeText: async (path, text) => writeFileSync(path, text, 'utf8'),
+							score: (text) => scoreSkillRubric(text, { measured: false }),
+							generate: makeGenerator({
+								subagents: ctx.get('subagents'),
+								ensureParent: () => ensureParent(),
+								providerName: () => providers[0],
+								cwd: project,
+							}),
+							judge: async ({ before, after }) => {
+								const judge = makeJudge({
+									subagents: ctx.get('subagents'),
+									ensureParent: () => ensureParent(),
+									providerName: () => providers[0],
+									votes: config.skilloptJudgeVotes ?? 3,
+									diag,
+								});
+								return judge({ before, after, projectDir: project });
+							},
+							vcs,
+							appendResult: makeResultAppender({ projectDir: project }),
+						});
+						diag.append({ ev: 'skillopt.optimize', project, skillPath, status: result.status, rounds: result.rounds.length, finalScore: result.finalScore, vcs: vcs.kind });
+						const lines = [
+							`[skillopt optimize] status=${result.status} rounds=${result.rounds.length} finalScore=${result.finalScore ?? '-'} vcs=${vcs.kind}`,
+							...(result.rounds ?? []).map((round) => `  r${round.round} ${round.dimension}: ${round.verdict} (${round.better}-${round.worse}) ${round.oldScore}→${round.newScore ?? '-'}${round.kept ? ' kept' : ' reverted'}`),
+							result.error ? `  error: ${result.error}` : '',
+						].filter(Boolean);
+						return lines.join('\n');
+					},
+				});
 				disposeSkillOpt = disposeExtra;
-				diag.append({ ev: 'skillopt.registered', backend: config.skilloptBackend ?? 'mock', timeoutMs: config.skilloptTimeoutMs ?? 120_000, adoptGate: true, judgeVotes: config.skilloptJudgeVotes ?? 3 });
+				diag.append({ ev: 'skillopt.registered', backend: config.skilloptBackend ?? 'mock', timeoutMs: config.skilloptTimeoutMs ?? 120_000, adoptGate: true, judgeVotes: config.skilloptJudgeVotes ?? 3, optimize: true });
 			}
 		} catch (error) {
 			diag.append({ ev: 'skillopt.fail', message: error?.message ?? String(error) });
