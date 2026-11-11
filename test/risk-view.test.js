@@ -68,6 +68,17 @@ test('stale decisions only include unread human decisions older than the thresho
 	assert.equal(view.counts.staleDecisions, 2);
 });
 
+test('a failure older than the member recovery is not an open risk', () => {
+	const state = baseState({
+		members: [
+			{ id: 'a1', name: '玄策', kind: 'agent', role: '编程', status: 'running', lastFailure: { category: 'unknown', at: NOW - 6 * H, message: 'tool dump' }, lastRecoveredAt: NOW - 5 * H },
+			{ id: 'a2', name: '白砚', kind: 'agent', role: '验收', status: 'running', lastFailure: { category: 'network', at: NOW - 2 * H }, lastRecoveredAt: NOW - 5 * H },
+		],
+	});
+	const view = riskView(state, { now: NOW });
+	assert.deepEqual(view.failures.map((row) => row.memberId), ['a2'], 'recovered-over failure is cleared');
+});
+
 test('empty state yields zero counts and stable shape', () => {
 	const view = riskView(baseState(), { now: NOW });
 	assert.deepEqual(view.counts, { blocked: 0, failures: 0, staleDecisions: 0 });

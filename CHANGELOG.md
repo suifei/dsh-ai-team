@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.63 — 2026-11-11
+
+- 修复风险清单「失败」永挂：成员恢复后 `member/recovered` 此前不清 `lastFailure`，一次瞬时 tool/LLM 失败会永远钉在 Human 的风险清单；fold 恢复即清除 + 风险视图对旧账本防御（failure 早于 lastRecoveredAt 不计）；
+- 失败消息入库截断 400 字符（3KB tool dump 不再轰击账本与 UI）；前端风险行截断 240 + hover 全文；
+- 实测案例：玄策 10:30 的 edit 参数 JSON 截断，08:26 已恢复三连，风险清单仍挂昨日原文——本版本后此类瞬态失败自动出局。
+
 ## 0.3.62 — 2026-11-11
 
 - **【致命】工作台渲染崩溃修复**：主对话流 `StreamMessage` 调用处的 `onOpenProfile` 简写属性引用了 Workbench 作用域中不存在的标识符（正确目标是 `openProfile` 函数），首次渲染即抛 `ReferenceError: onOpenProfile is not defined` 使整个工作台白屏。改为显式 `onOpenProfile: openProfile`（与 MemberView 调用点一致）。`node --check` 对简写属性语法不报错，静态检查存在盲区；
