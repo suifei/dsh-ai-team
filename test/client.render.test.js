@@ -239,4 +239,17 @@ test('headless render: workbench main path evaluates every component without ref
 		return value;
 	});
 	assert.ok(flattened.includes('Task #'), 'task cards must render');
+
+	// R-04 防刷屏回归：管理视图的 UI children 不得携带超长技术原文
+	// （失败 message 等调试串只允许出现在 hover title 属性里）。
+	const oversize = [];
+	const walkStrings = (node) => {
+		if (typeof node === 'string') { if (node.length > 200) oversize.push(node.slice(0, 60)); return; }
+		if (node && typeof node === 'object') {
+			if (Array.isArray(node.children)) node.children.forEach(walkStrings);
+			else if (node.children !== undefined) walkStrings(node.children);
+		}
+	};
+	walkStrings(tree3);
+	assert.deepEqual(oversize, [], 'no UI string may exceed 200 chars — long diagnostics belong in title attributes');
 });

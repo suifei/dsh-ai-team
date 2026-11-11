@@ -3747,7 +3747,7 @@ window.__ModuleLoader__.load({
 										h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => openInboxTask({ ref: { taskId: row.taskId }, projectId: projectId }) }, t('inboxOpenTask')))),
 									risksData.failures.map((row) => h('div', { key: 'f' + row.memberId, className: 'at-peopleproject' },
 										h('span', { className: 'at-peopleprojectname' }, row.name),
-										h('span', { className: 'at-peoplefail', title: row.message ?? '' }, failureHuman(t, row.category ?? 'unknown') + (row.message ? ' · ' + (row.message.length > 240 ? row.message.slice(0, 240) + '…' : row.message) : '')),
+										h('span', { className: 'at-peoplefail', title: row.message ?? '' }, failureHuman(t, row.category ?? 'unknown')),
 										h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => {
 											const agent = data.agents.find((candidate) => candidate.name === row.name);
 											if (agent) { closeMobile(); openProfile(agent); } else say(t('quadrantMissing'));
