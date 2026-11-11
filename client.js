@@ -1341,6 +1341,9 @@ window.__ModuleLoader__.load({
 			.at-obstep.at-obdone .at-obmark { border-color: var(--dsw-alias-state-success-primary); color: var(--dsw-alias-state-success-primary); }
 			.at-oblabel { flex: 1 1 auto; min-width: 0; }
 			.at-peoplehead { display: flex; align-items: center; gap: 8px; margin: 0 12px 8px; }
+			.at-aliasbox { margin: 0 12px 8px; border-bottom: 1px dashed var(--dsw-alias-border-l2); }
+			.at-aliasrow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 6px 0; }
+			.at-aliasrow .at-decisioninput { flex: 1 1 120px; min-width: 90px; }
 			.at-peoplecount { color: var(--dsw-alias-label-caption); font-size: 11px; margin-right: auto; }
 			.at-permbadge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--dsw-alias-state-warn-primary); color: var(--dsw-alias-state-warn-label); font-size: 10.5px; }
 			.at-msg-highlight { border-left: 2px solid var(--dsw-alias-state-business-primary); padding-left: 10px; }
@@ -1932,7 +1935,7 @@ window.__ModuleLoader__.load({
 		 * 人员池总览（全局层，11-管理视角 §2）：按"人"聚合各项目身份。
 		 * 数据 = GET /ai-team/api/people（各项目账本 members/tasks 的只读聚合）。
 		 */
-		function PeoplePage({ t, people, error, loading, onOpenProject, onRefresh, localNames, onOpenPerson, onChatPerson, onConfigModel }) {
+		function PeoplePage({ t, people, error, loading, onOpenProject, onRefresh, localNames, onOpenPerson, onChatPerson, onConfigModel, onBindAlias, aliasDraft }) {
 			if (error) return h('div', { className: 'at-stream', role: 'alert' },
 				h('div', { className: 'at-streaminner' }, h(EmptyState, { t, icon: 'alert', title: t('peopleTitle'), body: tf(t, 'peopleLoadFailed', { message: error }) })));
 			// loading 用中心区域骨架（流内行），不用整页 Skeleton——本组件位于
@@ -1951,6 +1954,14 @@ window.__ModuleLoader__.load({
 					h('div', { className: 'at-peoplehead' },
 						h('span', { className: 'at-peoplecount' }, loading ? t('loading') : tf(t, 'peopleProjects', { n: people.length })),
 						h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: onRefresh, disabled: loading }, t('refresh'))),
+					onBindAlias ? h('details', { className: 'at-aliasbox' },
+						h('summary', { className: 'at-peoplesum' }, h('span', { className: 'at-people-role' }, t('aliasTitle'))),
+						h('div', { className: 'at-aliasrow' },
+							h('input', { className: 'at-decisioninput', value: aliasDraft?.name ?? '', placeholder: t('aliasSourcePlaceholder'), onChange: (event) => aliasDraft.onName(event.target.value) }),
+							h('span', { className: 'at-people-role' }, '→'),
+							h('input', { className: 'at-decisioninput', value: aliasDraft?.target ?? '', placeholder: t('aliasTargetPlaceholder'), onChange: (event) => aliasDraft.onTarget(event.target.value) }),
+							h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => onBindAlias(aliasDraft?.target ?? '') }, t('aliasBind'))),
+						h('div', { className: 'at-modalmeta' }, t('aliasHint'))) : null,
 					people.map((person) => {
 					const badges = [
 						tf(t, 'peopleProjects', { n: person.projects.length }),
@@ -2644,6 +2655,9 @@ window.__ModuleLoader__.load({
 			// P1b 批量取消的忙碌标志——必须位于 Skeleton early-return 之前
 			// （React hooks 数量在渲染间必须恒定，否则 #310）。
 			const [cancelAllBusy, setCancelAllBusy] = React.useState(false);
+			// P17 同人绑定输入（同上：hooks 必须在 early-return 之前）。
+			const [aliasName, setAliasName] = React.useState('');
+			const [aliasTarget, setAliasTarget] = React.useState('');
 			// 自绘确认/输入对话框（替代原生 prompt/confirm，观感与宿主一致）。
 			// dialog: { mode: 'confirm'|'prompt'|'choice', title, body, placeholder,
 			//           value, options, resolve } — resolve(false|null|字符串)。
@@ -2924,6 +2938,24 @@ window.__ModuleLoader__.load({
 				} catch (error) {
 					sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
 				}
+			}
+			// P17：人员池同人绑定（把另一个名字并到某人）——host 路由
+			// POST /ai-team/api/people-aliases，绑定后聚合按 personId 合并。
+			function bindAlias(personName) {
+				const other = aliasName.trim();
+				const target = (personName ?? aliasTarget).trim();
+				if (!other || !target || other === target) { say(t('aliasRequired')); return; }
+				fetch('/ai-team/api/people-aliases', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json', accept: 'application/json' },
+					body: JSON.stringify({ name: other, personId: target }),
+				}).then(async (response) => {
+					const payload = await response.json().catch(() => null);
+					if (!response.ok) throw new Error(payload?.error?.message ?? ('HTTP ' + response.status));
+					say(tf(t, 'aliasSaved', { name: other, person: target }));
+					setAliasName('');
+					loadPeople();
+				}).catch((error) => sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) })));
 			}
 			// P2：人员池统一配置模型——对同名成员在其所有项目逐个
 			// member.config.update（跨项目批量，免逐项目进资料面板）。
@@ -3880,6 +3912,8 @@ window.__ModuleLoader__.load({
 						else say(t('quadrantMissing'));
 					},
 					onConfigModel: configPersonModel,
+					onBindAlias: bindAlias,
+					aliasDraft: { name: aliasName, target: aliasTarget, onName: setAliasName, onTarget: setAliasTarget },
 				})
 				: inInbox
 				? h('div', { className: 'at-stream', role: 'region', 'aria-label': t('inboxTitle') },

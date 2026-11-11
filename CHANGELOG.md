@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.75 - 2026-11-12
+
+- **P17 人员池同人绑定 UI 恢复**：人员池头部「同人绑定」表单（源名 → 目标人 → 绑定，POST /ai-team/api/people-aliases），跨项目身份合并可配置（host 路由此前已就绪，UI 在历史回退中丢失）。
+- **P5a 取证定论**：direct-subagent address 经源码取证为**读取**子代理会话日志/历史投影的地址通路（kind:subagent 用 childSessionId 校验），非 Human 输入投递通路——原生直聊为宿主硬边界，最终确认不可达；等效通道为私信直通。
+- 渲染 E2E #310 守卫在本次施工中实际拦截了两处新引入的 early-return 后 hooks（已改到 state 区）。
+
+
 ## 0.3.74 - 2026-11-12
 
 - **P2 人员池统一模型配置**：人员池行级「统一配置模型」入口——选 LLM 端点后对该成员在**所有项目**逐个 member.config.update（跨项目批量），免去逐项目×逐成员修改（NO_ADAPTER / max_tokens 超限场景的根治入口）。
