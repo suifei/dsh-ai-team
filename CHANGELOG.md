@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.73 - 2026-11-11
+
+- **项目头开关失效修复**：bootstrap 的 projects[] 在 registry 重映射时丢弃了 chatGate/runState（按钮状态永远默认「开」，点击后 UI 不更新）；归档 409 修复：归档保护在 service 内判定（只见自己账本，恒为最后项目）→ 移到 Host 路由层用 registry 全局清单判定。
+
+
 ﻿# Changelog
 
 ## 0.3.72 - 2026-11-11

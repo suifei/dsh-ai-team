@@ -41,7 +41,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.72';
+const VERSION = '0.3.73';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -1249,18 +1249,24 @@ export function apply(ctx, config = {}) {
 							...bootstrap,
 							inbox,
 							inboxUnread: inbox.filter((item) => item.state === 'unread').length,
-							projects: booted.registry.list().map((project) => {
-								const active = bootstrap.projects?.find((entry) => entry.id === project.id);
-								return {
-									...project,
-									owner: active?.owner ?? null,
-									goal: active?.goal ?? '',
-									workspacePath: active?.workspacePath ?? project.workspacePath ?? '',
-									pmoAuto: project.pmoAuto ?? active?.pmoAuto ?? true,
-									archived: false,
-									active: project.id === booted.activeProjectId,
-								};
-							}),
+							projects: booted.registry.list()
+								.filter((project) => project.archived !== true)
+								.map((project) => {
+									const active = bootstrap.projects?.find((entry) => entry.id === project.id);
+									return {
+										...project,
+										owner: active?.owner ?? null,
+										goal: active?.goal ?? '',
+										workspacePath: active?.workspacePath ?? project.workspacePath ?? '',
+										pmoAuto: project.pmoAuto ?? active?.pmoAuto ?? true,
+										// 项目级开关随 bootstrap 下发（此前被 registry 重映射
+										// 丢弃，导致按钮状态永远默认「开」）。
+										chatGate: active?.chatGate ?? 'open',
+										runState: active?.runState ?? 'running',
+										archived: project.archived === true,
+										active: project.id === booted.activeProjectId,
+									};
+								}),
 							runtime: {
 								defaultModel: ctx.get('agentDefaultModel')?.currentSelection?.() ?? null,
 								providers: ctx.get('subagents')?.list?.() ?? [],
@@ -1345,6 +1351,14 @@ export function apply(ctx, config = {}) {
 						}
 						if (typeof body?.type !== 'string' || body.type === '') {
 							return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'command type is required' } }, 400);
+						}
+						// 归档保护在实际的全局清单上判定（registry 跨项目；service 只见
+						// 自己的账本，旧实现在 service 内判定导致所有归档被误拒）。
+						if (body.type === 'project.archive' && body.payload?.archived !== false) {
+							const others = booted.registry.list().filter((project) => project.archived !== true && project.id !== projectId);
+							if (others.length === 0) {
+								return send(res, { error: { code: 'E_INVALID_STATE', message: 'cannot archive the last active project' } }, 409);
+							}
 						}
 						if (body.type === 'test.llm.fault') {
 							if (process.env.DSH_AI_TEAM_TEST !== '1') {
