@@ -28,8 +28,10 @@ import { apply as applySkillOpt } from './lib/vendor/skillopt/src/index.js';
 import { createAdoptGate, wrapToolsWithAdoptGate } from './lib/skillopt/adopt-gate.js';
 import { formatRubric, scoreSkillRubric } from './lib/skillopt/rubric.js';
 import { makeJudge, makeReadPair } from './lib/skillopt/gate-wiring.js';
-import { runOptimizeLoop } from './lib/skillopt/optimizer.js';
-import { makeGenerator, makeResultAppender, makeVcs } from './lib/skillopt/optimize-wiring.js';
+import { runOptimizeLoop, weakestDimension } from './lib/skillopt/optimizer.js';
+import { hasPairedKeepRecord, makeGenerator, makeResultAppender, makeVcs } from './lib/skillopt/optimize-wiring.js';
+import { listJobs, readJob, writeJob } from './lib/skillopt/jobs.js';
+import { reconcileJobs } from './lib/skillopt/job-runner.js';
 import { createMemberPermissionGuard } from './lib/host/permission-guard.js';
 import { installFaultAdapter } from './lib/host/fault-adapter.js';
 import { buildModelCatalog } from './lib/host/model-catalog.js';
@@ -46,7 +48,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell'];
 
-const VERSION = '0.3.98';
+const VERSION = '0.4.0';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -72,6 +74,28 @@ export const Config = z.object({
 	// Darwin paired judge：独立子代理票数，奇数 ≥3（接近平局可升 5）。
 	skilloptJudgeVotes: z.number().step(1).min(3).max(9).default(3),
 });
+
+/**
+ * 惰性 shell 服务代理：插件注入时机可能早于 shell 服务就绪，注册与 tick 都
+ * 必须在调用时现取，避免「boot 时未就绪 → 整条技能链静默跳过」。
+ */
+function lazyShellService(ctx) {
+	const get = () => {
+		const service = ctx.get('shell');
+		if (service === undefined || service === null) throw new Error('shell service is not available');
+		return service;
+	};
+	return {
+		resolve: (spec) => {
+			const service = get();
+			return typeof service.resolve === 'function' ? service.resolve(spec) : spec;
+		},
+		execute: async (spec) => {
+			const service = get();
+			return typeof service.execute === 'function' ? service.execute(spec) : service.run(spec);
+		},
+	};
+}
 
 function send(res, body, status = 200) {
 	if (res.writableEnded) return;
@@ -462,7 +486,7 @@ export function apply(ctx, config = {}) {
 							agentPresets: ctx.get('agentPresets'),
 							direct: false,
 							parent: parentInfo.agent,
-							provider: providers[0],
+							provider: (ctx.get('subagents')?.list?.() ?? [])[0],
 							preset: 'standard',
 							cwd,
 							trackHandle: (sessionId, handle) => resumedHandles.set(sessionId, handle),
@@ -542,6 +566,33 @@ export function apply(ctx, config = {}) {
 			const state = projectRuntime.service.state;
 			const project = state.projects?.[projectRuntime.id];
 			if (project === undefined || project.pmoAuto === false || project.status === 'archived') return;
+			// 两阶段异步优化 job 收割：与任务派发无关，放在停止门之前——
+			// Human 启动的 job 必须在任意运行态下收敛（生成/评审/落盘）。
+			try {
+				const parentInfo = await ensureParent();
+				await reconcileJobs({
+					ctx,
+					projectDir: project.workspacePath || projectRuntime.dir,
+					deps: {
+						now: () => Date.now(),
+						provider: (ctx.get('subagents')?.list?.() ?? [])[0],
+						parent: parentInfo?.agent,
+						votes: config.skilloptJudgeVotes ?? 3,
+						startChild: async (label, spec) => {
+							const child = await subagents.startActivation({ ...spec, label });
+							return { childId: child.childId, outputStart: child.outputStart ?? null };
+						},
+						readText: (file) => readFileSync(file, 'utf8'),
+						writeText: (file, next) => writeFileSync(file, next, 'utf8'),
+						score: (value) => scoreSkillRubric(value, { measured: false }),
+						appendResult: makeResultAppender({ projectDir: project.workspacePath || projectRuntime.dir }),
+						vcs: await makeVcs({ shell: lazyShellService(ctx), projectDir: project.workspacePath || projectRuntime.dir }),
+						diag: (row) => diag.append(row),
+					},
+				});
+			} catch (error) {
+				diag.append({ ev: 'skillopt.job.tick.fail', message: error?.message ?? String(error) });
+			}
 			// P6 停止门：stopped 项目停止一切派发（补派/心跳/升级/continue 全停），
 			// 正在执行的回合自然完成；唤醒事件 hook 同样检查（见 wakeFromResult）。
 			if (project.runState === 'stopped') return;
@@ -755,18 +806,7 @@ export function apply(ctx, config = {}) {
 		try {
 			// shell 惰性代理：注入时机早于 shell 服务就绪时，注册仍必须完成——
 			// 每次调用现取，避免「boot 时 shell 未就绪 → 整条技能链静默跳过」。
-			const shellProxy = {
-				resolve: (spec) => {
-					const service = ctx.get('shell');
-					if (service === undefined || service === null) throw new Error('shell service is not available');
-					return typeof service.resolve === 'function' ? service.resolve(spec) : spec;
-				},
-				execute: async (spec) => {
-					const service = ctx.get('shell');
-					if (service === undefined || service === null) throw new Error('shell service is not available');
-					return typeof service.execute === 'function' ? service.execute(spec) : service.run(spec);
-				},
-			};
+			const shellProxy = lazyShellService(ctx);
 			if (!tools?.register) {
 				diag.append({ ev: 'skillopt.skip.fail', hasToolsRegister: false, hasShell: Boolean(ctx.get('shell')) });
 				console.warn('[ai-team] SkillOpt tools not registered: no tool registry');
@@ -787,7 +827,9 @@ export function apply(ctx, config = {}) {
 				});
 				const adoptGate = createAdoptGate({
 					readPair,
-					judge,
+					// 两阶段异步模式：工具 execute 内无法等待子代理，判据改为
+					// results.tsv 中该 skill 已存在 paired keep 记录（同步可查）。
+					hasKeepRecord: async ({ projectDir, skillPath }) => hasPairedKeepRecord(projectDir, skillPath),
 					diag: (line, extra) => diag.append({
 						ev: extra?.ev ?? 'skillopt.adoptgate',
 						message: line,
@@ -862,64 +904,79 @@ export function apply(ctx, config = {}) {
 				});
 				// Darwin Phase 2：自动 hill-climbing（诊断→生成→写入→judge→keep/revert）。
 				// 同一轮只改一个维度，版本化走干净 git 仓库，否则 .bak 备份。
+				// 两阶段异步：工具只启动生成子代理并写 job，收割由 PMO tick 完成
+				// （工具 execute 内无法同步等待一次性子代理——实测 result 永不 settle）。
 				const optimizeTool = tools.register({
 					name: 'skillopt_optimize',
-					description: 'Run the Darwin hill-climbing loop on one SKILL.md: weakest-dimension diagnosis, generated candidate, paired independent judge, keep/revert, results.tsv.',
+					description: 'Start a Darwin hill-climbing job for one SKILL.md (diagnose, generate candidate, paired judge, keep/revert). The PMO tick harvests it; poll skillopt_jobs for the outcome.',
 					parameters: {
 						project: { type: 'string', description: 'Project directory' },
 						skillPath: { type: 'string', description: 'Path to SKILL.md to optimize' },
-						rounds: { type: 'number', description: 'Max rounds (default 3)' },
 					},
 					output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: String(value) }] },
 					async execute(args) {
 						const project = typeof args?.project === 'string' && args.project !== '' ? args.project : process.cwd();
 						const skillPath = typeof args?.skillPath === 'string' && args.skillPath !== '' ? args.skillPath : join(project, 'SKILL.md');
 						if (!existsSync(skillPath)) return `[skillopt optimize] SKILL.md not found: ${skillPath}`;
-						const rounds = Number.isSafeInteger(args?.rounds) ? Math.max(1, Math.min(5, args.rounds)) : 3;
-						const vcs = await makeVcs({ shell: shellProxy, projectDir: project });
-						const result = await runOptimizeLoop({
-							skillPath,
-							rounds,
-							readText: async (path) => readFileSync(path, 'utf8'),
-							writeText: async (path, text) => writeFileSync(path, text, 'utf8'),
-							score: (text) => scoreSkillRubric(text, { measured: false }),
-							generate: makeGenerator({
-								subagents: ctx.get('subagents'),
-								ensureParent: () => ensureParent(),
-								providerName: () => (ctx.get('subagents')?.list?.() ?? [])[0],
-								cwd: project,
-								diag,
-							}),
-							judge: async ({ before, after }) => {
-								const judge = makeJudge({
-									subagents: ctx.get('subagents'),
-									ensureParent: () => ensureParent(),
-									providerName: () => (ctx.get('subagents')?.list?.() ?? [])[0],
-									votes: config.skilloptJudgeVotes ?? 3,
-									diag,
-								});
-								return judge({ before, after, projectDir: project });
-							},
-							vcs,
-							appendResult: makeResultAppender({ projectDir: project }),
+						const text0 = readFileSync(skillPath, 'utf8');
+						const rubric = scoreSkillRubric(text0, { measured: false });
+						const dimension = weakestDimension(rubric);
+						if (dimension === null) return '[skillopt optimize] rubric produced no scorable dimension';
+						const parentInfo = await ensureParent();
+						const generator = makeGenerator({
+							subagents: ctx.get('subagents'),
+							ensureParent: () => ensureParent(),
+							providerName: () => (ctx.get('subagents')?.list?.() ?? [])[0],
+							cwd: project,
+							diag,
 						});
-						diag.append({ ev: 'skillopt.optimize', project, skillPath, status: result.status, rounds: result.rounds.length, finalScore: result.finalScore, vcs: vcs.kind });
-						const lines = [
-							`[skillopt optimize] status=${result.status} rounds=${result.rounds.length} finalScore=${result.finalScore ?? '-'} vcs=${vcs.kind}`,
-							...(result.rounds ?? []).map((round) => `  r${round.round} ${round.dimension}: ${round.verdict} (${round.better}-${round.worse}) ${round.oldScore}→${round.newScore ?? '-'}${round.kept ? ' kept' : ' reverted'}`),
-							result.error ? `  error: ${result.error}` : '',
-						].filter(Boolean);
-						return lines.join('\n');
+						const jobId = 'job_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+						const child = await generator.start({
+							skillPath,
+							before: text0,
+							dimension,
+							round: 1,
+						});
+						writeJob(project, {
+							id: jobId,
+							state: 'generating',
+							project,
+							skillPath,
+							skillName: skillPath.split(/[\\/]/).slice(-2, -1)[0] ?? skillPath,
+							dimension: `dim${dimension.id}` + ' ' + dimension.name,
+							generatorChildId: child.childId,
+							outputStart: child.outputStart ?? null,
+							parentId: parentInfo?.agent?.id ?? null,
+							createdAt: Date.now(),
+						});
+						diag.append({ ev: 'skillopt.job.started', jobId, project, skillPath, dimension: `dim${dimension.id}`, generatorChildId: child.childId });
+						return [
+							`[skillopt optimize] started job=${jobId} target=dim${dimension.id} ${dimension.name} baseline=${rubric.total}` ,
+							'  two-phase async: the PMO tick harvests generator -> judges -> keep/revert and appends results.tsv',
+							'  poll with skillopt_jobs',
+						].join('\n');
 					},
 				});
-				// 汇总释放：引擎工具 + 三个附加工具（顺序无关，各自 try）。
+				const jobsTool = tools.register({
+					name: 'skillopt_jobs',
+					description: 'List optimize jobs (state, target dimension, verdict) for a project.',
+					parameters: { project: { type: 'string', description: 'Project directory' } },
+					output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: String(value) }] },
+					async execute(args) {
+						const project = typeof args?.project === 'string' && args.project !== '' ? args.project : process.cwd();
+						const jobs = listJobs(project);
+						if (jobs.length === 0) return '[skillopt jobs] none';
+						return ['[skillopt jobs]', ...jobs.map((job) => `  ${job.id} ${job.state} ${job.dimension ?? '-'}${job.decision ? ` verdict=${job.decision.verdict} (${job.decision.better}-${job.decision.worse})` : ''}${job.error ? ` error=${job.error}` : ''}`)].join('\n');
+					},
+				});
 				const disposeExtra = () => {
 					try { disposeSkillOpt?.(); } catch { /* already disposed */ }
 					try { rubricTool?.(); } catch { /* noop */ }
 					try { judgeTool?.(); } catch { /* noop */ }
 					try { optimizeTool?.(); } catch { /* noop */ }
+					try { jobsTool?.(); } catch { /* noop */ }
 				};
-				disposeSkillOpt = disposeExtra;
+								disposeSkillOpt = disposeExtra;
 				diag.append({ ev: 'skillopt.registered', backend: config.skilloptBackend ?? 'mock', timeoutMs: config.skilloptTimeoutMs ?? 120_000, adoptGate: true, judgeVotes: config.skilloptJudgeVotes ?? 3, optimize: true });
 			}
 		} catch (error) {
@@ -1052,7 +1109,7 @@ export function apply(ctx, config = {}) {
 					agentPresets: ctx.get('agentPresets'),
 					direct: false,
 					parent: parentInfo.agent,
-					provider: providers[0],
+					provider: (ctx.get('subagents')?.list?.() ?? [])[0],
 					preset: 'standard',
 					cwd: effectiveDir,
 					trackHandle: (sessionId, handle) => resumedHandles.set(sessionId, handle),
