@@ -41,7 +41,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.68';
+const VERSION = '0.3.69';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -192,14 +192,16 @@ export function apply(ctx, config = {}) {
 				return null;
 			}
 		};
-		const memberSessionTitle = (member) => `${member?.name ?? 'Agent'}（${member?.role ?? 'Agent'}）`.trim().slice(0, 120);
+		// 会话标题带项目前缀：多项目同名成员在 DSH 侧栏无法区分（用户实证）。
+		const memberSessionTitle = (member, projectName) => `${projectName ? '【' + projectName + '】' : ''}${member?.name ?? 'Agent'}（${member?.role ?? 'Agent'}）`.trim().slice(0, 120);
+		const projectNameOf = (projectRuntime) => projectRuntime?.service?.state?.projects?.[projectRuntime?.id]?.name ?? '';
 		const titleMemberSession = async (projectRuntime, member) => {
 			if (member === undefined) return;
 			const sessions = ctx.get('sessions');
 			const titleService = ctx.get('sessionTitle');
 			const session = sessions?.get?.(member.sessionId);
 			if (session === undefined || session === null || typeof titleService?.rename !== 'function') return;
-			const title = memberSessionTitle(member);
+			const title = memberSessionTitle(member, projectNameOf(projectRuntime));
 			try {
 				if (typeof titleService.get === 'function' && titleService.get(session)?.title === title) return;
 				titleService.rename(session, title);
@@ -606,6 +608,11 @@ export function apply(ctx, config = {}) {
 				}
 				return;
 			}
+			// P1：空项目（从未有过任何任务）不自动开工——新装用户配置完目录后
+			// 被 PMO 自动建卡（用户实证：5 张卡违背「等我指令」预期）。等待
+			// Human 首条指令（human_message → PMO 建卡链路保持不变）。
+			const hasAnyTaskHistory = Object.keys(state.tasks ?? {}).length > 0;
+			if (!hasAnyTaskHistory) return;
 			const last = pmoLastKick.get(projectRuntime.id) ?? 0;
 			if (now - last < 10 * 60_000) return;
 			pmoLastKick.set(projectRuntime.id, now);

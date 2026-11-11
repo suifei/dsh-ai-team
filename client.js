@@ -222,6 +222,14 @@ window.__ModuleLoader__.load({
 			chatGateOpened: 'Human 对话通道已开启：私信将直达成员下一轮。',
 			chatGateClosedShort: 'Human 对话通道已关闭。',
 			routingHint: '成员的原生会话由团队路由驱动，宿主不接受直接输入；请用下方私信与成员对话（下一轮生效）。',
+			cancelAllPending: '取消全部待处理（{n}）',
+			cancelAllHint: '批量取消当前全部待处理任务（逐卡取消并汇总结果）',
+			cancelAllDone: '批量取消完成：成功 {done} 个，失败 {failed} 个。',
+			working: '处理中…',
+			archiveProject: '归档项目',
+			archiveHint: '归档当前项目（从工作台移除；账本保留，DSH 会话不受影响）',
+			archiveConfirmTitle: '归档项目',
+			archiveConfirmBody: '将「{name}」从工作台归档移除？账本保留、成员 DSH 会话不受影响。',
 			pmoEnabled: 'PMO 自动已开启。',
 			pmoDisabled: 'PMO 自动已关闭，决策回到收件箱。',
 			notifyTaskCreated: '新 Task 已创建',
@@ -619,6 +627,14 @@ window.__ModuleLoader__.load({
 			chatGateOpened: 'Human chat channel opened: DMs reach members next round.',
 			chatGateClosedShort: 'Human chat channel closed.',
 			routingHint: 'Member native sessions are driven by team routing; the host rejects direct input. Use the DM below to talk to a member (effective next round).',
+			cancelAllPending: 'Cancel all pending ({n})',
+			cancelAllHint: 'Batch-cancel every pending task (one by one, with a summary)',
+			cancelAllDone: 'Batch cancel done: {done} ok, {failed} failed.',
+			working: 'Working…',
+			archiveProject: 'Archive project',
+			archiveHint: 'Archive this project (removed from the workbench; ledger kept, DSH sessions unaffected)',
+			archiveConfirmTitle: 'Archive project',
+			archiveConfirmBody: 'Archive "{name}" and remove it from the workbench? The ledger is kept and member DSH sessions are unaffected.',
 			pmoEnabled: 'PMO auto enabled.',
 			pmoDisabled: 'PMO auto disabled; decisions go back to the inbox.',
 			notifyTaskCreated: 'New Task created',
@@ -1806,8 +1822,9 @@ window.__ModuleLoader__.load({
 				}, '⋯'));
 		}
 
-		function TeamPulse({ t, agents, tasks, onOpen }) {
+		function TeamPulse({ t, agents, tasks, onOpen, onCancelAllPending, cancelBusy }) {
 			const active = tasks.filter((task) => ['pending', 'in_progress', 'pending_acceptance'].includes(task.status)).slice(-5);
+			const pendingTasks = tasks.filter((task) => task.status === 'pending');
 			const running = agents.filter((agent) => agent.status === 'running');
 			const starting = active.length === 0 && tasks.length === 0 && running.length > 0;
 			if (active.length === 0 && !starting) return null;
@@ -1821,7 +1838,11 @@ window.__ModuleLoader__.load({
 			return h('section', { className: 'at-teampulse', 'aria-label': t('teamPulseTitle') },
 				h('div', { className: 'at-teampulsehead' },
 					h('span', { className: 'at-teampulsetitle' }, t('teamPulseTitle')),
-					h('span', { className: 'at-teampulsecount' }, summary || t('teamPulseWorking'))),
+					h('span', { className: 'at-teampulsecount' }, summary || t('teamPulseWorking')),
+					// P1b：批量取消——Human 无需逐卡点开（用户实证的取消体验痛点）。
+					pendingTasks.length > 0 && onCancelAllPending
+						? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => onCancelAllPending(pendingTasks), disabled: cancelBusy === true, title: t('cancelAllHint') }, cancelBusy ? t('working') : tf(t, 'cancelAllPending', { n: pendingTasks.length }))
+						: null),
 				active.length
 					? h('div', { className: 'at-teampulselist' }, active.map((task) => h('button', {
 						key: task.id,
@@ -2843,6 +2864,37 @@ window.__ModuleLoader__.load({
 			const selectedTask = tasks.find((task) => task.id === selected) ?? tasks[0] ?? null;
 			const thread = threadFor(data, selectedTask?.id);
 			const quadrants = deriveQuadrants(data);
+			// P1b：批量取消全部待处理（逐卡 task.cancel，Human-only；汇总结果）。
+			const [cancelAllBusy, setCancelAllBusy] = React.useState(false);
+			async function cancelAllPending(pendingTasks) {
+				if (!Array.isArray(pendingTasks) || pendingTasks.length === 0) return;
+				setCancelAllBusy(true);
+				let done = 0; let failed = 0;
+				try {
+					for (const task of pendingTasks) {
+						try {
+							await runCommand('task.cancel', { taskId: task.id, expectedRevision: task.revision, reason: t('cancelAllHint') });
+							done += 1;
+						} catch { failed += 1; }
+					}
+					sayRight(tf(t, 'cancelAllDone', { done, failed }));
+					await reloadData();
+				} finally {
+					setCancelAllBusy(false);
+				}
+			}
+			async function archiveCurrentProject() {
+				if (!project) return;
+				const answer = await askConfirm(t('archiveConfirmTitle'), tf(t, 'archiveConfirmBody', { name: project.name }));
+				if (answer !== true) return;
+				try {
+					await runCommand('project.archive', { archived: true });
+					say(t('archiveDone'));
+					await reloadData();
+				} catch (error) {
+					sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
+			}
 			const inboxItems = (data.inbox ?? []).filter((item) => !isInformationalInboxItem(item));
 			// R-13bis：Human↔成员对话门（项目级开关，账本留痕）。
 			const chatGateClosed = (project?.chatGate ?? 'open') === 'closed';
@@ -3863,7 +3915,7 @@ window.__ModuleLoader__.load({
 						? h(Situation, { t, quadrants, tasks, onItem: openQuadrantItem, onViewAll: viewQuadrant })
 						: h('div', { className: 'at-stream', role: 'tabpanel', id: 'at-panel-main', 'aria-labelledby': 'at-tab-main' },
 							h('div', { className: 'at-streaminner', role: 'log', 'aria-live': 'polite', 'aria-label': t('streamAria') },
-								h(TeamPulse, { t, agents: data.agents, tasks, onOpen: openTask }),
+								h(TeamPulse, { t, agents: data.agents, tasks, onOpen: openTask, onCancelAllPending: cancelAllPending, cancelBusy: cancelAllBusy }),
 								data.stream.length
 									? data.stream.map((item) => h(StreamMessage, {
 										key: item.id,
@@ -3919,7 +3971,13 @@ window.__ModuleLoader__.load({
 									title: t('chatGateHint'),
 									'aria-pressed': !chatGateClosed,
 									onClick: () => { void toggleChatGate(); },
-								}, !chatGateClosed ? t('chatGateOn') : t('chatGateOff'))) : null,
+								}, !chatGateClosed ? t('chatGateOn') : t('chatGateOff'),
+								h('button', {
+									className: 'at-workspacebtn',
+									type: 'button',
+									title: t('archiveHint'),
+									onClick: () => { void archiveCurrentProject(); },
+						}, t('archiveProject')))) : null,
 							inInbox || inPeople ? null : h('div', { className: 'at-tabs', role: 'tablist', 'aria-label': t('tabsAria'), onKeyDown: tabKeyDown },
 								h('button', {
 									className: cx('at-tab', tab === 'main' && 'at-on'),

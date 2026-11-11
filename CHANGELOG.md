@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.69 — 2026-11-11
+
+用户实证问题批（docs/phase1-2026-11-10/15-问题清单）：
+
+- **空项目不再被 PMO 自动开工**：`pmo/continue` 加门——从未有过任务的项目等待 Human 首条指令（新装用户配置目录后不再被自动建卡）；
+- **批量取消**：「团队动态」分区新增「取消全部待处理（n）」按钮（逐卡 task.cancel + 成功/失败汇总），免去逐卡点开；
+- **会话标题加项目前缀**：`【项目名】成员名（角色）`——多项目同名成员在 DSH 侧栏可区分；
+- **项目归档（软删）**：新命令 `project.archive`（Human-only，账本留痕）+ 项目头「归档项目」按钮：bootstrap 过滤 archived 项目，成员 DSH 会话不受影响；最后一个 active 项目不可归档；
+- 问题清单与 P2（人员池批量模型配置）/P5（direct-subagent 取证）计划见 docs/phase1-2026-11-10/15。
+
 ## 0.3.68 — 2026-11-11
 
 - **【致命】取消任务对话框卡死修复（用户实证三连）**：①根因是 `WorkbenchDialog` 挂载处**漏传 `onDismiss` prop**——settle/cancel 调用 `onDismiss()` 抛 TypeError，`setDialog(null)` 永不执行，对话框永久驻留无法关闭；②「确定没反应」实为 resolve 已执行（任务在后台真实取消）但关框崩溃吞掉了全部反馈；③「理由可留空」的提示与确定按钮禁用矛盾，且 host 域层 `cancelTask/reopenTask` 的 `requireText(reason)` 也强制必填——三层各自为政。现修复：挂载处显式传 `onDismiss: () => setDialog(null)`；settle 先关框后 resolve（后续异步不再阻断）；对话框新增 `optional` 语义（理由类输入允许留空）；domain 层 cancel/reopen 理由改 `optionalText`（留空记空串，超长边界保留）。新增 cancel/reason 链路测试 2 项（138 总）。
