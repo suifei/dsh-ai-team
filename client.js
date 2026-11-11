@@ -393,6 +393,10 @@ window.__ModuleLoader__.load({
 			teamBusyN: '在做 ×{n}',
 			pendingAcceptanceN: '待验收 ×{n}',
 			archivedCount: '已归档 {n}',
+			personModelBtn: '统一配置模型',
+			personModelTitle: '为「{name}」选择 LLM 端点（应用到其所有项目）',
+			personModelDone: '已把「{name}」配置为 {model}（成功 {done} 处，失败 {failed} 处）。',
+			modelCatalogEmpty: '模型目录为空：请先在 DSH 设置里配置可用的 LLM 端点。',
 			q1Title: '需要你',
 			q2Title: '团队在做',
 			q3Title: '等待受阻',
@@ -806,6 +810,10 @@ window.__ModuleLoader__.load({
 			teamBusyN: 'in progress ×{n}',
 			pendingAcceptanceN: 'awaiting acceptance ×{n}',
 			archivedCount: 'Archived {n}',
+			personModelBtn: 'Set model',
+			personModelTitle: 'Choose the LLM endpoint for "{name}" (applies to all its projects)',
+			personModelDone: 'Set "{name}" to {model} ({done} ok, {failed} failed).',
+			modelCatalogEmpty: 'The model catalog is empty: configure an LLM endpoint in DSH settings first.',
 			q1Title: 'Needs you',
 			q2Title: 'Team is doing',
 			q3Title: 'Waiting / blocked',
@@ -1924,7 +1932,7 @@ window.__ModuleLoader__.load({
 		 * 人员池总览（全局层，11-管理视角 §2）：按"人"聚合各项目身份。
 		 * 数据 = GET /ai-team/api/people（各项目账本 members/tasks 的只读聚合）。
 		 */
-		function PeoplePage({ t, people, error, loading, onOpenProject, onRefresh, localNames, onOpenPerson, onChatPerson }) {
+		function PeoplePage({ t, people, error, loading, onOpenProject, onRefresh, localNames, onOpenPerson, onChatPerson, onConfigModel }) {
 			if (error) return h('div', { className: 'at-stream', role: 'alert' },
 				h('div', { className: 'at-streaminner' }, h(EmptyState, { t, icon: 'alert', title: t('peopleTitle'), body: tf(t, 'peopleLoadFailed', { message: error }) })));
 			// loading 用中心区域骨架（流内行），不用整页 Skeleton——本组件位于
@@ -1954,7 +1962,10 @@ window.__ModuleLoader__.load({
 							h(Avatar, { name: person.name, human: false }),
 							h('span', { className: 'at-peoplename' }, person.name),
 							person.role ? h('span', { className: 'at-people-role' }, person.role) : null,
-							h('span', { className: 'at-peoplebadges' }, badges.join(' · '))),
+							h('span', { className: 'at-peoplebadges' }, badges.join(' · ')),
+							// P2：统一配置该人在所有项目的 LLM 端点（人员池级入口，
+							// 免去逐项目×逐成员修改）。
+							onConfigModel ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: (event) => { event.preventDefault(); onConfigModel(person); } }, t('personModelBtn')) : null),
 						h('div', { className: 'at-peopleprojects' }, person.projects.map((row) => {
 							const failed = row.lastFailure !== undefined && row.lastFailure !== null;
 							const localHere = localNames.has(person.name);
@@ -2914,6 +2925,41 @@ window.__ModuleLoader__.load({
 					sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
 				}
 			}
+			// P2：人员池统一配置模型——对同名成员在其所有项目逐个
+			// member.config.update（跨项目批量，免逐项目进资料面板）。
+			async function configPersonModel(person) {
+				const providers = modelCatalog?.providers ?? [];
+				const options = [];
+				for (const provider of providers) {
+					for (const model of provider.models ?? []) {
+						options.push(provider.name + ' / ' + model);
+						if (options.length >= 60) break;
+					}
+					if (options.length >= 60) break;
+				}
+				if (options.length === 0) { say(t('modelCatalogEmpty')); return; }
+				const picked = await askPrompt(tf(t, 'personModelTitle', { name: person.name }), { options });
+				if (picked === null) return;
+				const chosen = options.includes(picked) ? picked : options[0];
+				const [providerName, model] = chosen.split(' / ');
+				const provider = providers.find((entry) => entry.name === providerName) ?? providers.find((entry) => entry.id === providerName);
+				const patch = { provider: provider?.id ?? providerName, model };
+				let done = 0; let failed = 0;
+				for (const row of person.projects ?? []) {
+					const memberIds = Array.isArray(row.memberIds) ? row.memberIds : [];
+					for (const memberId of memberIds) {
+						try {
+							await runCommand('member.config.update', { memberId, patch, reason: 'people pool model' }, row.projectId);
+							done += 1;
+						} catch {
+							failed += 1;
+						}
+					}
+				}
+				sayRight(tf(t, 'personModelDone', { name: person.name, model, done, failed }));
+				await reloadData();
+				loadPeople();
+			}
 			const inboxItems = (data.inbox ?? []).filter((item) => !isInformationalInboxItem(item));
 			// R-13bis：Human↔成员对话门（项目级开关，账本留痕）。
 			const chatGateClosed = (project?.chatGate ?? 'open') === 'closed';
@@ -3833,6 +3879,7 @@ window.__ModuleLoader__.load({
 						if (target) void switchProject(target);
 						else say(t('quadrantMissing'));
 					},
+					onConfigModel: configPersonModel,
 				})
 				: inInbox
 				? h('div', { className: 'at-stream', role: 'region', 'aria-label': t('inboxTitle') },

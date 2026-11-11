@@ -207,18 +207,39 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(data.project?.pmoAuto, true);
 		assert.equal(data.projects[0].pmoAuto, true);
 
+		// P5b：目录必须真实存在——测试用真实临时目录（假路径会被校验拒绝）。
+		const realWorkspace = await mkdtemp(join(tmpdir(), 'ai-team-ws-'));
 		const workspace = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify({
 				type: 'project.workspace.update',
-				payload: { workspacePath: 'E:/work/main' },
+				payload: { workspacePath: realWorkspace },
 			}),
 		});
 		assert.equal(workspace.status, 200);
-		assert.equal((await workspace.json()).project.workspacePath, 'E:/work/main');
+		assert.equal((await workspace.json()).project.workspacePath, realWorkspace);
 		const afterWorkspace = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
-		assert.equal(afterWorkspace.project.workspacePath, 'E:/work/main');
+		assert.equal(afterWorkspace.project.workspacePath, realWorkspace);
+
+		// P5b 回归：不存在的目录必须被拒绝（成员会话 cwd 无效会让回合全失败）。
+		const badWorkspace = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({
+				type: 'project.workspace.update',
+				payload: { workspacePath: 'E:/definitely-not-existing-dir-xyz' },
+			}),
+		});
+		assert.equal(badWorkspace.status, 409, 'a non-existent workspace must be rejected');
+
+		// P4 回归：最后一个 active 项目不可归档（host 层用全局 registry 判定）。
+		const lastArchive = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ type: 'project.archive', payload: { archived: true } }),
+		});
+		assert.equal(lastArchive.status, 409, 'the last active project cannot be archived');
 
 		const stream = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
 			method: 'POST',

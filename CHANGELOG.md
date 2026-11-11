@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.74 - 2026-11-12
+
+- **P2 人员池统一模型配置**：人员池行级「统一配置模型」入口——选 LLM 端点后对该成员在**所有项目**逐个 member.config.update（跨项目批量），免去逐项目×逐成员修改（NO_ADAPTER / max_tokens 超限场景的根治入口）。
+- **P5b 工作目录存在性校验**：project.workspace.update 校验目录真实存在且为目录（配置不存在的目录会让成员会话 cwd 无效、回合全失败——用户实证 working-directory does not exist）。
+- 回归测试：+2 host 级断言（不存在目录 → 409；最后 active 项目归档 → 409）。
+
+
 ## 0.3.73 - 2026-11-11
 
 - **项目头开关失效修复**：bootstrap 的 projects[] 在 registry 重映射时丢弃了 chatGate/runState（按钮状态永远默认「开」，点击后 UI 不更新）；归档 409 修复：归档保护在 service 内判定（只见自己账本，恒为最后项目）→ 移到 Host 路由层用 registry 全局清单判定。
