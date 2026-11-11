@@ -41,7 +41,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.69';
+const VERSION = '0.3.70';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -386,6 +386,9 @@ export function apply(ctx, config = {}) {
 			|| null;
 		const wakeFromResult = async (projectRuntime, result, actor = {}) => {
 			if (projectRuntime === null || projectRuntime === undefined) return;
+			// P6 停止门（事件 hook 侧）：stopped 项目不再派发任何唤醒。
+			const gateProject = projectRuntime.service.state.projects?.[projectRuntime.id];
+			if (gateProject !== undefined && gateProject.runState === 'stopped') return;
 			const plans = planWakes(projectRuntime.service.state, result, actor);
 			if (plans.length === 0) return;
 			// Window eviction: a key older than this horizon can no longer dedupe
@@ -499,6 +502,9 @@ export function apply(ctx, config = {}) {
 			const state = projectRuntime.service.state;
 			const project = state.projects?.[projectRuntime.id];
 			if (project === undefined || project.pmoAuto === false || project.status === 'archived') return;
+			// P6 停止门：stopped 项目停止一切派发（补派/心跳/升级/continue 全停），
+			// 正在执行的回合自然完成；唤醒事件 hook 同样检查（见 wakeFromResult）。
+			if (project.runState === 'stopped') return;
 			for (const member of Object.values(state.members ?? {})) {
 				if (member.kind === 'agent' && typeof member.sessionId === 'string') {
 					await titleMemberSession(projectRuntime, member);
@@ -608,11 +614,10 @@ export function apply(ctx, config = {}) {
 				}
 				return;
 			}
-			// P1：空项目（从未有过任何任务）不自动开工——新装用户配置完目录后
-			// 被 PMO 自动建卡（用户实证：5 张卡违背「等我指令」预期）。等待
-			// Human 首条指令（human_message → PMO 建卡链路保持不变）。
+			// P1a 门更新：空项目且未被 Human 显式启动 → 等待首条指令；显式启动
+			// （project.runState=running）即视为指令，解除等待。
 			const hasAnyTaskHistory = Object.keys(state.tasks ?? {}).length > 0;
-			if (!hasAnyTaskHistory) return;
+			if (!hasAnyTaskHistory && project.explicitStart !== true) return;
 			const last = pmoLastKick.get(projectRuntime.id) ?? 0;
 			if (now - last < 10 * 60_000) return;
 			pmoLastKick.set(projectRuntime.id, now);

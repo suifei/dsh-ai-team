@@ -222,6 +222,14 @@ window.__ModuleLoader__.load({
 			chatGateOpened: 'Human 对话通道已开启：私信将直达成员下一轮。',
 			chatGateClosedShort: 'Human 对话通道已关闭。',
 			routingHint: '成员的原生会话由团队路由驱动，宿主不接受直接输入；请用下方私信与成员对话（下一轮生效）。',
+			runOn: '项目运行 · 开',
+			runOff: '项目运行 · 停止中',
+			runStateHint: '停止：当前子任务完成后停止派发（不再派发新任务/心跳/升级）；启动：空项目开始或停止的项目继续开工',
+			runStarted: '项目已启动：PMO 将在下一个巡检周期开工。',
+			runStopped: '项目已停止：正在执行的子任务自然完成后不再派发。',
+			handoffBtn: '生成交接文档',
+			handoffHint: '按时序生成项目交接文档（Human 指令 + 任务全量），写入工作目录 docs/ 下',
+			handoffDone: '交接文档已生成：{path}',
 			cancelAllPending: '取消全部待处理（{n}）',
 			cancelAllHint: '批量取消当前全部待处理任务（逐卡取消并汇总结果）',
 			cancelAllDone: '批量取消完成：成功 {done} 个，失败 {failed} 个。',
@@ -627,6 +635,14 @@ window.__ModuleLoader__.load({
 			chatGateOpened: 'Human chat channel opened: DMs reach members next round.',
 			chatGateClosedShort: 'Human chat channel closed.',
 			routingHint: 'Member native sessions are driven by team routing; the host rejects direct input. Use the DM below to talk to a member (effective next round).',
+			runOn: 'Project run · on',
+			runOff: 'Project run · stopping',
+			runStateHint: 'Stop: finish the in-flight subtask then halt dispatch (no new tasks/heartbeats/escalations); Start: kick an empty project or resume a stopped one',
+			runStarted: 'Project started: PMO begins at the next tick.',
+			runStopped: 'Project stopped: in-flight subtasks finish, then dispatch halts.',
+			handoffBtn: 'Generate handoff doc',
+			handoffHint: 'Generate a chronological handoff document (Human instructions + all task info) into the workspace docs/ folder',
+			handoffDone: 'Handoff document written: {path}',
 			cancelAllPending: 'Cancel all pending ({n})',
 			cancelAllHint: 'Batch-cancel every pending task (one by one, with a summary)',
 			cancelAllDone: 'Batch cancel done: {done} ok, {failed} failed.',
@@ -2898,6 +2914,26 @@ window.__ModuleLoader__.load({
 			const inboxItems = (data.inbox ?? []).filter((item) => !isInformationalInboxItem(item));
 			// R-13bis：Human↔成员对话门（项目级开关，账本留痕）。
 			const chatGateClosed = (project?.chatGate ?? 'open') === 'closed';
+			// P6：项目运行态（启动/停止）+ 交接文档落盘。
+			const runStopped = (project?.runState ?? 'running') === 'stopped';
+			async function toggleRunState() {
+				try {
+					await runCommand('project.runState', { runState: runStopped ? 'running' : 'stopped' });
+					say(runStopped ? t('runStarted') : t('runStopped'));
+					await reloadData();
+				} catch (error) {
+					sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
+			}
+			async function makeHandoff() {
+				if (!project) return;
+				try {
+					const result = await runCommand('project.handoff', {});
+					sayRight(tf(t, 'handoffDone', { path: result.filePath ?? '' }));
+				} catch (error) {
+					sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
+			}
 			async function toggleChatGate() {
 				try {
 					await runCommand('project.chatGate', { gate: chatGateClosed ? 'open' : 'closed' });
@@ -3971,12 +4007,25 @@ window.__ModuleLoader__.load({
 									title: t('chatGateHint'),
 									'aria-pressed': !chatGateClosed,
 									onClick: () => { void toggleChatGate(); },
-								}, !chatGateClosed ? t('chatGateOn') : t('chatGateOff'),
-								h('button', {
-									className: 'at-workspacebtn',
-									type: 'button',
-									title: t('archiveHint'),
-									onClick: () => { void archiveCurrentProject(); },
+						}, !chatGateClosed ? t('chatGateOn') : t('chatGateOff'),
+						h('button', {
+							className: cx('at-pmobtn', !runStopped && 'at-pmo-on'),
+							type: 'button',
+							title: t('runStateHint'),
+							'aria-pressed': !runStopped,
+							onClick: () => { void toggleRunState(); },
+						}, !runStopped ? t('runOn') : t('runOff')),
+						h('button', {
+							className: 'at-workspacebtn',
+							type: 'button',
+							title: t('handoffHint'),
+							onClick: () => { void makeHandoff(); },
+						}, t('handoffBtn')),
+						h('button', {
+							className: 'at-workspacebtn',
+							type: 'button',
+							title: t('archiveHint'),
+							onClick: () => { void archiveCurrentProject(); },
 						}, t('archiveProject')))) : null,
 							inInbox || inPeople ? null : h('div', { className: 'at-tabs', role: 'tablist', 'aria-label': t('tabsAria'), onKeyDown: tabKeyDown },
 								h('button', {
