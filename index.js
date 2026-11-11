@@ -52,7 +52,7 @@ export const name = 'ai-team';
 // 实际使用的服务（含可选服务：缺失时 serviceOf 回退 ctx.get 并返回 undefined）。
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'];
 
-const VERSION = '0.4.19';
+const VERSION = '0.4.21';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -379,6 +379,27 @@ export function apply(ctx, config = {}) {
 				}
 				if (decision.action !== 'retry') return next();
 				return { kind: 'retry' };
+			})
+			: () => {};
+		// 诊断：记录每个新建 agent（含成员）可见的工具名与 preset，
+		// 用于判定「成员是否能调用插件注册的 team 工具」（SDK：工具默认继承，
+		// 仅 ctx.tools.restrict() 会移除）。
+		const offAgentCreated = typeof ctx.on === 'function'
+			? ctx.on('agent/created', (agent) => {
+				try {
+					const names = (agent?.ctx?.tools?.definitions?.() ?? []).map((definition) => definition.name);
+					diag.append({
+						ev: 'agent.created.probe.fail',
+						agentId: agent?.id ?? null,
+						parentId: agent?.meta?.parentSession ?? null,
+						toolCount: names.length,
+						hasTeam: names.includes('team'),
+						preset: agent?.meta?.agentPreset ?? agent?.meta?.preset ?? null,
+						names: names.slice(0, 40),
+					});
+				} catch (error) {
+					diag.append({ ev: 'agent.created.probe.fail', error: error?.message ?? String(error) });
+				}
 			})
 			: () => {};
 		const offSessionEvent = typeof ctx.on === 'function'
@@ -1859,6 +1880,8 @@ export function apply(ctx, config = {}) {
 												: '会话已重建（成员恢复）。先读 tasks/thread 当前状态，继续推进；不要重复已完成的工作。',
 										},
 									}, runtime);
+									// reseat 后旧会话不再使用：清掉选择日志缓存，避免随重建累积（泄漏）。
+									if (before !== null) modelSelectionLogged.delete(before);
 									results.push({
 										memberId,
 										ok: activated.error === undefined,
@@ -1944,6 +1967,7 @@ export function apply(ctx, config = {}) {
 			try { disposeSkillOpt(); } catch { /* already disposed */ }
 			offRequestError();
 			offSessionEvent();
+			offAgentCreated();
 			disposeTool();
 			dispose();
 			for (const runtime of booted?.runtimes?.values() ?? []) {
