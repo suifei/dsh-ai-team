@@ -214,6 +214,14 @@ window.__ModuleLoader__.load({
 			pmoOn: 'PMO 自动 · 开',
 			pmoOff: 'PMO 自动 · 关',
 			pmoHint: 'PMO 自动处理 Human 决策并续派下一批 Task；默认开启',
+			chatGateOn: 'Human 对话 · 开',
+			chatGateOff: 'Human 对话 · 关',
+			chatGateHint: '开启后可在成员资料里给成员发私信（成员下一轮生效）；关闭后私信通道停用。注意：成员的原生会话由团队路由驱动，宿主不接受直接输入，始终请用私信。',
+			chatGateClosed: 'Human 对话通道已由项目设置关闭；请通过决策与任务看板与团队交互，或用上方开关重新开启。',
+			chatGateClosedPlaceholder: '对话通道已关闭',
+			chatGateOpened: 'Human 对话通道已开启：私信将直达成员下一轮。',
+			chatGateClosedShort: 'Human 对话通道已关闭。',
+			routingHint: '成员的原生会话由团队路由驱动，宿主不接受直接输入；请用下方私信与成员对话（下一轮生效）。',
 			pmoEnabled: 'PMO 自动已开启。',
 			pmoDisabled: 'PMO 自动已关闭，决策回到收件箱。',
 			notifyTaskCreated: '新 Task 已创建',
@@ -603,6 +611,14 @@ window.__ModuleLoader__.load({
 			pmoOn: 'PMO auto · on',
 			pmoOff: 'PMO auto · off',
 			pmoHint: 'PMO answers Human decisions and dispatches the next Tasks; on by default',
+			chatGateOn: 'Human chat · on',
+			chatGateOff: 'Human chat · off',
+			chatGateHint: 'When on, you can DM members from their profile (effective next round); when off, the DM channel is disabled. Note: member native sessions are driven by team routing and the host rejects direct input — always use DMs.',
+			chatGateClosed: 'The Human chat channel is closed by project settings; interact via decisions and the task board, or re-open with the toggle above.',
+			chatGateClosedPlaceholder: 'Chat channel closed',
+			chatGateOpened: 'Human chat channel opened: DMs reach members next round.',
+			chatGateClosedShort: 'Human chat channel closed.',
+			routingHint: 'Member native sessions are driven by team routing; the host rejects direct input. Use the DM below to talk to a member (effective next round).',
 			pmoEnabled: 'PMO auto enabled.',
 			pmoDisabled: 'PMO auto disabled; decisions go back to the inbox.',
 			notifyTaskCreated: 'New Task created',
@@ -2825,6 +2841,17 @@ window.__ModuleLoader__.load({
 			const thread = threadFor(data, selectedTask?.id);
 			const quadrants = deriveQuadrants(data);
 			const inboxItems = (data.inbox ?? []).filter((item) => !isInformationalInboxItem(item));
+			// R-13bis：Human↔成员对话门（项目级开关，账本留痕）。
+			const chatGateClosed = (project?.chatGate ?? 'open') === 'closed';
+			async function toggleChatGate() {
+				try {
+					await runCommand('project.chatGate', { gate: chatGateClosed ? 'open' : 'closed' });
+					say(chatGateClosed ? t('chatGateOpened') : t('chatGateClosedShort'));
+					await reloadData();
+				} catch (error) {
+					sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
+				}
+			}
 			// R-13 老化分档（纯前端派生）：决策项 >24h 加深、>72h 升错误色。
 			const inboxAge = (item) => {
 				const created = item.createdAt ?? 0;
@@ -3882,7 +3909,14 @@ window.__ModuleLoader__.load({
 									title: t('pmoHint'),
 									'aria-pressed': project.pmoAuto !== false,
 									onClick: togglePmo,
-								}, project.pmoAuto !== false ? t('pmoOn') : t('pmoOff'))) : null,
+								}, project.pmoAuto !== false ? t('pmoOn') : t('pmoOff')),
+								h('button', {
+									className: cx('at-pmobtn', !chatGateClosed && 'at-pmo-on'),
+									type: 'button',
+									title: t('chatGateHint'),
+									'aria-pressed': !chatGateClosed,
+									onClick: () => { void toggleChatGate(); },
+								}, !chatGateClosed ? t('chatGateOn') : t('chatGateOff'))) : null,
 							inInbox || inPeople ? null : h('div', { className: 'at-tabs', role: 'tablist', 'aria-label': t('tabsAria'), onKeyDown: tabKeyDown },
 								h('button', {
 									className: cx('at-tab', tab === 'main' && 'at-on'),
@@ -4077,8 +4111,17 @@ window.__ModuleLoader__.load({
 								h('input', { value: pSkill, onChange: (event) => setPSkill(event.target.value), placeholder: t('skillPlaceholder') }),
 								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: addSkill, disabled: !pSkill.trim() }, t('addSkill'))),
 							h('div', { className: 'at-inlineadd' },
-								h('input', { value: pMessage, onChange: (event) => setPMessage(event.target.value), placeholder: t('messagePlaceholder') }),
-								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: sendMemberMessage, disabled: !pMessage.trim() }, t('sendMessage'))),
+								h('input', {
+									value: pMessage,
+									onChange: (event) => setPMessage(event.target.value),
+									placeholder: chatGateClosed ? t('chatGateClosedPlaceholder') : t('messagePlaceholder'),
+									disabled: chatGateClosed,
+								}),
+								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: sendMemberMessage, disabled: !pMessage.trim() || chatGateClosed }, t('sendMessage'))),
+							// R-13bis：正常提示替代宿主黑 toast——成员原生会话由团队
+							// 路由驱动，宿主守卫拒绝直接写入；对话走私信（下一轮生效）。
+							h('div', { className: 'at-modalmeta' }, t('routingHint')),
+							chatGateClosed ? h('div', { className: 'at-modalmeta' }, t('chatGateClosed')) : null,
 							pError ? h('div', { className: 'at-modalerror', role: 'alert' }, pError) : null,
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setProfileAgent(null), disabled: pBusy }, t('cancel')),
