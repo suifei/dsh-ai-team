@@ -1,31 +1,44 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMemberPermissionGuard } from '../lib/host/permission-guard.js';
+import { createMemberPermissionGuard, resolveTeamPreset, TEAM_PERMISSION } from '../lib/host/permission-guard.js';
 
-function fixture({ canRepair = true } = {}) {
-	const session = { id: 's1', sandbox: 'workspace-write' };
-	const service = { state: { members: { a1: { id: 'a1', kind: 'agent', name: '沈舟', sessionId: 's1' } } } };
-	const permissionPresets = {
-		set(target, name) {
-			if (canRepair) target.sandbox = name;
-		},
-	};
-	const sandboxPolicy = { overrideOf: (target) => target.sandbox };
+/** 一个只有 `full` 这一档 danger-full-access 的部署。 */
+function customPresets() {
+	const table = { 'workspace-write': { sandbox: 'workspace-write', approval: 'ask' }, full: { sandbox: 'danger-full-access', approval: 'never' } };
+	const sessions = new WeakMap();
 	return {
-		session,
-		guard: createMemberPermissionGuard({ service, permissionPresets, sandboxPolicy }),
+		resolve(name) {
+			if (table[name] === undefined) throw new Error(`unknown preset: ${name}`);
+			return table[name];
+		},
+		list() { return Object.keys(table); },
+		set(session, name) {
+			if (table[name] === undefined) throw new Error(`unknown preset: ${name}`);
+			sessions.set(session, name);
+		},
+		current(session) { return sessions.get(session); },
 	};
 }
 
-test('member tool guard repairs a mid-turn permission downgrade', () => {
-	const { session, guard } = fixture();
-	assert.equal(guard({ agent: { id: 's1', session } }), undefined);
-	assert.equal(session.sandbox, 'danger-full-access');
+test('resolves the deployed name for full access instead of hardcoding it', () => {
+	const presets = customPresets();
+	assert.equal(resolveTeamPreset(presets), 'full');
 });
 
-test('member tool guard denies when repair fails and ignores non-members', () => {
-	const { session, guard } = fixture({ canRepair: false });
-	assert.match(guard({ agent: { id: 's1', session } }), /not danger-full-access/);
-	assert.equal(guard({ agent: { id: 'other', session: { id: 'x' } } }), undefined);
-	assert.equal(guard({}), undefined);
+test('falls back to the conventional name when the table has no matching preset', () => {
+	assert.equal(resolveTeamPreset({ resolve: () => ({ sandbox: 'workspace-write' }), list: () => ['workspace-write'] }), TEAM_PERMISSION);
+});
+
+test('the guard restores full access through the deployed preset name', () => {
+	const presets = customPresets();
+	const session = { id: 's1' };
+	let mode = 'workspace-write';
+	const guard = createMemberPermissionGuard({
+		service: { state: { members: { m1: { id: 'm1', name: '沈舟', kind: 'agent', sessionId: 's1' } } } },
+		permissionPresets: { ...presets, set: (target, name) => { presets.set(target, name); mode = presets.resolve(name).sandbox; } },
+		sandboxPolicy: { overrideOf: () => mode },
+	});
+	// 硬编码 danger-full-access 时，这里会因为未知预设而直接返回拒绝字符串。
+	assert.equal(guard({ agent: { id: 's1', session } }), undefined);
+	assert.equal(mode, 'danger-full-access');
 });

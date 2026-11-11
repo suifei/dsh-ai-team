@@ -2194,10 +2194,9 @@ export function apply(ctx, config = {}) {
 								}
 							}
 							send(res, { ok: true, ...result });
-							void wakeFromResult(runtime, result, { agentId: HUMAN_ID }).catch((error) => {
-								diag.append({ ev: 'wake.plan.fail', projectId: runtime.id, eventType: result?.event?.type ?? null, message: error?.message ?? String(error) });
-								console.warn('[ai-team] wake planner failed:', error?.message ?? error);
-							});
+							// 唤醒只由账本事件路径规划（attachRuntime 的 onEvent）：dispatch 的
+							// 返回值只有投影、没有 event，这里再算一次要么算不出计划、要么与
+							// 事件路径用不同的键重复唤醒。同一能力保留一份实现。
 							return;
 						} catch (error) {
 							return errorResponse(res, error);

@@ -189,3 +189,29 @@ test('no wake is planned for a member who authored a thread reply', () => {
 	}, { agentId: 'a1' });
 	assert.equal(plans.length, 0);
 });
+
+test('PMO review never wakes the assignee or someone who already claimed the Task', () => {
+	const reviewState = {
+		...state,
+		members: {
+			...state.members,
+			a4: { id: 'a4', name: '白砚', kind: 'agent', status: 'idle', role: '验收' },
+			a5: { id: 'a5', name: '旧验收', kind: 'agent', status: 'idle', role: '验收' },
+		},
+		tasks: {
+			...state.tasks,
+			t2: { ...state.tasks.t2, assigneeId: 'a4', claimHistory: ['a5'] },
+		},
+	};
+	const plans = planWakes(reviewState, { event: { type: 'pmo/review', payload: { taskId: 't2', bucket: 42 } } }, {});
+	assert.deepEqual(plans.map((item) => item.memberId), [], 'nobody left to review without self-review');
+});
+
+test('an inbox item wakes its member using the flat ledger payload', () => {
+	// 账本实际写的是扁平载荷（itemId/memberId/ref），不是嵌套的 payload.item。
+	const plans = planWakes(state, {
+		event: { type: 'inbox/item-created', seq: 31, payload: { itemId: 'inb_1', memberId: 'a2', kind: 'decision', ref: { taskId: 't1' } } },
+	}, {});
+	assert.deepEqual(plans.map((item) => [item.memberId, item.taskId, item.reason]), [['a2', 't1', 'inbox']]);
+	assert.equal(plans[0].key, 'inbox:inb_1:a2:');
+});
