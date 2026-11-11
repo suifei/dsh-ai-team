@@ -221,7 +221,7 @@ window.__ModuleLoader__.load({
 			chatGateClosedPlaceholder: '对话通道已关闭',
 			chatGateOpened: 'Human 对话通道已开启：私信将直达成员下一轮。',
 			chatGateClosedShort: 'Human 对话通道已关闭。',
-			routingHint: '成员的原生会话由团队路由驱动，宿主不接受直接输入；请用下方私信与成员对话（下一轮生效）。',
+			routingHint: '原生会话直写被宿主拒绝（不是开关问题）；在此输入即写入该成员会话（与团队指令同一通道），成员下一轮在同一会话可见并回复。',
 			runOn: '项目运行 · 开',
 			runOff: '项目运行 · 停止中',
 			runStateHint: '停止：当前子任务完成后停止派发（不再派发新任务/心跳/升级）；启动：空项目开始或停止的项目继续开工',
@@ -638,7 +638,7 @@ window.__ModuleLoader__.load({
 			chatGateClosedPlaceholder: 'Chat channel closed',
 			chatGateOpened: 'Human chat channel opened: DMs reach members next round.',
 			chatGateClosedShort: 'Human chat channel closed.',
-			routingHint: 'Member native sessions are driven by team routing; the host rejects direct input. Use the DM below to talk to a member (effective next round).',
+			routingHint: 'Direct input in the native session is rejected by the host (not a switch issue); a DM here is written into that member session through the same channel as team instructions, and the member replies in the same session next round.',
 			runOn: 'Project run · on',
 			runOff: 'Project run · stopping',
 			runStateHint: 'Stop: finish the in-flight subtask then halt dispatch (no new tasks/heartbeats/escalations); Start: kick an empty project or resume a stopped one',
@@ -1559,7 +1559,7 @@ window.__ModuleLoader__.load({
 			);
 		}
 
-		function StreamMessage({ t, item, data, tasks, selected, follows, highlight, onOpenProfile, onOpen, onToggleFollow }) {
+		function StreamMessage({ t, item, data, tasks, selected, follows, highlight, onOpenProfile, onChat, onOpen, onToggleFollow }) {
 			const author = item.author ?? {};
 			// 结构化判定：kind 是权威字段；显示名回退只兼容旧账本流。
 			const human = author.kind === 'human' || (author.kind === undefined && agentFor(data, author.name) === null && author.name === t('you'));
@@ -1574,6 +1574,8 @@ window.__ModuleLoader__.load({
 							: h('b', null, author.name ?? '—'),
 						agent ? h('span', { className: 'at-role' }, agent.role) : null,
 						h('time', { dateTime: iso(item.at) }, fmtTime(item.at)),
+						// 私信直达：Human 的话经同一通道写入该成员会话（原生会话只读）。
+						agent && onChat ? h('button', { className: 'at-workspacebtn', type: 'button', title: t('routingHint'), onClick: () => onChat(agent) }, t('agentChat')) : null,
 					),
 					h('div', { className: 'at-msgt' }, item.body),
 					cards.length ? h(TaskGroup, { t, cards, tasks, selected, follows, onOpen, onToggleFollow }) : null,
@@ -4047,6 +4049,7 @@ window.__ModuleLoader__.load({
 										follows: followingOf,
 										highlight: streamHighlight === item.id,
 										onOpenProfile: openProfile,
+										onChat: (agent) => { closeMobile(); void openAgentChat(agent); },
 										onOpen: openTask,
 										onToggleFollow: toggleFollow,
 									}))
