@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.89 - 2026-11-12
+
+**完全对齐 darwin-skill v2.1（9 维 rubric + 独立 judge）**
+
+- **9 维 rubric（`skillopt_rubric`）**：结构 59（Frontmatter 7 / 工作流 12 / 失败模式 12 / 检查点 6 / 具体性 18 / 资源 4）+ 效果 35（架构 12 / 实测 23）+ Meta 6（反例黑名单）——静态启发式评分带逐维证据；**绝对总分明确标注 TRIAGE-ONLY**（绝不作 keep/revert 依据），dim8 未实测时标注 dry-run。
+- **独立 judge（`skillopt_judge`）**：paired 同-judge 比较 + A/B 随机化盲评 + 奇数 N（默认 3，可配 `skilloptJudgeVotes`）多数决（better≥worse→keep，含 tie；无有效票→inconclusive 不得 adopt）；judge 是**一次性独立子代理**（`subagents.startActivation`），上下文干净，杜绝自评自改。
+- **adopt 验证门**：`skillopt_adopt` 经 `wrapToolsWithAdoptGate` 包装——先读 staged 候选与 live 基线，跑独立 judge；revert/inconclusive/无法验证时**拒绝 adopt** 并给出理由（unverified adopt is refused），keep 才放行引擎。
+- **根因修复**：插件 `inject` 增加 `tools`/`shell`——此前 shell 服务未就绪时 SkillOpt 整段静默跳过（diag 实测 `hasShell:false`）；judge 的 `ensureParent` 改惰性引用（修复 TDZ `Cannot access before initialization`）。
+- **工具输出协议修复**：`skillopt_rubric`/`skillopt_judge` 的 render 返回 content 数组（此前 `content.some is not a function`）。
+- 测试：`test/darwin-alignment.test.js` 10 项（rubric 强弱对照/权重和 100、A/B 盲评与解析、多数决与平局、judge-runner 子代理注入、adopt 门 keep/revert/inconclusive/无法验证、只拦 adopt 不动其他工具）。
+
+
 ## 0.3.86 - 2026-11-12
 
 - **技能进化链路可观测性**：health 新增 `runtime.services`（tools.register / shell / 已注册的 skillopt_* 工具清单）；SkillOpt 注册条件不满足时记 `skillopt.skip.fail` 诊断——消除「静默未启用」的排查盲区（此前只能靠 diag 猜）。

@@ -11,7 +11,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import z from '@deepseek-ai/schemastery';
 import { ProjectRuntime } from './lib/host/project-runtime.js';
 import { ProjectRegistry } from './lib/host/project-registry.js';
@@ -25,6 +25,9 @@ import { formatSkillCatalog } from './lib/runtime/skill-catalog.js';
 import { isSkillExcluded } from './lib/runtime/skill-policy.js';
 import { installFileSkillProvider } from './lib/runtime/skill-provider.js';
 import { apply as applySkillOpt } from './lib/vendor/skillopt/src/index.js';
+import { createAdoptGate, wrapToolsWithAdoptGate } from './lib/skillopt/adopt-gate.js';
+import { formatRubric, scoreSkillRubric } from './lib/skillopt/rubric.js';
+import { makeJudge, makeReadPair } from './lib/skillopt/gate-wiring.js';
 import { createMemberPermissionGuard } from './lib/host/permission-guard.js';
 import { installFaultAdapter } from './lib/host/fault-adapter.js';
 import { buildModelCatalog } from './lib/host/model-catalog.js';
@@ -39,9 +42,9 @@ import { createDiagLogger, defaultDiagDir } from './lib/diaglog.js';
 export const name = 'ai-team';
 
 /** The workbench only makes sense where the Web carrier exists. */
-export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
+export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell'];
 
-const VERSION = '0.3.86';
+const VERSION = '0.3.89';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -64,6 +67,8 @@ export const Config = z.object({
 	skilloptBackend: z.union(SKILLOPT_BACKENDS).default('mock'),
 	// per-call timeout for skillopt_* engine runs
 	skilloptTimeoutMs: z.number().step(1).min(10_000).max(600_000).default(120_000),
+	// Darwin paired judge：独立子代理票数，奇数 ≥3（接近平局可升 5）。
+	skilloptJudgeVotes: z.number().step(1).min(3).max(9).default(3),
 });
 
 function send(res, body, status = 200) {
@@ -758,10 +763,32 @@ export function apply(ctx, config = {}) {
 				console.warn('[ai-team] SkillOpt tools not registered:', { hasToolsRegister: typeof tools?.register === 'function', hasShell: Boolean(shell) });
 			}
 			if (tools?.register && shell) {
+				// Darwin validation gate（对齐 darwin-skill v2.1）：adopt 之前必须
+				// 通过 paired 独立 judge 的多数决；绝对 rubric 分只做 triage。
+				const engineScript = fileURLToPath(new URL('./lib/vendor/skillopt/scripts/sleep.py', import.meta.url));
+				const readPair = makeReadPair({ shell, engineScript, diag });
+				const judge = makeJudge({
+					subagents: ctx.get('subagents'),
+					// 惰性解析：ensureParent 在 apply 之后才定义（const TDZ），
+					// judge 只在 adopt 时调用，此处不能立即取值。
+					ensureParent: () => ensureParent(),
+					providerName: () => providers[0],
+					votes: config.skilloptJudgeVotes ?? 3,
+					diag,
+				});
+				const adoptGate = createAdoptGate({
+					readPair,
+					judge,
+					diag: (line, extra) => diag.append({
+						ev: extra?.ev ?? 'skillopt.adoptgate',
+						message: line,
+						...(extra?.project === undefined ? {} : { project: extra.project }),
+					}),
+				});
 				// Backend/timeout come from the plugin Config (patch layer), so an
 				// operator can move the skillopt_* tools off the safe mock default.
 				disposeSkillOpt = applySkillOpt({
-					tools,
+					tools: wrapToolsWithAdoptGate(tools, adoptGate),
 					shell,
 					logger: console,
 				}, {
@@ -769,7 +796,68 @@ export function apply(ctx, config = {}) {
 					project: process.cwd(),
 					timeoutMs: config.skilloptTimeoutMs ?? 120_000,
 				}) ?? (() => {});
-				diag.append({ ev: 'skillopt.registered', backend: config.skilloptBackend ?? 'mock', timeoutMs: config.skilloptTimeoutMs ?? 120_000 });
+				// 9 维 rubric（triage）与独立 judge（keep/revert）作为新工具暴露。
+				const rubricTool = tools.register({
+					name: 'skillopt_rubric',
+					description: 'Score a SKILL.md against the 9-dimension Darwin rubric (triage only — absolute scores must not be used for keep/revert).',
+					parameters: {
+						project: { type: 'string', description: 'Project directory (defaults to cwd)' },
+						skillPath: { type: 'string', description: 'Path to SKILL.md to score' },
+						dim8: { type: 'number', description: 'Measured effect score 1-10 (omit for dry-run)' },
+						measured: { type: 'boolean', description: 'Set when dim8 came from a real prompt run' },
+					},
+					// DSH 工具输出协议：render 必须返回 content 数组（与 vendored 一致）。
+					output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: String(value) }] },
+					async execute(args) {
+						const project = typeof args?.project === 'string' && args.project !== '' ? args.project : process.cwd();
+						const skillPath = typeof args?.skillPath === 'string' && args.skillPath !== ''
+							? args.skillPath
+							: join(project, 'SKILL.md');
+						if (!existsSync(skillPath)) return `[skillopt rubric] SKILL.md not found: ${skillPath}`;
+						const result = scoreSkillRubric(readFileSync(skillPath, 'utf8'), {
+							dim8: typeof args?.dim8 === 'number' ? args.dim8 : undefined,
+							measured: args?.measured === true,
+						});
+						diag.append({ ev: 'skillopt.rubric', project, skillPath, total: result.total, measured: result.evaluated });
+						return formatRubric(result);
+					},
+				});
+				const judgeTool = tools.register({
+					name: 'skillopt_judge',
+					description: 'Paired independent-judge verdict (N odd votes, majority) for before/after SKILL.md — the authoritative keep/revert signal.',
+					parameters: {
+						project: { type: 'string', description: 'Project directory' },
+						beforePath: { type: 'string', description: 'Baseline file path (default: current live SKILL.md)' },
+						afterPath: { type: 'string', description: 'Candidate file path (default: latest staged proposal)' },
+					},
+					// DSH 工具输出协议：render 必须返回 content 数组（与 vendored 一致）。
+					output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: String(value) }] },
+					async execute(args) {
+						const project = typeof args?.project === 'string' && args.project !== '' ? args.project : process.cwd();
+						let pair;
+						try {
+							pair = await readPair(project);
+						} catch (error) {
+							return `[skillopt judge] cannot read pair: ${error?.message ?? error}`;
+						}
+						const before = typeof args?.beforePath === 'string' && existsSync(args.beforePath) ? readFileSync(args.beforePath, 'utf8') : pair.before;
+						const after = typeof args?.afterPath === 'string' && existsSync(args.afterPath) ? readFileSync(args.afterPath, 'utf8') : pair.after;
+						const result = await judge({ before, after, projectDir: project });
+						const lines = result.votes.map((vote) => `  judge${vote.index}: ${vote.vote ?? 'invalid'} (margin ${vote.margin ?? '-'}) ${vote.reason}`);
+						return [
+							`[skillopt judge] verdict=${result.verdict} better=${result.better} worse=${result.worse} tie=${result.ties} valid=${result.valid}`,
+							...lines,
+							result.errors.length > 0 ? `  errors: ${result.errors.join('; ')}` : '',
+						].filter(Boolean).join('\n');
+					},
+				});
+				const disposeExtra = () => {
+					try { disposeSkillOpt?.(); } catch { /* already disposed */ }
+					try { rubricTool?.(); } catch { /* noop */ }
+					try { judgeTool?.(); } catch { /* noop */ }
+				};
+				disposeSkillOpt = disposeExtra;
+				diag.append({ ev: 'skillopt.registered', backend: config.skilloptBackend ?? 'mock', timeoutMs: config.skilloptTimeoutMs ?? 120_000, adoptGate: true, judgeVotes: config.skilloptJudgeVotes ?? 3 });
 			}
 		} catch (error) {
 			diag.append({ ev: 'skillopt.fail', message: error?.message ?? String(error) });
