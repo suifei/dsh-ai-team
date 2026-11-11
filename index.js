@@ -48,7 +48,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell'];
 
-const VERSION = '0.4.0';
+const VERSION = '0.4.1';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -565,7 +565,8 @@ export function apply(ctx, config = {}) {
 			if (projectRuntime === null || projectRuntime === undefined) return;
 			const state = projectRuntime.service.state;
 			const project = state.projects?.[projectRuntime.id];
-			if (project === undefined || project.pmoAuto === false || project.status === 'archived') return;
+			// job 收割先于 pmoAuto 门：Human 启动的优化 job 与 PMO 派发无关，
+			// PMO 自动关闭时也必须收敛（否则 job 永远停在 generating）。
 			// 两阶段异步优化 job 收割：与任务派发无关，放在停止门之前——
 			// Human 启动的 job 必须在任意运行态下收敛（生成/评审/落盘）。
 			try {
@@ -593,6 +594,7 @@ export function apply(ctx, config = {}) {
 			} catch (error) {
 				diag.append({ ev: 'skillopt.job.tick.fail', message: error?.message ?? String(error) });
 			}
+			if (project === undefined || project.pmoAuto === false || project.status === 'archived') return;
 			// P6 停止门：stopped 项目停止一切派发（补派/心跳/升级/continue 全停），
 			// 正在执行的回合自然完成；唤醒事件 hook 同样检查（见 wakeFromResult）。
 			if (project.runState === 'stopped') return;
