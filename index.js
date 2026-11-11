@@ -52,7 +52,7 @@ export const name = 'ai-team';
 // 实际使用的服务（含可选服务：缺失时 serviceOf 回退 ctx.get 并返回 undefined）。
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'];
 
-const VERSION = '0.4.14';
+const VERSION = '0.4.15';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -540,13 +540,14 @@ export function apply(ctx, config = {}) {
 					});
 					console.warn('[ai-team] wake failed:', plan.memberId, error?.code ?? error?.message ?? error);
 					// 一次性迁移自愈：旧形态成员会话（历史上由 agents.create 创建、
-					// 不在 subagent catalog）无法经父→子通道投递。识别该失败后自动以
-					// subagent 形态重建一次（重置会话），避免成员静默不再被唤醒。
+					// 不在 subagent catalog）或重启后不可恢复的会话（NOT_RESUMABLE /
+					// is unavailable）无法经父→子通道投递。识别该失败后自动以 subagent
+					// 形态重建一次（重置会话），避免成员静默不再被唤醒。
+					// 注意：member 是 try 块内变量，catch 里必须从 state 取成员。
+					const targetMember = projectRuntime.service.state.members?.[plan.memberId];
 					const failureText = `${error?.code ?? ''} ${error?.message ?? String(error)}`;
-					// 含 NOT_RESUMABLE / is unavailable：DSH 重启后 subagent 会话不可恢复/
-					// 不可投递（diag 实测），此时必须重建会话，否则成员永久失联。
 					const legacySession = /subagent|not-found|not found|E_SESSION_MISSING|NOT_RESUMABLE|unavailable/i.test(failureText)
-						&& typeof member?.sessionId === 'string' && member.sessionId !== '';
+						&& typeof targetMember?.sessionId === 'string' && targetMember.sessionId !== '';
 					if (legacySession) {
 						try {
 							const reseated = await activateMember({
@@ -560,7 +561,7 @@ export function apply(ctx, config = {}) {
 								ev: 'member.autoreseat',
 								projectId: projectRuntime.id,
 								memberId: plan.memberId,
-								oldSessionId: member.sessionId,
+								oldSessionId: targetMember.sessionId,
 								newSessionId: reseated?.sessionId ?? null,
 								ok: reseated?.error === undefined,
 							});
