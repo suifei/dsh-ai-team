@@ -57,6 +57,8 @@ test('host refuses a profile without danger-full-access', async () => {
 test('host mounts the workbench routes on a real default-project ledger', async () => {
 	const routes = [];
 	const memberSessions = new Map();
+	// 激活计数：跨 ctx.get('subagents') 调用共享（每次激活 = 新 childId）。
+	let activationCounter = 0;
 	const workspaceAttachments = [];
 	const requestErrorListeners = [];
 	const sessionEventListeners = [];
@@ -141,12 +143,17 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 				return {
 					list: () => ['local'],
 					startActivation: async (spec) => {
-						memberSessions.set('session-member-1', { id: 'session-member-1', sandbox: 'workspace-write' });
+						// 每次激活分配新 childId：reseat 断言依赖「重建 = 新会话」。
+						// counter 必须跨 ctx.get 调用共享（放在外层激活计数）。
+						activationCounter += 1;
+						const childId = 'session-member-' + activationCounter;
+						memberSessions.set(childId, { id: childId, sandbox: 'workspace-write' });
 						return {
-							childId: 'session-member-1',
-							messageId: 'msg-member-1',
+							childId,
+							messageId: 'msg-member-' + activationCounter,
 							result: Promise.resolve({ output: [], stopReason: 'completed' }),
-							dispose: async () => {},
+							// reseat 断言依赖「旧 activation 被 dispose」：记录到共享数组。
+							dispose: async () => { disposedHandles.push(childId); },
 						};
 					},
 					sendMessage: async (parent, targetId, content) => {

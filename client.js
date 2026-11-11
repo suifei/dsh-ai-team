@@ -214,14 +214,7 @@ window.__ModuleLoader__.load({
 			pmoOn: 'PMO 自动 · 开',
 			pmoOff: 'PMO 自动 · 关',
 			pmoHint: 'PMO 自动处理 Human 决策并续派下一批 Task；默认开启',
-			chatGateOn: 'Human 对话 · 开',
-			chatGateOff: 'Human 对话 · 关',
-			chatGateHint: '开启后可在成员资料里给成员发私信（成员下一轮生效）；关闭后私信通道停用。注意：成员的原生会话由团队路由驱动，宿主不接受直接输入，始终请用私信。',
-			chatGateClosed: 'Human 对话通道已由项目设置关闭；请通过决策与任务看板与团队交互，或用上方开关重新开启。',
-			chatGateClosedPlaceholder: '对话通道已关闭',
-			chatGateOpened: 'Human 对话通道已开启：私信将直达成员下一轮。',
-			chatGateClosedShort: 'Human 对话通道已关闭。',
-			routingHint: '原生会话直写被宿主拒绝（不是开关问题）；在此输入即写入该成员会话（与团队指令同一通道），成员下一轮在同一会话可见并回复。',
+			routingHint: '成员由 DSH 作为子智能体管理：在 DSH「管理的子智能体」面板中进入该成员会话可直接对话（保留上下文）；此处私信写入同一会话，成员下一轮回复。',
 			runOn: '项目运行 · 开',
 			runOff: '项目运行 · 停止中',
 			runStateHint: '停止：当前子任务完成后停止派发（不再派发新任务/心跳/升级）；启动：空项目开始或停止的项目继续开工',
@@ -631,14 +624,7 @@ window.__ModuleLoader__.load({
 			pmoOn: 'PMO auto · on',
 			pmoOff: 'PMO auto · off',
 			pmoHint: 'PMO answers Human decisions and dispatches the next Tasks; on by default',
-			chatGateOn: 'Human chat · on',
-			chatGateOff: 'Human chat · off',
-			chatGateHint: 'When on, you can DM members from their profile (effective next round); when off, the DM channel is disabled. Note: member native sessions are driven by team routing and the host rejects direct input — always use DMs.',
-			chatGateClosed: 'The Human chat channel is closed by project settings; interact via decisions and the task board, or re-open with the toggle above.',
-			chatGateClosedPlaceholder: 'Chat channel closed',
-			chatGateOpened: 'Human chat channel opened: DMs reach members next round.',
-			chatGateClosedShort: 'Human chat channel closed.',
-			routingHint: 'Direct input in the native session is rejected by the host (not a switch issue); a DM here is written into that member session through the same channel as team instructions, and the member replies in the same session next round.',
+			routingHint: 'Members are managed by DSH as subagents: open the subagent from the DSH managed-subagents panel to chat in that session directly (context preserved); a DM here is written into the same session and answered next round.',
 			runOn: 'Project run · on',
 			runOff: 'Project run · stopping',
 			runStateHint: 'Stop: finish the in-flight subtask then halt dispatch (no new tasks/heartbeats/escalations); Start: kick an empty project or resume a stopped one',
@@ -2994,9 +2980,6 @@ window.__ModuleLoader__.load({
 				await reloadData();
 				loadPeople();
 			}
-			const inboxItems = (data.inbox ?? []).filter((item) => !isInformationalInboxItem(item));
-			// R-13bis：Human↔成员对话门（项目级开关，账本留痕）。
-			const chatGateClosed = (project?.chatGate ?? 'open') === 'closed';
 			// P6：项目运行态（启动/停止）+ 交接文档落盘。
 			const runStopped = (project?.runState ?? 'running') === 'stopped';
 			async function toggleRunState() {
@@ -3017,16 +3000,7 @@ window.__ModuleLoader__.load({
 					sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
 				}
 			}
-			async function toggleChatGate() {
-				try {
-					const result = await runCommand('project.chatGate', { gate: chatGateClosed ? 'open' : 'closed' });
-					// host 的 note 说明自动收敛语义（空闲成员约 1 分钟内自动重建）。
-					say(result?.note ?? (chatGateClosed ? t('chatGateOpened') : t('chatGateClosedShort')));
-					await reloadData();
-				} catch (error) {
-					sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
-				}
-			}
+			const inboxItems = (data.inbox ?? []).filter((item) => !isInformationalInboxItem(item));
 			// R-13 老化分档（纯前端派生）：决策项 >24h 加深、>72h 升错误色。
 			const inboxAge = (item) => {
 				const created = item.createdAt ?? 0;
@@ -4090,13 +4064,6 @@ window.__ModuleLoader__.load({
 									onClick: togglePmo,
 								}, project.pmoAuto !== false ? t('pmoOn') : t('pmoOff')),
 								h('button', {
-									className: cx('at-pmobtn', !chatGateClosed && 'at-pmo-on'),
-									type: 'button',
-									title: t('chatGateHint'),
-									'aria-pressed': !chatGateClosed,
-									onClick: () => { void toggleChatGate(); },
-								}, !chatGateClosed ? t('chatGateOn') : t('chatGateOff')),
-								h('button', {
 									className: cx('at-pmobtn', !runStopped && 'at-pmo-on'),
 									type: 'button',
 									title: t('runStateHint'),
@@ -4312,14 +4279,12 @@ window.__ModuleLoader__.load({
 								h('input', {
 									value: pMessage,
 									onChange: (event) => setPMessage(event.target.value),
-									placeholder: chatGateClosed ? t('chatGateClosedPlaceholder') : t('messagePlaceholder'),
-									disabled: chatGateClosed,
+									placeholder: t('messagePlaceholder'),
 								}),
-								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: sendMemberMessage, disabled: !pMessage.trim() || chatGateClosed }, t('sendMessage'))),
-							// R-13bis：正常提示替代宿主黑 toast——成员原生会话由团队
-							// 路由驱动，宿主守卫拒绝直接写入；对话走私信（下一轮生效）。
+								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: sendMemberMessage, disabled: !pMessage.trim() }, t('sendMessage'))),
+							// 成员作为 DSH 子智能体管理：从「管理的子智能体」面板可直接对话；
+							// 此私信写入同一会话，成员下一轮回复。
 							h('div', { className: 'at-modalmeta' }, t('routingHint')),
-							chatGateClosed ? h('div', { className: 'at-modalmeta' }, t('chatGateClosed')) : null,
 							pError ? h('div', { className: 'at-modalerror', role: 'alert' }, pError) : null,
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setProfileAgent(null), disabled: pBusy }, t('cancel')),

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.82 - 2026-11-12
+
+- **成员会话形态修正（取代 0.3.78–0.3.81 的 header 门方案）**：成员改回由 DSH **子智能体**管理（subagents.startActivation，label/cwd/parent/delivery）——成员会话登记 subagent catalog，从 DSH「管理的子智能体」面板进入即可直接对话、**保留上下文**（宿主父→子投递），且不再出现在工作区会话列表（与真实 subagent 一致）。
+- **移除 project.chatGate 特性**（命令/fold/服务门/bootstrap 字段/client 按钮与文案/自动重建收敛/chat-gate-sync 模块与测试）——对话入口即宿主子智能体面板，无需门控，也不再以「重建会话」为代价。
+- 私信保留为插件侧写入同一会话的通道（无条件可用）；routingHint 改为指引「从管理的子智能体面板对话」。
+- 契约测试 	est/member-activation.test.js（激活/唤醒路径）；历史成员会话需一次「重置会话」以 subagent 形态重建。
+
+
 ## 0.3.81 - 2026-11-12
 
 - **官方资料合规评审复核**：评审代理的 7 medium / 6 low 逐条对照当前源码复核——locale 覆盖、硬编码文案、SSE 清空草稿、模态 Escape/焦点陷阱、toast 字面色、grid 第三列（实为 absolute 浮层）、SSE 诊断、prj_main 兜底**均不成立或已修**（多数为评审后已被后续修复覆盖，二手材料必须核实的实例）；唯一可执行项（index.js 未使用常量 PROJECT_ID）已删除。结论归档 docs/15。
