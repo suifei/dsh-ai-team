@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.29 - 2026-11-12
+
+**第二轮审计批次 3：成员唤醒与归档修复补全**
+
+- **第二次唤醒不再丢上下文**：冷恢复拿到的 AgentHandle 现在由 runtime 自己记住；此前 session 变 live 后第二次唤醒会回退到 `subagent.sendMessage`，manager 再做一次冷恢复并以 `NOT_RESUMABLE` 失败，触发上层强制重建、丢掉成员历史（handle 失效时才回退并清理）。
+- **归档修复覆盖成员会话自身**：sweep 之前只处理 host 一代；成员会话被单独归档时该成员每回合仍永久 `blocked`。现在 member session 本身也进 victims。
+- **roots() 快路径也解归档**：选中 Human 根会话时若它已归档，成员血缘被 gate 永久拒绝，而 sweep 因没有 hostSessionId 看不到它。
+- **面板作者名**：`bootstrap` 的 stream 投影补 `author`（客户端读 `item.author`，账本只有 `authorId`），主对话与 Thread 不再恒显示「—」。
+- **决策表章节号**：识别中文序号「六」，以 `## 六、…` 写的第 6 节决策表不再解析不出问题。
+- **唤醒 prompt 截断**：Main stream 的 Human 正文截到 2000 字符，1MB 级粘贴不再整段进入 Project owner 上下文。
+- 测试：`node --test` **203/203**。
+
 ## 0.4.28 - 2026-11-12
 
 **第二轮审计：8 条 HIGH + 工作台 409 修复**

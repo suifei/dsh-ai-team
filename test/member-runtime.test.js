@@ -242,3 +242,25 @@ test('missing parent/provider or session is rejected explicitly', async () => {
 		(error) => error.code === 'E_SESSION_MISSING',
 	);
 });
+
+test('a second wake reuses the resumed handle instead of re-entering cold resume', async () => {
+	const { runtime, sessions, calls } = makeRuntime();
+	const followed = [];
+	let resumeCount = 0;
+	runtime.agents = {
+		resume: async ({ resumeSessionId }) => {
+			resumeCount += 1;
+			sessions.set(resumeSessionId, { id: resumeSessionId, sandbox: 'workspace-write' });
+			return { agent: { id: resumeSessionId, followup: (message) => { followed.push(message); } }, dispose: async () => {} };
+		},
+	};
+	const member = { id: 'mem_1', name: '沈舟', sessionId: 'session-cold' };
+	await runtime.wake(member, { prompt: '第一次' });
+	// 第一次之后 session 已 live：第二次若回退到 sendMessage，subagent manager 会
+	// 再做一次冷恢复并以 NOT_RESUMABLE 失败，进而触发上层强制重建丢上下文。
+	const second = await runtime.wake(member, { prompt: '第二次' });
+	assert.equal(resumeCount, 1, 'resume must happen once');
+	assert.equal(calls.send.length, 0, 'no subagent sendMessage after the session is live');
+	assert.equal(second.resumed, true);
+	assert.equal(followed.length, 2, 'both wakes delivered through the resumed agent');
+});

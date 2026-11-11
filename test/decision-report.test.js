@@ -26,3 +26,16 @@ test('finds the last Windows markdown path in a thread message', () => {
 	assert.equal(path, 'E:\\work\\old.md');
 	assert.equal(findReportPath('no path'), null);
 });
+
+test('accepts a Chinese section number (六) for the decision table', () => {
+	const markdown = [
+		'# report',
+		'## 六、需要你决定的事',
+		'| # | 问题 | 建议 | 阻塞点 |',
+		'|---|---|---|---|',
+		'| 1 | 走 A 还是 B？ | A | 无 |',
+	].join('\n');
+	const questions = parseDecisionQuestions(markdown);
+	assert.equal(questions.length, 1);
+	assert.match(questions[0].text, /走 A 还是 B/);
+});

@@ -23,8 +23,9 @@ test('unarchives the host that a member lineage hangs from', async () => {
 		workspaceRegistry: { unarchiveSession: async (id) => { unarchived.push(id); } },
 		diag: { append: (row) => diag.push(row) },
 	});
-	assert.deepEqual(repaired, ['host-1']);
-	assert.deepEqual(unarchived, ['host-1']);
+	// 成员会话本身也在 victims 里：它可能被单独归档。
+	assert.deepEqual(repaired, ['m1', 'host-1']);
+	assert.deepEqual(unarchived, ['m1', 'host-1']);
 });
 
 test('asks for the persisted host too and never touches unrelated sessions', async () => {
@@ -59,6 +60,6 @@ test('a failing unarchive is reported and the sweep keeps going', async () => {
 		},
 		diag: { append: (row) => diag.push(row) },
 	});
-	assert.deepEqual(repaired, ['host-5']);
+	assert.deepEqual(repaired, ['m4', 'host-5']);
 	assert.equal(diag.some((row) => row.ev === 'host.unarchive.fail' && row.sessionId === 'host-4'), true);
 });

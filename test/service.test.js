@@ -368,3 +368,22 @@ test('bootstrap rejects an unknown project and every decision question must be a
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test('bootstrap stream entries carry the author name the client renders', async () => {
+	const root = await mkdtemp(join(tmpdir(), 'ai-team-stream-'));
+	const ledger = openLedger({ dir: join(root, 'ledger'), projectId: 'prj_stream', fsync: false });
+	const service = new TeamService({ ledger });
+	try {
+		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'h1', name: 'Human', kind: 'human' } });
+		await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'S', ownerId: 'h1' } });
+		await service.dispatch({ type: 'stream.post', actor: human, projectId: 'prj_stream', payload: { body: '你好' } });
+		const boot = service.bootstrap('prj_stream');
+		const last = boot.stream[boot.stream.length - 1];
+		assert.equal(last.body, '你好');
+		// 客户端读 item.author；账本只有 authorId，投影必须补齐，否则作者恒为「—」。
+		assert.equal(last.author, 'Human');
+	} finally {
+		ledger.close?.();
+		await rm(root, { recursive: true, force: true });
+	}
+});
