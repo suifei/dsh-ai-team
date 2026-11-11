@@ -41,7 +41,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.78';
+const VERSION = '0.3.79';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -455,6 +455,7 @@ export function apply(ctx, config = {}) {
 							agents: ctx.get('agents'),
 							agentPresets: ctx.get('agentPresets'),
 							direct: true,
+							allowHumanWrite: projectRuntime.service.state.projects?.[projectRuntime.id]?.chatGate !== 'closed',
 							parent: parentInfo.agent,
 							provider: providers[0],
 							preset: 'standard',
@@ -859,6 +860,7 @@ export function apply(ctx, config = {}) {
 					agents: ctx.get('agents'),
 					agentPresets: ctx.get('agentPresets'),
 					direct: true,
+					allowHumanWrite: projectRuntime.service.state.projects?.[projectRuntime.id]?.chatGate !== 'closed',
 					parent: parentInfo.agent,
 					provider: providers[0],
 					preset: 'standard',

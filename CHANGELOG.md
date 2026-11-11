@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.79 - 2026-11-12
+
+- **Human 直聊门接入项目开关**：成员会话 header 的 parentSession 现在由项目 chatGate 决定——open（默认）不带 parentSession（宿主放行 Human 在 DSH 主界面直接输入）；closed 带 parentSession（宿主按 subagent-owned 拒绝）。门只对新建/重建会话生效（header 不可变），切换开关时命令返回明确说明（已有成员需「重置会话」）。2 项映射测试（open/closed 两种 header 断言）。
+
+
 ## 0.3.78 - 2026-11-12
 
 - **【关键】成员会话对 Human 只读的根因修复**：宿主 hasApiSessionSubagentOwner 除 origin=subagent 外，对「header 带 parentSession 且 parent 拥有该 agent」的会话同样判定为 subagent-owned 并拒绝 Human 输入。插件 direct 模式创建成员会话时恰好设置了 meta.parentSession，导致所有成员会话被拒。现移除该 header 字段（驱动改用 agents.resume 的 parentAgent，不依赖 header）——新激活/重置后的成员会话可在 DSH 主界面直接输入。
