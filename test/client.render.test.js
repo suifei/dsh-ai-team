@@ -53,7 +53,7 @@ const BOOTSTRAP = {
 	},
 	follows: {},
 	notes: {},
-	modelCatalog: { providers: [{ id: 'prov', name: 'Prov', models: ['m1'] }] },
+	modelCatalog: { providers: [{ id: 'prov', name: 'Prov', models: [{ id: 'm1', name: 'Model One' }], modelCount: 1 }] },
 };
 const MODELS = { ok: true, providers: BOOTSTRAP.modelCatalog.providers };
 const PENDING = { ok: true, rows: [
@@ -264,8 +264,13 @@ test('headless render: workbench main path evaluates every component without ref
 	// R-04 防刷屏回归：管理视图的 UI children 不得携带超长技术原文
 	// （失败 message 等调试串只允许出现在 hover title 属性里）。
 	const oversize = [];
+	const stringified = [];
 	const walkStrings = (node) => {
-		if (typeof node === 'string') { if (node.length > 200) oversize.push(node.slice(0, 60)); return; }
+		if (typeof node === 'string') {
+			if (node.length > 200) oversize.push(node.slice(0, 60));
+			if (node.includes('[object Object]')) stringified.push(node.slice(0, 80));
+			return;
+		}
 		if (node && typeof node === 'object') {
 			if (Array.isArray(node.children)) node.children.forEach(walkStrings);
 			else if (node.children !== undefined) walkStrings(node.children);
@@ -273,4 +278,5 @@ test('headless render: workbench main path evaluates every component without ref
 	};
 	walkStrings(tree3);
 	assert.deepEqual(oversize, [], 'no UI string may exceed 200 chars — long diagnostics belong in title attributes');
+	assert.deepEqual(stringified, [], 'no object may be stringified into UI text ([object Object]) — read .id/.name from catalog rows');
 });

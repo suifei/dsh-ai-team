@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.83 - 2026-11-12
+
+- **人员池模型下拉 [object Object] 修复**：modelCatalog 的 providers[].models 元素是 {id,name} 对象，P2 之前按字符串拼接。改为按 {id,name} 取值，并用索引映射代替字符串拆解（模型显示名可能含分隔符）。
+- 渲染 E2E：bootstrap fixture 的 models 改为真实 {id,name} 形状；新增 **[object Object] 守卫**（任何对象被当字符串拼进 UI 文本即失败）——同类数据形状错误今后提交前被拦截。
+
+
 ## 0.3.82 - 2026-11-12
 
 - **成员会话形态修正（取代 0.3.78–0.3.81 的 header 门方案）**：成员改回由 DSH **子智能体**管理（subagents.startActivation，label/cwd/parent/delivery）——成员会话登记 subagent catalog，从 DSH「管理的子智能体」面板进入即可直接对话、**保留上下文**（宿主父→子投递），且不再出现在工作区会话列表（与真实 subagent 一致）。

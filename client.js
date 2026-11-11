@@ -2947,23 +2947,31 @@ window.__ModuleLoader__.load({
 			}
 			// P2：人员池统一配置模型——对同名成员在其所有项目逐个
 			// member.config.update（跨项目批量，免逐项目进资料面板）。
+			// catalog 形状：providers[] = { id, name, models: [{ id, name }] }。
 			async function configPersonModel(person) {
 				const providers = modelCatalog?.providers ?? [];
-				const options = [];
+				const labels = [];
+				const values = [];
 				for (const provider of providers) {
-					for (const model of provider.models ?? []) {
-						options.push(provider.name + ' / ' + model);
-						if (options.length >= 60) break;
+					for (const entry of provider.models ?? []) {
+						// 兼容历史上可能出现的字符串模型项。
+						const modelId = typeof entry === 'string' ? entry : entry?.id;
+						const modelName = typeof entry === 'string' ? entry : (entry?.name ?? entry?.id);
+						if (typeof modelId !== 'string' || modelId === '') continue;
+						labels.push(provider.name + ' / ' + modelName);
+						values.push({ providerId: provider.id, providerName: provider.name, model: modelId, modelName });
+						if (labels.length >= 60) break;
 					}
-					if (options.length >= 60) break;
+					if (labels.length >= 60) break;
 				}
-				if (options.length === 0) { say(t('modelCatalogEmpty')); return; }
-				const picked = await askPrompt(tf(t, 'personModelTitle', { name: person.name }), { options });
+				if (labels.length === 0) { say(t('modelCatalogEmpty')); return; }
+				const picked = await askPrompt(tf(t, 'personModelTitle', { name: person.name }), { options: labels });
 				if (picked === null) return;
-				const chosen = options.includes(picked) ? picked : options[0];
-				const [providerName, model] = chosen.split(' / ');
-				const provider = providers.find((entry) => entry.name === providerName) ?? providers.find((entry) => entry.id === providerName);
-				const patch = { provider: provider?.id ?? providerName, model };
+				// 用索引映射取值：模型显示名可能含分隔符，不能按字符串拆解。
+				const pickedIndex = labels.indexOf(picked);
+				const target = values[pickedIndex >= 0 ? pickedIndex : 0];
+				if (target === undefined) return;
+				const patch = { provider: target.providerId, model: target.model };
 				let done = 0; let failed = 0;
 				for (const row of person.projects ?? []) {
 					const memberIds = Array.isArray(row.memberIds) ? row.memberIds : [];
@@ -2976,7 +2984,7 @@ window.__ModuleLoader__.load({
 						}
 					}
 				}
-				sayRight(tf(t, 'personModelDone', { name: person.name, model, done, failed }));
+				sayRight(tf(t, 'personModelDone', { name: person.name, model: target.modelName ?? target.model, done, failed }));
 				await reloadData();
 				loadPeople();
 			}
