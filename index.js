@@ -41,7 +41,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.65';
+const VERSION = '0.3.66';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -369,6 +369,7 @@ export function apply(ctx, config = {}) {
 		const pmoLastKick = new Map();
 		const pmoLastStall = new Map();
 		const pmoLastHeartbeat = new Map();
+		const pmoLastDispatch = new Map();
 		const pmoLastEscalate = new Map();
 		const pmoLastReview = new Map();
 		// Members resumed from cold sessions produce AgentHandles nobody stored;
@@ -513,6 +514,25 @@ export function apply(ctx, config = {}) {
 			const active = Object.values(state.tasks ?? {}).filter((task) =>
 				task.tombstone !== true && ['pending', 'in_progress', 'pending_acceptance'].includes(task.status));
 			const now = Date.now();
+			// R-14 pending 快速补派：task/created 的事件唤醒可能在责任位正忙时
+			// 被投递语义吞掉，而账本没有「回合结束/空闲」事件可挂钩（member.status
+			// 只有 running/failed 写点，idle 是 bootstrap 显示兜底）——所以用
+			// 60s tick + 责任位状态检查兜底：pending 且责任位非 running → 每分钟
+			// 最多一次补派。pending 开工等待从最长 10 分钟压到一个 tick。
+			for (const task of active) {
+				if (task.status !== 'pending') continue;
+				const responsibleId = task.assigneeId ?? task.ownerId;
+				const responsible = state.members?.[responsibleId];
+				if (responsible === undefined || responsible.kind !== 'agent') continue;
+				if (responsible.status === 'running') continue; // 正在执行别的回合：不打断
+				if (responsible.status === 'retired' || responsible.status === 'failed') continue; // 不自动唤醒
+				const lastDispatch = pmoLastDispatch.get(task.id) ?? 0;
+				if (now - lastDispatch < 60_000) continue;
+				pmoLastDispatch.set(task.id, now);
+				await wakeFromResult(projectRuntime, {
+					event: { type: 'pmo/dispatch', payload: { taskId: task.id, bucket: Math.floor(now / 60_000) } },
+				}, {});
+			}
 			for (const task of active) {
 				const thread = state.threads?.[task.id];
 				const threadAt = thread?.entries?.at(-1)?.at;
