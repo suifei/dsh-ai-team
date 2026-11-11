@@ -1,0 +1,29 @@
+fix: give the reviewer the exact team-tool call format; document the SDK findings
+
+The reviewer never posted because the review request only said "use the
+team tool to reply to this card" - it never named the actual action or its
+parameters. lib/host/member-tools.js exposes the post as
+{"action":"reply","taskId":...,"baseSeq":<headSeq>,"body":...} (read the
+headSeq first with {"action":"thread","taskId":...}); thread.post is the
+internal command name, not an action. buildReviewRequest now emits both
+calls verbatim with the real taskId and initial baseSeq.
+
+SDK findings from the official plugin-development references shipped in
+@deepseek-ai/dsh-agent-preset (skills/cordis-plugin-development):
+- child agents compose persona and tools from the mounted agentPreset;
+  an omitted selection joins the parent's preset revision
+- tools are inherited by default; only ctx.tools.restrict() removes them
+  from an agent and ctx.tools.guard() denies execution - so a member can
+  see the plugin-registered team tool
+- so the reviewer's silence was a session-availability problem plus a
+  malformed instruction, not an invisible tool
+
+Measured after the fix: wake/delivered now succeeds for the reviewer (fresh
+session), the member receives all three requests, but it still performs no
+team action in its turn. Next discriminating step: inspect the preset's
+tool list inside the asar, and simplify the review prompt to the verdict
+format only.
+
+chore: release 0.4.19.
+
+Tests: 164 passing.
