@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.28 - 2026-11-12
+
+**第二轮审计：8 条 HIGH + 工作台 409 修复**
+
+- **工作台不可达（409）**：`bootstrap` 曾用「过滤掉归档项目」的列表判定存在性，于是账本里存在、只是已归档的项目被报成 `E_NOT_FOUND`，与 `board()`/`quadrants()` 口径矛盾；归档当前 active 项目时 `booted.activeProjectId` 仍指向已归档账本，刷新后工作台停在错误页。现在存在性按未过滤记录判定，归档项目返回只读视图；无参 bootstrap 使用「该 runtime 账本里真实存在的项目」；归档 active 后自动切到 registry 的 fallback；`ProjectRegistry.setActive` 拒绝归档项目。
+- **账本**：poison 闸门移入写队列——同一 tick 并发的两个批次曾同时通过入口检查，先失败者置毒后另一个仍按旧 head 写出重复 seq，账本此后永久打不开；`lock.takeover` 标记现在带 pid/startedAt 且超过 10s 可回收，清理失败会告警而非静默。
+- **技能加载**：frontmatter 按 `\r\n|\r|\n` 切分。此前 CRLF 文件的最后一行整行失配（`\r` 是 JS 行终止符，`^…$` 越不过），description 位于末尾的 SKILL.md 会被当成「缺少 description」丢弃——包括插件自带的 skillopt-sleep。
+- **命令注入**：SkillOpt gate 新增 `assertSafeProjectDir`，模型可控的 project 必须是真实存在的绝对目录且不含 shell 元字符；仅靠 `quoteArgv` 的双引号挡不住 `$(...)`/反引号。
+- **项目创建**：`project.create` 先校验工作目录再写 registry，避免一个打不开的项目让下次 boot 全线 503；`project.activate` 透传 `workspacePath`，否则账本把它写成空、成员激活永远 `E_WORKSPACE_REQUIRED`。
+- **adopt 门**：keep 记录的查找覆盖工作区与所有 runtime 数据目录（optimize 写在后者，adopt 之前只查前者，导致恒被拒）。引擎 staging 与评审通道两条流水线的候选仍不同源，失败关闭并记录为设计缺口。
+- **打包**：vendor 通配收窄为 `*.py`，`__pycache__/*.pyc` 不再进入发布包（142 → 113 文件、796 → 468 kB）。
+- 测试：`node --test` **200/200**。
+
 ## 0.4.27 - 2026-11-12
 
 **审计 LOW 收尾（195/195）**
