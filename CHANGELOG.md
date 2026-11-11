@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.80 - 2026-11-12
+
+- **chatGate 自动收敛（UX 一致性修正）**：开关切换不再要求手动「重置会话」——PMO 巡检对**空闲**成员自动重建会话（每轮最多 2 个，约 1 分钟内收敛；忙碌成员等回合结束再应用，绝不打断进行中的工作）；boot 时以账本当前值初始化，避免重启即全体重建。命令返回 note 如实说明「自动生效 + 会话记忆会重置」。
+- planChatGateReseats 纯函数（可选重建计划）+ 3 项测试（idle/busy/cold/retired/limit）。
+
+
 ## 0.3.79 - 2026-11-12
 
 - **Human 直聊门接入项目开关**：成员会话 header 的 parentSession 现在由项目 chatGate 决定——open（默认）不带 parentSession（宿主放行 Human 在 DSH 主界面直接输入）；closed 带 parentSession（宿主按 subagent-owned 拒绝）。门只对新建/重建会话生效（header 不可变），切换开关时命令返回明确说明（已有成员需「重置会话」）。2 项映射测试（open/closed 两种 header 断言）。

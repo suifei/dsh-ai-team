@@ -3019,8 +3019,9 @@ window.__ModuleLoader__.load({
 			}
 			async function toggleChatGate() {
 				try {
-					await runCommand('project.chatGate', { gate: chatGateClosed ? 'open' : 'closed' });
-					say(chatGateClosed ? t('chatGateOpened') : t('chatGateClosedShort'));
+					const result = await runCommand('project.chatGate', { gate: chatGateClosed ? 'open' : 'closed' });
+					// host 的 note 说明自动收敛语义（空闲成员约 1 分钟内自动重建）。
+					say(result?.note ?? (chatGateClosed ? t('chatGateOpened') : t('chatGateClosedShort')));
 					await reloadData();
 				} catch (error) {
 					sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));

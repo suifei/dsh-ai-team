@@ -30,6 +30,7 @@ import { installFaultAdapter } from './lib/host/fault-adapter.js';
 import { buildModelCatalog } from './lib/host/model-catalog.js';
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeWake, planWakes } from './lib/host/waker.js';
+import { planChatGateReseats } from './lib/host/chat-gate-sync.js';
 import { aggregatePeople } from './lib/host/people-view.js';
 import { riskView } from './lib/host/risk-view.js';
 import { weeklyView } from './lib/host/weekly-view.js';
@@ -41,7 +42,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.79';
+const VERSION = '0.3.80';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -372,6 +373,9 @@ export function apply(ctx, config = {}) {
 		const pmoLastStall = new Map();
 		const pmoLastHeartbeat = new Map();
 		const pmoLastDispatch = new Map();
+		// chatGate 已应用值（内存）：boot 时用当前账本值初始化，避免重启即重建
+		// 全体会话；此后每轮 tick 收敛到账本值（对空闲成员自动重建会话）。
+		const chatGateApplied = new Map();
 		const pmoLastEscalate = new Map();
 		const pmoLastReview = new Map();
 		// Members resumed from cold sessions produce AgentHandles nobody stored;
@@ -508,6 +512,33 @@ export function apply(ctx, config = {}) {
 			// P6 停止门：stopped 项目停止一切派发（补派/心跳/升级/continue 全停），
 			// 正在执行的回合自然完成；唤醒事件 hook 同样检查（见 wakeFromResult）。
 			if (project.runState === 'stopped') return;
+			// chatGate 自动收敛：开关变更后成员会话 header 需重建才生效——对
+			// **空闲**成员自动 reseat（每轮最多 2 个），忙碌成员等回合结束再应用。
+			// 本轮无可重建且无忙碌成员时记为已收敛（停止重复重建）。独立于派发门。
+			const gate = project.chatGate === 'closed' ? 'closed' : 'open';
+			if (chatGateApplied.get(projectRuntime.id) !== gate) {
+				const plan = planChatGateReseats(
+					Object.values(state.members ?? {}).filter((member) => member.kind === 'agent'),
+					(sessionId) => ctx.get('agents')?.get?.(sessionId)?.status ?? null,
+					{ limit: 2 },
+				);
+				for (const memberId of plan.reseat) {
+					const member = state.members?.[memberId];
+					if (member === undefined) continue;
+					diag.append({ ev: 'chatgate.reseat', projectId: projectRuntime.id, memberId, gate, oldSessionId: member.sessionId ?? null });
+					const result = await activateMember({
+						payload: { memberId, prompt: `会话已重建（Human 对话门：${gate}）。先读 tasks/thread 当前状态，继续推进；不要重复已完成的工作。`, force: true },
+					}, projectRuntime).catch((error) => ({ error: { message: error?.message ?? String(error) } }));
+					if (result?.error !== undefined) {
+						diag.append({ ev: 'chatgate.reseat.fail', projectId: projectRuntime.id, memberId, message: result.error.message });
+					}
+				}
+				// 本轮没有可重建对象、也没有忙碌成员 → 全部收敛（cold 成员激活时
+			// 自然读取当前门状态）。
+				if (plan.reseat.length === 0 && plan.busy.length === 0) {
+					chatGateApplied.set(projectRuntime.id, gate);
+				}
+			}
 			for (const member of Object.values(state.members ?? {})) {
 				if (member.kind === 'agent' && typeof member.sessionId === 'string') {
 					await titleMemberSession(projectRuntime, member);
