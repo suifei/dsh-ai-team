@@ -52,7 +52,7 @@ export const name = 'ai-team';
 // 实际使用的服务（含可选服务：缺失时 serviceOf 回退 ctx.get 并返回 undefined）。
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'];
 
-const VERSION = '0.4.15';
+const VERSION = '0.4.18';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -546,8 +546,24 @@ export function apply(ctx, config = {}) {
 					// 注意：member 是 try 块内变量，catch 里必须从 state 取成员。
 					const targetMember = projectRuntime.service.state.members?.[plan.memberId];
 					const failureText = `${error?.code ?? ''} ${error?.message ?? String(error)}`;
+					// 探针（.fail 后缀以便 errors 级可见）：自愈为什么没触发。
+					diag.append({
+						ev: 'wake.catch.probe.fail',
+						memberId: plan.memberId,
+						reason: plan.reason,
+						hasTarget: targetMember !== undefined && targetMember !== null,
+						sessionIdType: typeof targetMember?.sessionId,
+						failureText: failureText.slice(0, 160),
+					});
 					const legacySession = /subagent|not-found|not found|E_SESSION_MISSING|NOT_RESUMABLE|unavailable/i.test(failureText)
 						&& typeof targetMember?.sessionId === 'string' && targetMember.sessionId !== '';
+					diag.append({
+						ev: 'wake.catch.probe.fail',
+						stage: 'decision',
+						memberId: plan.memberId,
+						legacySession,
+						hasActivateMember: typeof activateMember === 'function',
+					});
 					if (legacySession) {
 						try {
 							const reseated = await activateMember({
@@ -564,6 +580,7 @@ export function apply(ctx, config = {}) {
 								oldSessionId: targetMember.sessionId,
 								newSessionId: reseated?.sessionId ?? null,
 								ok: reseated?.error === undefined,
+								error: reseated?.error ?? null,
 							});
 						} catch (reseatError) {
 							diag.append({
@@ -966,6 +983,25 @@ export function apply(ctx, config = {}) {
 						if (runtime === null) return '[skillopt optimize] no active project runtime';
 						const jobId = 'job_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 						const actor = { kind: 'human', memberId: HUMAN_ID };
+						// 评审前先刷新评审官会话：subagent provider 不提供 continuable
+						// 会话，旧会话在重启/回合结束后即不可投递（NOT_RESUMABLE）。
+						// 这一步让评审投递落在**新鲜会话**上，闭环才成立。
+						try {
+							const reviewer = Object.values(runtime.service.state.members ?? {})
+								.find((member) => member.kind === 'agent' && (member.role === '评审' || member.name === '评审官'));
+							if (reviewer !== undefined) {
+								const refreshed = await activateMember({
+									payload: {
+										memberId: reviewer.id,
+										force: true,
+										prompt: '会话已刷新（评审官）。职责不变：只做 A/B 盲评，把一行 JSON 结论用 team 工具发到评审卡。',
+									},
+								}, runtime);
+								diag.append({ ev: refreshed.error === undefined ? 'skillopt.reviewer.refreshed' : 'skillopt.reviewer.refresh.fail', projectId: runtime.id, memberId: reviewer.id, sessionId: refreshed.sessionId ?? null, message: refreshed.error?.message ?? null });
+							}
+						} catch (error) {
+							diag.append({ ev: 'skillopt.reviewer.refresh.fail', projectId: runtime.id, message: error?.message ?? String(error) });
+						}
 						const started = await startReview({
 							service: runtime.service,
 							projectRuntime: runtime,
@@ -1794,6 +1830,58 @@ export function apply(ctx, config = {}) {
 							if (activated.error !== undefined) return send(res, { error: activated.error }, activated.status ?? 409);
 							broadcast(undefined);
 							return send(res, activated);
+						}
+						// 成员恢复巡检（不依赖 boot/tick）：subagent provider 不提供
+						// continuable 会话，唤醒失败后必须重建会话——单成员或全量。
+						if (body.type === 'member.reseat') {
+							const payload = body.payload ?? {};
+							const state = runtime.service.state;
+							const targets = Array.isArray(payload.memberIds) && payload.memberIds.length > 0
+								? payload.memberIds
+								: typeof payload.memberId === 'string' && payload.memberId !== ''
+									? [payload.memberId]
+									: payload.all === true
+										? Object.values(state.members ?? {}).filter((member) => member.kind === 'agent' && member.status !== 'retired').map((member) => member.id)
+										: [];
+							if (targets.length === 0) {
+								return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'memberIds, memberId or all:true is required' } }, 400);
+							}
+							const results = [];
+							for (const memberId of targets) {
+								const before = state.members?.[memberId]?.sessionId ?? null;
+								try {
+									const activated = await activateMember({
+										payload: {
+											memberId,
+											force: true,
+											prompt: typeof payload.prompt === 'string' && payload.prompt !== ''
+												? payload.prompt
+												: '会话已重建（成员恢复）。先读 tasks/thread 当前状态，继续推进；不要重复已完成的工作。',
+										},
+									}, runtime);
+									results.push({
+										memberId,
+										ok: activated.error === undefined,
+										oldSessionId: before,
+										newSessionId: activated.sessionId ?? null,
+										error: activated.error ?? null,
+									});
+								} catch (error) {
+									results.push({ memberId, ok: false, oldSessionId: before, newSessionId: null, error: { code: 'E_RUNTIME', message: error?.message ?? String(error) } });
+								}
+								if (typeof diag?.append === 'function') {
+									diag.append({
+										ev: results.at(-1)?.ok === true ? 'member.reseat' : 'member.reseat.fail',
+										projectId: projectId,
+										memberId,
+										oldSessionId: before,
+										newSessionId: results.at(-1)?.newSessionId ?? null,
+										message: results.at(-1)?.error?.message ?? null,
+									});
+								}
+							}
+							broadcast(undefined);
+							return send(res, { ok: results.every((row) => row.ok), results });
 						}
 						try {
 							const result = await runtime.service.dispatch({

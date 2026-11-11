@@ -1,0 +1,24 @@
+feat: member.reseat command (single/batch recovery) + refresh reviewer before review
+
+Two operational capabilities for the wake-availability problem, both
+measurable and independent of boot/tick:
+
+1. member.reseat command — `{memberId}`, `{memberIds:[...]}` or `{all:true}`
+   rebuilds member sessions through the same force activation the manual
+   recovery used, returns per-member old/new session ids and errors, and
+   records member.reseat / member.reseat.fail diagnostics. Measured: a
+   batch run over the il2c project reseated all seven members (all ok, all
+   with fresh session ids) while the plugin was live.
+2. skillopt_optimize refreshes the reviewer member's session right before
+   delivering the blind-review votes, so a stale (non-continuable) session
+   can never swallow the review round.
+
+Root cause documented: the only subagent provider in this environment is
+`local`, which does not offer continuable sessions (`prepareContinuable`
+absent), so every member session becomes NOT_RESUMABLE once its turn ends
+or the host restarts. Recovery is therefore a rebuild, not a resume — the
+new command makes that explicit and repeatable.
+
+chore: release 0.4.18.
+
+Tests: 164 passing.
