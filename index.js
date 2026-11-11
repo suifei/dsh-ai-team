@@ -50,7 +50,7 @@ export const name = 'ai-team';
 // 实际使用的服务（含可选服务：缺失时 serviceOf 回退 ctx.get 并返回 undefined）。
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'];
 
-const VERSION = '0.4.6';
+const VERSION = '0.4.8';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -986,8 +986,41 @@ export function apply(ctx, config = {}) {
 					parameters: { project: { type: 'string', description: 'Project directory' } },
 					output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: String(value) }] },
 					async execute(args) {
-						const project = typeof args?.project === 'string' && args.project !== '' ? args.project : process.cwd();
-						const jobs = listJobs(project);
+						// 主动收割：工具调用即驱动（不依赖 PMO 定时器——实测宿主热重载/
+						// 重启后 setInterval 可能不重建，工具驱动保证链路可用）。
+						const explicit = typeof args?.project === 'string' && args.project !== '' ? args.project : null;
+						// job 归属项目数据目录（runtime.dir），显式路径只作为额外搜索根。
+					const runtimeRoots = [...(booted?.runtimes?.values?.() ?? [])].map((runtime) => runtime.dir).filter((root) => typeof root === 'string' && root !== '');
+					const jobRoots = [...new Set([...runtimeRoots, ...(explicit !== null ? [explicit] : [])])];
+						for (const jobRoot of jobRoots) {
+							if (typeof jobRoot !== 'string' || jobRoot === '') continue;
+							try {
+								await reconcileJobs({
+									ctx,
+									projectDir: jobRoot,
+									deps: {
+										now: () => Date.now(),
+										provider: (serviceOf(ctx, 'subagents')?.list?.() ?? [])[0],
+										ensureParent: () => ensureParent(),
+										votes: config.skilloptJudgeVotes ?? 3,
+										startChild: async (label, spec) => {
+											const child = await serviceOf(ctx, 'subagents').startActivation({ ...spec, label });
+											return { childId: child.childId, outputStart: child.outputStart ?? null };
+										},
+										readText: (file) => readFileSync(file, 'utf8'),
+										writeText: (file, next) => writeFileSync(file, next, 'utf8'),
+										score: (value) => scoreSkillRubric(value, { measured: false }),
+										appendResult: makeResultAppender({ projectDir: jobRoot }),
+										vcs: await makeVcs({ shell: lazyShellService(ctx), projectDir: jobRoot }),
+										diag: (row) => diag.append(row),
+									},
+								});
+							} catch (error) {
+								diag.append({ ev: 'skillopt.jobs.step.fail', message: error?.message ?? String(error), jobRoot });
+							}
+						}
+						const roots = jobRoots.length > 0 ? jobRoots : [process.cwd()];
+						const jobs = roots.flatMap((jobRoot) => listJobs(jobRoot));
 						if (jobs.length === 0) return '[skillopt jobs] none';
 						return ['[skillopt jobs]', ...jobs.map((job) => `  ${job.id} ${job.state} ${job.dimension ?? '-'}${job.decision ? ` verdict=${job.decision.verdict} (${job.decision.better}-${job.decision.worse})` : ''}${job.error ? ` error=${job.error}` : ''}`)].join('\n');
 					},
