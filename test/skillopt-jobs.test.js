@@ -10,6 +10,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isChildSettled, isJobExpired, planJobStep } from '../lib/skillopt/jobs.js';
+import { sha12 } from '../lib/skillopt/proposal-store.js';
 import { hasPairedKeepRecord } from '../lib/skillopt/optimize-wiring.js';
 import { createAdoptGate } from '../lib/skillopt/adopt-gate.js';
 
@@ -73,20 +74,28 @@ test('jobs: settled detection is tolerant of the activation shapes', () => {
 	assert.equal(isJobExpired({ createdAt: 0 }, 6000, 5000), true);
 });
 
-test('adopt gate: paired-keep record is the synchronous verdict source', async () => {
+test('adopt gate: paired-keep record must match the current proposal', async () => {
 	const dir = mkdtempSync(join(tmpdir(), 'ai-team-records-'));
 	try {
 		const pair = { before: 'OLD', after: 'NEW', skillPath: join(dir, 'skills', 'demo', 'SKILL.md') };
-		const gate = createAdoptGate({ readPair: async () => pair, hasKeepRecord: async ({ projectDir }) => hasPairedKeepRecord(projectDir, pair.skillPath) });
+		const gate = createAdoptGate({
+			readPair: async () => pair,
+			hasKeepRecord: async ({ projectDir, candidate }) => hasPairedKeepRecord(projectDir, pair.skillPath, candidate),
+		});
 		// no results.tsv yet -> refuse
 		assert.match(await gate({ project: dir }), /no paired keep record/);
-		// a keep row -> allow
 		mkdirSync(join(dir, '.skillopt-sleep'), { recursive: true });
 		const file = join(dir, '.skillopt-sleep', 'results.tsv');
-		writeFileSync(file, ['timestamp\tcommit\tskill\told_score\tnew_score\tstatus\tdimension\tnote\teval_mode', '2026-11-11T20:00:00\t-\tdemo\t50.9\t55\tkeep\tdim3\t3-0 keep\tpaired'].join('\n') + '\n', 'utf8');
+		const header = 'timestamp\tcommit\tskill\told_score\tnew_score\tstatus\tdimension\tnote\teval_mode\tproposal_sha';
+		const row = (sha, status = 'keep', note = '3-0 keep') => ['2026-11-11T20:00:00', '-', 'demo', '50.9', '55', status, 'dim3', note, 'paired', sha].join('\t');
+		// keep row for THIS candidate -> allow
+		writeFileSync(file, [header, row(sha12('NEW'))].join('\n') + '\n', 'utf8');
 		assert.equal(await gate({ project: dir }), null);
+		// a keep for a DIFFERENT proposal must not unlock this one
+		writeFileSync(file, [header, row(sha12('SOMETHING-ELSE'))].join('\n') + '\n', 'utf8');
+		assert.match(await gate({ project: dir }), /no paired keep record/);
 		// a later revert row -> refuse again
-		writeFileSync(file, ['timestamp\tcommit\tskill\told_score\tnew_score\tstatus\tdimension\tnote\teval_mode', '2026-11-11T20:00:00\t-\tdemo\t50.9\t55\tkeep\tdim3\t3-0 keep\tpaired', '2026-11-11T21:00:00\t-\tdemo\t55\t50\trevert\tdim5\t1-2 revert\tpaired'].join('\n') + '\n', 'utf8');
+		writeFileSync(file, [header, row(sha12('NEW')), row(sha12('NEW'), 'revert', '1-2 revert')].join('\n') + '\n', 'utf8');
 		assert.match(await gate({ project: dir }), /no paired keep record/);
 	} finally {
 		rmSync(dir, { recursive: true, force: true });

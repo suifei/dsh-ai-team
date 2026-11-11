@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.4.27 - 2026-11-12
+
+**审计 LOW 收尾（195/195）**
+
+- **诊断可区分**：成员输出探针成功行改名 `member.output.probe`（此前与异常共用 `.fail`，errors 级无法区分）；`request-error` 链三处 catch 补 `*.fail` 诊断（失败记录/换路/恢复）。
+- **判别正确性**：`classifyLlmFailure` 把 429 判定提到 billing 之前（带 quota 字样的限流不再被当成致命计费错误）；`scoreSkillRubric` 拒绝 `NaN` dim8；`formatRubric` 的 weakest 排除 dim8，与 `weakestDimension` 同口径。
+- **技能目录**：`formatSkillCatalog` 过滤 `modelInvocable === false`（禁止模型调用的技能不再进成员 prompt）；`skillProvider.get()` 读取失败返回 `undefined` 而不是抛错打断回合；disposer 兼容函数/control 两种形状并调用 `invalidate`。
+- **账本**：`_scan` 检测重复事件 id 并以 `E_LEDGER_CORRUPT`（`duplicate-id`）拒绝载入。
+- **命令层**：`bootstrap` 对未知 `projectId` 报 `E_NOT_FOUND`（与 board/quadrants 同口径）；`decision.answer` 要求答案覆盖全部问题（未知/缺失均 `E_INVALID_ARGUMENT`）。
+- **生命周期**：`roots()` 优先挑真正的 Human 根会话（无 `parentSession`、非 subagent）；`member.retire`/`member.leave` 成功后释放常驻 activation 句柄；损坏 job 文件保留并告警。
+- 测试：`node --test` **195/195**（+2：`resilience` 的 429/quota 回归、`service` 的 bootstrap+决策完整性）。
+
+## 0.4.26 - 2026-11-12
+
+**审计后续：MEDIUM/LOW 三批清理（193/193）**
+
+- **账本写入安全**：`_rollback` 本身失败时置 `E_LEDGER_POISONED`（要求 close+open），不再让 `fd=null` 的句柄继续接单；段号改为按**磁盘最大段号 + 1**推导（旧实现会复用已存在段号 → 永久 `EEXIST`）；空账本不再预创建段文件（否则空段被当尾段删掉，首段跳到 `000002`）。
+- **命令层输入校验**：`member.add` 校验 id 类型/唯一性与 status 枚举；`member.config.update` 忽略请求里夹带的 `policy`（防止自行放宽白名单）；`inbox.ack` 校验归属；`decision` 写入投影；`project.create` 校验工作目录存在并拒绝重复 id；`task.assign/reassign` 校验目标成员存在且未退役。
+- **路径与作者身份**：`backfillHumanMentions` 只接受工作目录内的 `.md`（`resolve+relative` 包含性校验）；`postStream` 按 actor 写 `kind`（agent 发言不再冒充 `human_message`）。
+- **调度**：PMO tick 按 Project 去重（`pmoBusy` + `pmo.tick.skip`）；`wakeKeys` 改为先判定工作目录再占键（跳过不再永久丢事件）；`waker` 去重键追加成员与 Project 作用域；`task/created` 按 `payload.taskId` 回投影取任务。
+- **SkillOpt 判别质量**：多数决要求有效票过半（3→2、5→3）；`parseJudgeOutput` 逐个尝试平衡括号对象并取**最后**一个合法结论（模板回显不再丢票）；rubric dim6 在无 `resourcePaths` 时按「未验证」给中性分；评审通道 job 补 30 分钟兜底 TTL。
+- **视图与前端**：`q4Limit` 真正生效；周报不再把 PMO 自动决策算作 Human 介入；`findReportPath` 支持正斜杠与带空格/引号路径；`g` 前缀快捷键恢复；Thread 冲突检测改读 `headSeq` 并在发送后推进基线；`loadPending` 失败不再伪装成「没有待验收」；`loadRisks` 不再借用 people 的加载态；SSE 断流首次可见提示。
+- 测试：`node --test` **193/193**（+9：`judge-parse` 5、`weekly-report-path` 2、`ledger` 2）。
+
+## 0.4.25 - 2026-11-12
+
+**全量代码审计收口：17 条 HIGH 全部修复**
+
+- **成员回合永久 `blocked` 的根因（R6）**：`archived-session-gate` 会沿 subagent 血缘上溯，而旧版为隐藏会话把 Team Host **归档**——所有成员都是它的子会话，于是每回合在发出模型请求前被拒（实测 453 blocked / 0 completed）。`lib/runtime/host-agent.js` 不再归档 host；新增 `lib/runtime/host-repair.js` 在 boot 与 `ensureParent` 时把 host 及成员 `parentSession` 解归档。
+- **`team` 首回合不可见**：可见性原按「请求者是否已知成员」判定，而成员 `sessionId` 在 `activate()` 返回后才写入 → 首个 model step 恒缺 `team`（43→44 工具）。改为 `when: () => booted !== null`，非成员仍由工具自身 `E_NOT_MEMBER` 拒绝。
+- **SkillOpt 越权面**：新增 `lib/skillopt/tool-access.js`——`run/adopt/schedule/unschedule/optimize/jobs/judge` 只允许 Team 成员或 Human 面对根会话，一次性子代理调用一律拒绝。
+- **SkillOpt 落盘链**：`apply-candidate` 先落 job 再改 live；keep/revert 落盘前比对 sha（冲突则 `failed`）+ 备份 + `tmp+rename` 原子替换；`results.tsv` 增 `proposal_sha` 列，adopt 门的 keep 必须绑定本次候选。
+- **评审票序**：每票带 `orderId`，按 id 归票、去重、票数 ≤ 请求数；乱序/重复回帖不再移位或反转 keep/revert。
+- **waker**：`task/created` 按 `payload.taskId` 回投影取任务（原读不存在的 `payload.task`，该路径永不唤醒）；去重键追加成员与 Project 作用域。
+- **其他**：项目归档同步写 registry；冷唤醒只 resume 一次并由 resumed agent 投递（不再二次冷恢复导致 `NOT_RESUMABLE` 丢历史）；自愈判据改用结构化错误码；`turn/end` 的 `blocked`/`error` 不再静默丢弃；`taskCard` 补 `submission`/`completedAt`/`acceptedBy`。
+- 测试：`node --test` **180/180**（新增 `tool-access`、`host-repair`、`review-votes` 三套）。
+- 审计报告：`docs/审计报告-2026-11-12-全量代码审计.md`。
+
 ## 0.3.90 - 2026-11-12
 
 **Darwin Phase 2 自动 hill-climbing 循环（`skillopt_optimize`）**

@@ -14,8 +14,9 @@ test('reuses an existing live root Agent as the member parent', async () => {
 	assert.equal(created, 0);
 });
 
-test('creates and archives a Team Host Agent when no root exists', async () => {
+test('creates a Team Host Agent and never archives it', async () => {
 	const archived = [];
+	const unarchived = [];
 	const disposed = [];
 	const result = await ensureHostAgent({
 		agents: {
@@ -27,15 +28,42 @@ test('creates and archives a Team Host Agent when no root exists', async () => {
 			},
 		},
 		agentDefaultModel: { currentSelection: () => ({ provider: 'deepseek', model: 'deepseek-chat' }) },
-		workspaceRegistry: { archiveSession: async (id) => { archived.push(id); } },
+		workspaceRegistry: {
+			archivedSessionIds: [],
+			archiveSession: async (id) => { archived.push(id); },
+			unarchiveSession: async (id) => { unarchived.push(id); },
+		},
 		cwd: 'E:/works/dsh-ai-team',
 		newSessionId: () => 'session-team-host-1',
 	});
 	assert.equal(result.created, true);
 	assert.equal(result.agent.id, 'session-team-host-1');
-	assert.deepEqual(archived, ['session-team-host-1']);
+	// Regression: archiving the host gates every member turn (blocked, no request).
+	assert.deepEqual(archived, []);
+	// 新建后主动「解除归档」：unarchiveSession 对未归档 id 是 no-op，因此无需先读
+	// archivedSessionIds（那是未文档化 API，之前正是它让修复静默跳过）。
+	assert.deepEqual(unarchived, ['session-team-host-1']);
 	await result.dispose();
 	assert.deepEqual(disposed, ['session-team-host-1']);
+});
+
+test('unarchives a Team Host archived by an earlier revision', async () => {
+	const unarchived = [];
+	await ensureHostAgent({
+		agents: {
+			roots: () => [],
+			get: () => undefined,
+			create: async () => { throw new Error('must resume, not create'); },
+			resume: async ({ resumeSessionId }) => ({ agent: { id: resumeSessionId }, dispose: async () => {} }),
+		},
+		workspaceRegistry: {
+			archivedSessionIds: ['session-host-persisted'],
+			unarchiveSession: async (id) => { unarchived.push(id); },
+		},
+		resumeSessionId: 'session-host-persisted',
+		cwd: 'E:/works/dsh-ai-team',
+	});
+	assert.deepEqual(unarchived, ['session-host-persisted']);
 });
 
 test('resumes the persisted Team Host instead of creating a new parent', async () => {
@@ -50,7 +78,7 @@ test('resumes the persisted Team Host instead of creating a new parent', async (
 				dispose: async () => {},
 			}),
 		},
-		workspaceRegistry: { archiveSession: async () => {} },
+		workspaceRegistry: { archivedSessionIds: [], unarchiveSession: async () => {} },
 		resumeSessionId: 'session-host-persisted',
 		cwd: 'E:/works/dsh-ai-team',
 	});

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { apply, inject, name } from '../index.js';
@@ -309,8 +309,12 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(workspaceAttachments.includes(memberSessionId), true);
 		assert.equal(memberSessions.get(memberSessionId).sandbox, 'danger-full-access');
 		assert.ok(toolRegistration !== null);
+		// team 的可见性不再按「请求者是不是已知成员」判定：成员的首个 model step 发生在
+		// bindMemberSession 写入 sessionId 之前，按请求者判定会把 team 从首回合滤掉。
+		// 现在只要 AI Team runtime 已 boot，工具即对 agent 可见；非成员调用由工具本身
+		// 以 E_NOT_MEMBER 拒绝（见下方 toolTasksOld 断言）。
 		assert.equal(toolRegistration.options.when({ agent: { id: memberSessionId } }), true);
-		assert.equal(toolRegistration.options.when({ agent: { id: 'other' } }), false);
+		assert.equal(toolRegistration.options.when({ agent: { id: 'other' } }), true);
 
 		// 会话重建（reseat）：force 重建同一成员 → 旧句柄被 dispose、绑定切换到新会话。
 		const reseat = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
@@ -436,10 +440,13 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(changed.quadrants.rev, changed.rev);
 		controller.abort();
 
+		// project.create 现在要求工作目录真实存在（与 project.workspace.update 一致）。
+		const secondWorkspace = join(root, 'p2-workspace');
+		await mkdir(secondWorkspace, { recursive: true });
 		const projectCreate = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
-			body: JSON.stringify({ type: 'project.create', payload: { name: '并发 P2', goal: '并发运行', workspacePath: 'E:/work/p2' } }),
+			body: JSON.stringify({ type: 'project.create', payload: { name: '并发 P2', goal: '并发运行', workspacePath: secondWorkspace } }),
 		});
 		assert.equal(projectCreate.status, 200);
 		const secondProject = (await projectCreate.json()).project.id;

@@ -84,6 +84,7 @@ window.__ModuleLoader__.load({
 			groupLess: '收起其余 {n} 项',
 			fromDiscussion: '由讨论升格',
 			loading: '加载中…',
+			streamDown: '实时更新已中断，界面可能滞后；正在自动重连…',
 			loadFailedTitle: '工作台不可达',
 			loadFailedBody: 'bootstrap 接口（/ai-team）无法访问；请确认插件已启用后重试。',
 			spike: 'AI Team',
@@ -495,6 +496,7 @@ window.__ModuleLoader__.load({
 			loading: 'Loading…',
 			loadFailedTitle: 'Workbench unreachable',
 			loadFailedBody: 'The bootstrap endpoint (/ai-team) cannot be reached; confirm the plugin is enabled and retry.',
+		streamDown: 'Live updates stopped; the view may lag while the stream reconnects…',
 			spike: 'AI Team',
 			spikeTitle: 'Wenyuan Pavilion AI Team workbench: compile, collate, edit; direction, acceptance and ledger.',
 			navAria: 'Page navigation',
@@ -2607,18 +2609,20 @@ window.__ModuleLoader__.load({
 			}
 			// R-09 待验收跨项目队列。
 			const [pendingRows, setPendingRows] = React.useState(null);
+			// 拉取失败与「确实没有待验收」必须可区分（旧实现把失败写成空数组）。
+			const [pendingError, setPendingError] = React.useState('');
 			function loadPending() {
 				fetch('/ai-team/api/pending-acceptance', { headers: { accept: 'application/json' } })
 					.then(async (response) => {
 						const payload = await response.json().catch(() => null);
 						if (!response.ok) throw new Error(payload?.error?.message ?? ('HTTP ' + response.status));
 						setPendingRows(Array.isArray(payload?.rows) ? payload.rows : []);
+						setPendingError('');
 					})
-					.catch(() => setPendingRows([]));
+					.catch((error) => setPendingError(error?.message ?? String(error)));
 			}
 			function loadRisks() {
 				const seq = ++riskSeqRef.current;
-				setPeopleLoading(true);
 				fetch('/ai-team/api/risks' + (projectId ? '?project=' + encodeURIComponent(projectId) : ''), { headers: { accept: 'application/json' } })
 					.then(async (response) => {
 						const payload = await response.json().catch(() => null);
@@ -2627,10 +2631,12 @@ window.__ModuleLoader__.load({
 						setRisksData(payload?.risks ?? null);
 					})
 					.catch(() => { if (seq === riskSeqRef.current) setRisksData(null); })
-					.finally(() => { if (seq === riskSeqRef.current) setPeopleLoading(false); });
+					.finally(() => { /* 风险区自带空态，不复用 people 的 loading */ });
 			}
 			// 最新 scope 镜像：SSE 回调在 effect 闭包里拿不到最新值。
 			const scopeRef = React.useRef(scope);
+			// SSE 断流一次性提示：只提示一次，恢复后重置。
+			const streamDownRef = React.useRef(false);
 			scopeRef.current = scope;
 			const [nBusy, setNBusy] = React.useState(false);
 			const [nError, setNError] = React.useState('');
@@ -2733,6 +2739,7 @@ window.__ModuleLoader__.load({
 				if (source) {
 					source.addEventListener('change', (raw) => {
 						if (!alive) return;
+						streamDownRef.current = false;
 						try {
 							const frame = JSON.parse(raw.data);
 							pushToast(notificationText(frame?.event));
@@ -2745,9 +2752,14 @@ window.__ModuleLoader__.load({
 						load();
 					});
 					source.addEventListener('error', () => {
-						// One-shot diagnostic: EventSource reconnects by itself; this row
-						// only makes the console explain why the panel may lag behind.
-						if (alive && dataRef.current === null) console.error(PKG + ': event stream unavailable (retrying)');
+						// EventSource 自己会重连，但**必须让用户看见**：旧实现只在首屏
+						// （dataRef===null）时打印，面板已有数据时断流完全静默。
+						if (!alive) return;
+						console.error(PKG + ': event stream unavailable (retrying)');
+						if (!streamDownRef.current) {
+							streamDownRef.current = true;
+							say(t('streamDown'));
+						}
 					});
 				}
 				return () => {
@@ -2797,7 +2809,8 @@ window.__ModuleLoader__.load({
 			React.useEffect(() => {
 				const current = dataRef.current;
 				const thread = threadFor(current, selected);
-				setReplyBase(thread?.baseSeq ?? null);
+				// 宿主投影里没有 baseSeq：读 headSeq。否则 ConflictBanner 永不出现。
+				setReplyBase(thread?.headSeq ?? null);
 				setAcceptChecked(false);
 				const nextTask = current?.tasks?.find((task) => task.id === selected) ?? current?.tasks?.[0];
 				setQaChecks((nextTask?.qaChecklist ?? []).map((item) => ({ item, passed: false })));
@@ -2860,13 +2873,16 @@ window.__ModuleLoader__.load({
 						setShortcutsOpen(true);
 						return;
 					}
-					if (event.key.toLowerCase() !== 'g') return;
-					if (Date.now() - gPrefixRef.current > 600) {
+					// g 前缀：先按 g 记录时间戳并返回；下一个键才做分发。
+					// 旧实现把这两个动作写在同一个 `key !== 'g'` 判断之后，
+					// 导致 i/b/p/c 永远走不到（g 前缀导航整体失效）。
+					const key = event.key.toLowerCase();
+					if (key === 'g') {
 						gPrefixRef.current = Date.now();
 						return;
 					}
+					if (Date.now() - gPrefixRef.current > 600) return;
 					gPrefixRef.current = 0;
-					const key = event.key.toLowerCase();
 					if (key === 'i') { event.preventDefault(); switchInbox(); }
 					else if (key === 'b') { event.preventDefault(); switchBoard(); }
 					else if (key === 'p') { event.preventDefault(); openPeople(); }
@@ -3690,6 +3706,8 @@ window.__ModuleLoader__.load({
 						body: text,
 					});
 					setReply('');
+					// 发送成功后把基线推进到新 headSeq，避免自己的回复触发冲突横幅。
+					setReplyBase(typeof result.entry?.seq === 'number' ? result.entry.seq : null);
 					sayRight(tf(t, 'replySent', { seq: result.entry?.seq ?? '' }));
 					await reloadData();
 				} catch (error) {
@@ -3903,6 +3921,8 @@ window.__ModuleLoader__.load({
 				: inInbox
 				? h('div', { className: 'at-stream', role: 'region', 'aria-label': t('inboxTitle') },
 					h('div', { className: 'at-streaminner' },
+						// 失败必须可见：不能把「拉取失败」渲染成「没有待验收」。
+						pendingError !== '' ? h('div', { className: 'at-peoplefail', role: 'status' }, tf(t, 'loadFailedBody') + (pendingError ? '（' + pendingError + '）' : '')) : null,
 						// R-09 待验收跨项目队列。
 						pendingRows !== null && pendingRows.length > 0
 							? h('details', { className: 'at-people', open: true },

@@ -14,7 +14,7 @@ import {
 	verifyChain,
 	verifyEvent,
 } from '../lib/ledger/events.js';
-import { LOCK_FILE, LedgerWriter, openLedger } from '../lib/ledger/writer.js';
+import { LOCK_FILE, LOCK_WRITE_GRACE_MS, LedgerWriter, openLedger } from '../lib/ledger/writer.js';
 import {
 	CHECKPOINT_BACKUP_FILE,
 	CHECKPOINT_FILE,
@@ -297,6 +297,40 @@ test('单写者锁生效；陈旧锁可被接管并记录修复', async (t) => {
 	assert.ok(opened.repairs.some((repair) => repair.kind === 'stale-lock'));
 	third.close();
 	assert.equal(fs.existsSync(lockPath), false);
+});
+
+test('空锁记录在写入宽限期内不被接管，超过宽限期才视为崩溃残留', async (t) => {
+	const { dir, track } = tempLedger(t);
+	const lockPath = path.join(dir, LOCK_FILE);
+	// 锁文件在写入 payload 之前就是 0 字节的正常形态。
+	fs.writeFileSync(lockPath, '');
+	const racing = track(new LedgerWriter({ dir, projectId: PROJECT_ID }));
+	assert.throws(
+		() => racing.open(),
+		(error) => error.code === 'E_LOCKED',
+		'a live writer holds an empty lock record while writing its payload',
+	);
+	assert.equal(fs.existsSync(lockPath), true, 'takeover must not delete a lock inside the grace window');
+
+	// 把 mtime 退到宽限期之外：此时才认定是崩溃残留。
+	const past = new Date(Date.now() - LOCK_WRITE_GRACE_MS * 3);
+	fs.utimesSync(lockPath, past, past);
+	const recover = track(new LedgerWriter({ dir, projectId: PROJECT_ID }));
+	const opened = recover.open();
+	assert.ok(opened.repairs.some((repair) => repair.kind === 'stale-lock'));
+	recover.close();
+});
+
+test('接管标记存在时拒绝第二个接管者，避免互相删除活锁', async (t) => {
+	const { dir, track } = tempLedger(t);
+	const lockPath = path.join(dir, LOCK_FILE);
+	fs.writeFileSync(lockPath, `${JSON.stringify({ pid: 2 ** 30, host: os.hostname(), startedAt: 1 })}\n`);
+	fs.writeFileSync(`${lockPath}.takeover`, '');
+	const loser = track(new LedgerWriter({ dir, projectId: PROJECT_ID }));
+	assert.throws(
+		() => loser.open(),
+		(error) => error.code === 'E_LOCKED' && /taking over the ledger lock/.test(error.message),
+	);
 });
 
 test('写入/fsync 失败回滚到写前长度，内存 head 不变且可继续写', async (t) => {
@@ -1089,4 +1123,103 @@ test('fold 可直接重放 host service/domain 写入的快照事件', async (t)
 	assert.equal(recovered.replayed, 0);
 	assert.deepEqual(recovered.state, snapshot);
 	checkpointWriter.close();
+});
+
+test('checkpoint 状态自述水位与账本水位不一致时被拒绝', async (t) => {
+	const { dir, track } = tempLedger(t);
+	const writer = track(new LedgerWriter({ dir, projectId: PROJECT_ID }));
+	writer.open();
+	await writer.append(draft('project/created', { name: 'P' }));
+	await writer.append(draft('project/member-added', { memberId: 'mem_a', name: 'A' }));
+	const full = fold(writer.readAll());
+	assert.equal(full.lastSeq, writer.head.seq, 'fold state carries its own watermark');
+	assert.throws(
+		() =>
+			saveCheckpoint(
+				dir,
+				{
+					stateVersion: FOLD_STATE_VERSION,
+					lastSeq: writer.head.seq,
+					lastHash: writer.hashAt(writer.head.seq),
+					// 投影被截断/错位而外层水位仍然有效
+					state: { ...full, lastSeq: full.lastSeq - 1 },
+				},
+				{ hashAt: (seq) => writer.hashAt(seq) },
+			),
+		(error) => {
+			assert.equal(error.code, 'E_CHECKPOINT_STATE_MISMATCH');
+			return true;
+		},
+	);
+	writer.close();
+});
+
+test('回滚本身失败时把 writer 置为 poisoned，后续写入必须重新 open', async (t) => {
+	const { dir, track } = tempLedger(t);
+	const original = { fsyncSync: fs.fsyncSync.bind(fs), openSync: fs.openSync.bind(fs) };
+	let failWrite = false;
+	let failTruncate = false;
+	const faultyFs = {
+		...fs,
+		fsyncSync(fd) {
+			if (failWrite) {
+				const error = new Error('disk full');
+				error.code = 'ENOSPC';
+				throw error;
+			}
+			return original.fsyncSync(fd);
+		},
+		openSync(target, flags, ...rest) {
+			// 回滚路径用 'r+' 打开原段做 ftruncate；让它失败 → 回滚不完整。
+			if (failTruncate && flags === 'r+') {
+				const error = new Error('EPERM: cannot truncate');
+				error.code = 'EPERM';
+				throw error;
+			}
+			return original.openSync(target, flags, ...rest);
+		},
+	};
+	const writer = track(new LedgerWriter({ dir, projectId: PROJECT_ID, fs: faultyFs, lock: false }));
+	writer.open();
+	await writer.append(draft('project/created', { name: 'P' }));
+	const beforeHead = writer.head;
+
+	failWrite = true;
+	failTruncate = true;
+	await assert.rejects(
+		writer.append(draft('project/member-added', { memberId: 'mem_a', name: 'A' })),
+		(error) => {
+			assert.equal(error.code, 'E_STORAGE');
+			assert.match(String(error.details?.rollbackError ?? ''), /truncate|EPERM/);
+			return true;
+		},
+	);
+	assert.deepEqual(writer.head, beforeHead, 'head must not advance on a failed append');
+
+	failWrite = false;
+	failTruncate = false;
+	// 回滚不完整：本句柄不可继续写，避免把新事件追加到未知状态之后。
+	await assert.rejects(
+		writer.append(draft('project/member-added', { memberId: 'mem_b', name: 'B' })),
+		(error) => error.code === 'E_LEDGER_POISONED',
+	);
+});
+
+test('当前段 fd 丢失时按磁盘最大段号续写，不会复用已存在的段号', async (t) => {
+	const { dir, track } = tempLedger(t);
+	const writer = track(new LedgerWriter({ dir, projectId: PROJECT_ID, lock: false }));
+	writer.open();
+	await writer.append(draft('project/created', { name: 'P' }));
+	const firstSegment = path.join(dir, 'ledger-000001.jsonl');
+	assert.equal(fs.existsSync(firstSegment), true);
+
+	// 模拟「回滚失败留下 fd=null 的当前段」：段文件仍在，句柄不可用。
+	writer._current = { ...writer._current, fd: null };
+	await writer.append(draft('project/member-added', { memberId: 'mem_a', name: 'A' }));
+
+	const segments = fs.readdirSync(dir).filter((name) => /^ledger-\d{6}\.jsonl$/.test(name)).sort();
+	assert.deepEqual(segments, ['ledger-000001.jsonl', 'ledger-000002.jsonl']);
+	assert.equal(writer.head.seq, 2);
+	assert.equal(writer.readAll().length, 2);
+	writer.close();
 });

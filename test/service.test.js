@@ -239,3 +239,132 @@ test('TeamService drives a real ledger from project setup to accepted task and t
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test('command validation rejects duplicate ids, forged assignees, missing workspaces and cross-member acks', async () => {
+	const root = await mkdtemp(join(tmpdir(), 'ai-team-validation-'));
+	const ledger = openLedger({ dir: join(root, 'ledger'), projectId: 'prj_val', fsync: false });
+	const service = new TeamService({ ledger });
+	const rejects = (promise, code) => assert.rejects(promise, (error) => error.code === code);
+	try {
+		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'h1', name: 'Human', kind: 'human' } });
+		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'a1', name: '执行', kind: 'agent' } });
+
+		// 重复 id 会覆盖既有成员（含 sessionId/config 丢失）
+		await rejects(service.dispatch({ type: 'member.add', actor: human, payload: { id: 'a1', name: '冒名' } }), 'E_CONFLICT');
+		// 非字符串 id 会被 fold 丢弃却仍返回成功
+		await rejects(service.dispatch({ type: 'member.add', actor: human, payload: { id: 5, name: '数字' } }), 'E_INVALID_ARGUMENT');
+		// 枚举外的 status 与投影不一致
+		await rejects(service.dispatch({ type: 'member.add', actor: human, payload: { id: 'a9', name: '怪态', status: 'bogus' } }), 'E_INVALID_ARGUMENT');
+
+		// 首次 create 之前先验工作目录：此时项目还不存在，工作目录校验可达。
+		await rejects(
+			service.dispatch({ type: 'project.create', actor: human, payload: { name: 'V3', ownerId: 'a1', workspacePath: 'Z:/definitely-not-here-audit' } }),
+			'E_INVALID_ARGUMENT',
+		);
+		await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'V', ownerId: 'a1' } });
+		// 同一账本的 projectId 固定，再 create 必须冲突而不是覆盖原项目
+		await rejects(service.dispatch({ type: 'project.create', actor: human, payload: { name: 'V2', ownerId: 'a1' } }), 'E_CONFLICT');
+
+		const task = await service.dispatch({
+			type: 'task.create', actor: human, projectId: 'prj_val',
+			payload: { title: 'T', resultDefinition: 'done', ownerId: 'a1' },
+		});
+		// 幽灵 assignee 会让真实成员 claim 永远撞 E_ALREADY_CLAIMED
+		await rejects(
+			service.dispatch({ type: 'task.assign', actor: human, projectId: 'prj_val', payload: { taskId: task.task.id, expectedRevision: task.task.revision, assigneeId: 'ghost' } }),
+			'E_INVALID_ARGUMENT',
+		);
+
+		const decision = await service.dispatch({
+			type: 'decision.request', actor: human, projectId: 'prj_val',
+			payload: { title: '选哪条', questions: [{ id: 'q1', text: '走 A 还是 B？' }] },
+		});
+		const itemId = decision.item?.id ?? decision.id;
+		assert.equal(typeof itemId, 'string');
+		// 成员不能解析 Human 的决策项
+		await rejects(
+			service.dispatch({ type: 'inbox.ack', actor: a1, projectId: 'prj_val', payload: { itemId, disposition: 'done' } }),
+			'E_UNAUTHORIZED',
+		);
+		// 归属正确时 ack 成功，且 decision 进入投影
+		const acked = await service.dispatch({
+			type: 'inbox.ack', actor: human, projectId: 'prj_val',
+			payload: { itemId, disposition: 'done', decision: { answers: [{ id: 'q1', value: 'A' }], note: '' } },
+		});
+		assert.equal(acked.item.state, 'resolved');
+		assert.deepEqual(service.state.inbox[itemId].decision.answers, [{ id: 'q1', value: 'A' }]);
+	} finally {
+		ledger.close?.();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test('member.config.update cannot widen its own allow-list', async () => {
+	const root = await mkdtemp(join(tmpdir(), 'ai-team-policy-'));
+	const ledger = openLedger({ dir: join(root, 'ledger'), projectId: 'prj_pol', fsync: false });
+	const service = new TeamService({ ledger, memberConfigPolicy: { allowedModels: ['m1'] } });
+	try {
+		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'h1', name: 'Human', kind: 'human' } });
+		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'a1', name: '执行', kind: 'agent' } });
+		await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'P', ownerId: 'a1' } });
+		await assert.rejects(
+			() => service.dispatch({ type: 'member.config.update', actor: human, projectId: 'prj_pol', payload: { memberId: 'a1', patch: { model: 'm2' } } }),
+			(error) => error.code === 'E_CONFIG_POLICY',
+		);
+		// 关键回归：请求里夹带 policy 不能把白名单放宽
+		await assert.rejects(
+			() => service.dispatch({
+				type: 'member.config.update', actor: human, projectId: 'prj_pol',
+				payload: { memberId: 'a1', patch: { model: 'm2' }, policy: { allowedModels: ['m1', 'm2'] } },
+			}),
+			(error) => error.code === 'E_CONFIG_POLICY',
+		);
+	} finally {
+		ledger.close?.();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test('bootstrap rejects an unknown project and every decision question must be answered', async () => {
+	const root = await mkdtemp(join(tmpdir(), 'ai-team-bootstrap-'));
+	const ledger = openLedger({ dir: join(root, 'ledger'), projectId: 'prj_boot', fsync: false });
+	const service = new TeamService({ ledger });
+	try {
+		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'h1', name: 'Human', kind: 'human' } });
+		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'a1', name: '执行', kind: 'agent' } });
+		await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'B', ownerId: 'a1' } });
+
+		// 与 board/quadrants 同口径：未知 projectId 必须报错而不是返回空壳
+		assert.throws(() => service.bootstrap('nope'), (error) => error.code === 'E_NOT_FOUND');
+
+		const decision = await service.dispatch({
+			type: 'decision.request', actor: human, projectId: 'prj_boot',
+			payload: { title: '两问', questions: [{ id: 'q1', text: 'A 还是 B？' }, { id: 'q2', text: '什么时候？' }] },
+		});
+		const itemId = decision.item?.id ?? decision.id;
+		assert.equal(typeof itemId, 'string');
+
+		await assert.rejects(
+			() => service.dispatch({
+				type: 'decision.answer', actor: human, projectId: 'prj_boot',
+				payload: { itemId, answers: [{ id: 'q1', value: 'A' }] },
+			}),
+			(error) => error.code === 'E_INVALID_ARGUMENT' && /missing: q2/.test(error.message),
+		);
+		await assert.rejects(
+			() => service.dispatch({
+				type: 'decision.answer', actor: human, projectId: 'prj_boot',
+				payload: { itemId, answers: [{ id: 'q1', value: 'A' }, { id: 'q2', value: '现在' }, { id: 'q9', value: '?' }] },
+			}),
+			(error) => error.code === 'E_INVALID_ARGUMENT' && /unknown question/.test(error.message),
+		);
+		const answered = await service.dispatch({
+			type: 'decision.answer', actor: human, projectId: 'prj_boot',
+			payload: { itemId, answers: [{ id: 'q1', value: 'A' }, { id: 'q2', value: '现在' }] },
+		});
+		assert.equal(answered.item.state, 'resolved');
+	} finally {
+		ledger.close?.();
+		await rm(root, { recursive: true, force: true });
+	}
+});

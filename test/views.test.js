@@ -109,14 +109,46 @@ test('quadrantsView puts each task in one quadrant and Q1 only where Human must 
 	assert.equal(ids.includes('t7'), false);
 });
 
-test('quadrantsView counts q4 total before the 5-item summary cap', () => {
+test('quadrantsView honours q4Limit while q4 totals stay exact', () => {
 	const many = { ...state, tasks: {} };
 	for (let index = 0; index < 8; index += 1) {
 		const id = `t${index + 1}`;
 		many.tasks[id] = task(id, { status: 'done', acceptedAt: now - index * 1000, updatedAt: now - index * 1000 });
 	}
-	const view = quadrantsView(many, { now, humanMemberId: 'h1' });
-	assert.equal(view.q4.total, 8);
-	assert.equal(view.q4.count, 8);
-	assert.equal(view.q4.items.length, 5);
+	const wide = quadrantsView(many, { now, humanMemberId: 'h1' });
+	assert.equal(wide.q4.total, 8);
+	assert.equal(wide.q4.count, 8);
+	assert.equal(wide.q4.items.length, 8, 'default limit is 20, so every recent completion is returned');
+
+	const narrow = quadrantsView(many, { now, humanMemberId: 'h1', q4Limit: 3 });
+	assert.equal(narrow.q4.total, 8, 'totals ignore the display limit');
+	assert.equal(narrow.q4.count, 8);
+	assert.equal(narrow.q4.items.length, 3);
+	assert.equal(narrow.q4.limit, 3);
+});
+
+test('taskCard exposes the submission and completion fields the panels read', () => {
+	const submitted = task('t9', {
+		status: 'pending_acceptance',
+		summary: '迁移完成',
+		evidence: [{ kind: 'text', value: 'npm test 172/172' }, 'commit 926f320'],
+	});
+	const card = taskCard(state, submitted);
+	assert.equal(card.submission.summary, '迁移完成');
+	assert.deepEqual(card.submission.evidence, [
+		{ label: 'npm test 172/172', ref: '' },
+		{ label: 'commit 926f320', ref: '' },
+	]);
+	assert.equal(card.evidenceCount, 2);
+
+	const accepted = task('t10', {
+		status: 'done',
+		acceptedAt: now - 1000,
+		acceptedBy: undefined,
+		reviewerId: 'a1',
+	});
+	const done = taskCard(state, accepted);
+	assert.equal(done.completedAt, now - 1000);
+	assert.equal(done.acceptedBy, '沈舟', 'renders the reviewer NAME, which is what the panel prints');
+	assert.equal(done.submission, null, 'a task without a submission reports null, not an empty shell');
 });

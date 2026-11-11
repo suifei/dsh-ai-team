@@ -24,6 +24,22 @@ test('file skill provider discovers user and project skills', async (t) => {
 	assert.equal(loaded.source, 'project-dsh');
 });
 
+test('file skill provider rejects names the host registry would refuse', async (t) => {
+	const root = mkdtempSync(join(tmpdir(), 'ai-team-skills-'));
+	t.after(() => rmSync(root, { recursive: true, force: true }));
+	const home = join(root, 'home');
+	const cwd = join(root, 'project');
+	// The host registry validates with `^[a-z0-9]+(?:-[a-z0-9]+)*$`; a trailing or
+	// doubled hyphen passes a looser provider check but makes skills.snapshot throw.
+	for (const [dir, name] of [['trailing-', 'trailing-'], ['double--dash', 'double--dash'], ['ok-one', 'ok-one']]) {
+		mkdirSync(join(home, 'skills', dir), { recursive: true });
+		writeFileSync(join(home, 'skills', dir, 'SKILL.md'), `---\nname: ${name}\ndescription: d\n---\n# ${name}\n`);
+	}
+	const provider = createFileSkillProvider({ dshHome: home, projectCwd: cwd });
+	const list = await provider.list({ cwd });
+	assert.deepEqual(list.map((skill) => skill.name), ['ok-one']);
+});
+
 test('file skill provider installs through the skills registry', () => {
 	let registered = null;
 	const dispose = installFileSkillProvider({ registerProvider(factory) {

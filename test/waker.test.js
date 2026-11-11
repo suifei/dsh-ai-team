@@ -39,7 +39,7 @@ test('a Human DM wakes exactly the target member', () => {
 	}, {});
 	assert.deepEqual(plans.map((item) => [item.memberId, item.reason]), [['a2', 'member_message']]);
 	assert.match(plans[0].prompt, /看一下 #2/);
-	assert.equal(plans[0].key, 'member_message:11');
+	assert.equal(plans[0].key, 'member_message:11:a2:');
 });
 
 test('restart resumes unfinished Tasks once without timers', () => {
@@ -50,6 +50,7 @@ test('restart resumes unfinished Tasks once without timers', () => {
 	]);
 	assert.match(plans[0].prompt, /DSH 已重启/);
 	assert.ok(plans.every((item) => item.key.startsWith('startup:')));
+	assert.equal(new Set(plans.map((item) => item.key)).size, plans.length, 'each recipient gets its own dedupe key');
 });
 
 test('PMO review nudge wakes every QA member for a pending Task', () => {
@@ -124,7 +125,7 @@ test('acceptance schedules a reflection wake for the executor', () => {
 	};
 	const plans = planWakes(doneState, { event: { type: 'task/accepted', seq: 10, payload: { taskId: 't2' } } }, {});
 	assert.deepEqual(plans.map((item) => [item.memberId, item.reason]), [['a2', 'reflection_requested']]);
-	assert.equal(plans[0].key, 'reflection:t2');
+	assert.equal(plans[0].key, 'reflection:t2:a2:');
 	assert.match(plans[0].prompt, /evolve/);
 });
 

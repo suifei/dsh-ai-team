@@ -125,3 +125,25 @@ test('fold caps: stream and thread entries stay bounded while headSeq/counts sta
 		ledger.close();
 	}
 });
+
+test('events stay unique when appends happen before the first events read', async (t) => {
+	const root = await mkdtemp(join(tmpdir(), 'aiteam-dup-'));
+	t.after(() => rm(root, { recursive: true, force: true }));
+	const dir = join(root, 'ledger');
+	{
+		const ledger = openLedger({ dir, projectId: 'prj_dup', fsync: false, checkpoint: { stateVersion: FOLD_STATE_VERSION, saveEvery: 1000 } });
+		for (let i = 0; i < 3; i++) await ledger.append(STREAM_DRAFT(i));
+		ledger.close();
+	}
+	{
+		// 重开时检查点与账本齐平 → events 惰性为 null。若先 append 后 readAll，
+		// 刚写入的事件会被读出来再 push 一次（seq 会出现 1,2,3,3,4）。
+		const ledger = openLedger({ dir, projectId: 'prj_dup', fsync: false, checkpoint: { stateVersion: FOLD_STATE_VERSION, saveEvery: 1000 } });
+		await ledger.append(STREAM_DRAFT(9));
+		await ledger.append(STREAM_DRAFT(10));
+		const seqs = ledger.events.map((event) => event.seq);
+		assert.deepEqual(seqs, [1, 2, 3, 4, 5]);
+		assert.equal(new Set(ledger.events.map((event) => event.id)).size, 5);
+		ledger.close();
+	}
+});

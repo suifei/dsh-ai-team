@@ -84,3 +84,13 @@ test('defaults keep context budgets bounded and no timer fields exist', () => {
 	assert.equal(DEFAULT_MEMBER_CONFIG.fallback.length, 0);
 	assert.equal('retryDelayMs' in DEFAULT_MEMBER_CONFIG.retry, false);
 });
+
+test('a throttled response carrying quota wording is a rate limit, not fatal billing', async () => {
+	const { classifyLlmFailure, retryDecision } = await import('../lib/runtime/failure-policy.js');
+	const failure = classifyLlmFailure({ status: 429, message: 'insufficient quota for this minute; rate limit hit' });
+	assert.equal(failure.category, 'rate_limit');
+	assert.equal(failure.retryable, true);
+	// 有备用路由时必须能换路，而不是当成计费错误直接停
+	const decision = retryDecision(failure, { provider: 'p', model: 'm', fallback: [{ provider: 'p2', model: 'm2' }] }, 1);
+	assert.equal(decision.action, 'fallback');
+});

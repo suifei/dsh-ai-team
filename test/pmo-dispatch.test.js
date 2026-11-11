@@ -33,7 +33,7 @@ test('pmo/dispatch wakes the assignee (fallback owner) for a pending task', () =
 	assert.equal(wakes.length, 1);
 	assert.equal(wakes[0].memberId, 'a2', 'assignee has priority over owner');
 	assert.equal(wakes[0].reason, 'pmo_dispatch');
-	assert.match(wakes[0].key, /^pmo_dispatch:t1:7$/);
+	assert.match(wakes[0].key, /^pmo_dispatch:t1:7:[^:]+:$/);
 	assert.match(wakes[0].prompt, /仍处于待处理/);
 	assert.match(wakes[0].prompt, /认领/);
 });
@@ -53,7 +53,7 @@ test('pmo/dispatch keys carry the bucket so a later minute can re-dispatch', () 
 	const state = stateWith({ ownerStatus: undefined });
 	const first = planWakes(state, { event: dispatchEvent(100) }, {});
 	const second = planWakes(state, { event: dispatchEvent(101) }, {});
-	assert.equal(first[0].key, 'pmo_dispatch:t1:100');
-	assert.equal(second[0].key, 'pmo_dispatch:t1:101');
+	assert.equal(first[0].key, 'pmo_dispatch:t1:100:a1:');
+	assert.equal(second[0].key, 'pmo_dispatch:t1:101:a1:');
 	assert.notEqual(first[0].key, second[0].key, 'different minutes must produce distinct dedupe keys');
 });

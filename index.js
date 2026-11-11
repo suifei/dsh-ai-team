@@ -18,6 +18,7 @@ import { ProjectRegistry } from './lib/host/project-registry.js';
 import { ids } from './lib/domain/ids.js';
 import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-runtime.js';
 import { ensureHostAgent } from './lib/runtime/host-agent.js';
+import { repairArchivedHosts as repairHostSessions } from './lib/runtime/host-repair.js';
 import { classifyLlmFailure, retryDecision } from './lib/runtime/failure-policy.js';
 import { memberIdentity } from './lib/domain/member-profile.js';
 import { loadSkillContext } from './lib/runtime/skill-loader.js';
@@ -26,11 +27,16 @@ import { isSkillExcluded } from './lib/runtime/skill-policy.js';
 import { installFileSkillProvider } from './lib/runtime/skill-provider.js';
 import { apply as applySkillOpt } from './lib/vendor/skillopt/src/index.js';
 import { createAdoptGate, wrapToolsWithAdoptGate } from './lib/skillopt/adopt-gate.js';
+import { wrapToolsWithSkilloptAccess } from './lib/skillopt/tool-access.js';
+import { applyLiveAtomically, backupLive, sha12 } from './lib/skillopt/proposal-store.js';
 import { formatRubric, scoreSkillRubric } from './lib/skillopt/rubric.js';
 import { makeJudge, makeReadPair } from './lib/skillopt/gate-wiring.js';
 import { runOptimizeLoop, validateCandidate, weakestDimension } from './lib/skillopt/optimizer.js';
 import { hasPairedKeepRecord, makeGenerator, makeResultAppender, makeVcs } from './lib/skillopt/optimize-wiring.js';
-import { listJobs, readJob, writeJob } from './lib/skillopt/jobs.js';
+import { isJobExpired, listJobs, readJob, writeJob } from './lib/skillopt/jobs.js';
+
+/** 评审通道 job 的兜底 TTL：与子代理通道（jobs.js JOB_TTL_MS）保持一致。 */
+const REVIEW_JOB_TTL_MS = 30 * 60 * 1000;
 import { reconcileJobs } from './lib/skillopt/job-runner.js';
 import { collectReview, startReview } from './lib/skillopt/review-runner.js';
 import { REVIEWER_NAME } from './lib/skillopt/reviewer.js';
@@ -52,7 +58,15 @@ export const name = 'ai-team';
 // 实际使用的服务（含可选服务：缺失时 serviceOf 回退 ctx.get 并返回 undefined）。
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'];
 
-const VERSION = '0.4.24';
+// 版本号只有一处真源：package.json。硬编码字面量曾让 /health 在升版后仍报旧版本，
+// 误导「运行实例是否加载了新代码」的判断。
+const VERSION = (() => {
+	try {
+		return JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version ?? '0.0.0';
+	} catch {
+		return '0.0.0';
+	}
+})();
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -309,18 +323,36 @@ export function apply(ctx, config = {}) {
 						// Attach the broadcast/wake hook before the first tick: events
 						// produced by the tick must reach SSE clients immediately.
 						attachRuntime(runtime);
-						void pmoTick(runtime).catch((error) => {
-							diag.append({ ev: 'pmo.tick.fail', projectId: runtime.id, message: error?.message ?? String(error) });
-							console.warn('[ai-team] PMO tick failed:', error?.message ?? error);
-						});
+						if (!pmoBusy.has(runtime.id)) {
+							pmoBusy.add(runtime.id);
+							void pmoTick(runtime).catch((error) => {
+								diag.append({ ev: 'pmo.tick.fail', projectId: runtime.id, message: error?.message ?? String(error) });
+								console.warn('[ai-team] PMO tick failed:', error?.message ?? error);
+							}).finally(() => pmoBusy.delete(runtime.id));
+						}
 					}
+					// 归档修复不能等 tick：workspaceRegistry 要等 sessionPersistence 与
+					// 历史 bootstrap 完成才 active，boot 时通常还取不到。这里先试一次，
+					// 再用一个短重试窗口（2s × 30）兜住就绪时间，不必等 60s 的 tick。
+					void (async () => {
+						for (let attempt = 0; attempt < 30; attempt += 1) {
+							await repairArchivedHosts();
+							if (hostRepaired) return;
+							await new Promise((resolve) => { const timer = setTimeout(resolve, 2000); timer.unref?.(); });
+						}
+					})();
 					if (pmoTimer === null) {
 						pmoTimer = setInterval(() => {
 							for (const runtime of booted?.runtimes?.values() ?? []) {
+								if (pmoBusy.has(runtime.id)) {
+									diag.append({ ev: 'pmo.tick.skip', projectId: runtime.id, reason: 'in-flight' });
+									continue;
+								}
+								pmoBusy.add(runtime.id);
 								void pmoTick(runtime).catch((error) => {
 									diag.append({ ev: 'pmo.tick.fail', projectId: runtime.id, message: error?.message ?? String(error) });
 									console.warn('[ai-team] PMO tick failed:', error?.message ?? error);
-								});
+								}).finally(() => pmoBusy.delete(runtime.id));
 							}
 						}, 60_000);
 						pmoTimer.unref?.();
@@ -365,15 +397,21 @@ export function apply(ctx, config = {}) {
 						model: member.config?.model ?? null,
 					}, failureRuntime.id);
 				} catch (error) {
+					// diag 是唯一持久化通道：只打 console 等于线上不可诊断。
+					diag.append({ ev: 'member.failure.record.fail', memberId: member.id, message: error?.message ?? String(error) });
 					console.warn('[ai-team] member failure record failed:', member.id, error?.message ?? error);
 					return next();
 				}
-				if (!failure.retryable) return next();
+				// 不可重试 ≠ 不可恢复：model_unavailable / context_overflow 声明的是
+				// fallback（换路），此前一律 next() 让它们的 fallback 永远不可达。
+				const fallbackCapable = failure.action === 'fallback' || failure.action === 'compact_or_fallback';
+				if (!failure.retryable && !fallbackCapable) return next();
 				const decision = retryDecision(failure, member.config ?? {}, recorded.member.attempts ?? 1);
 				if (decision.action === 'fallback' && decision.patch !== undefined) {
 					try {
 						await failureRuntime.service.applySystemFallback(member.id, decision.patch, 'llm-fallback', failureRuntime.id);
 					} catch (error) {
+						diag.append({ ev: 'member.fallback.fail', memberId: member.id, message: error?.message ?? String(error) });
 						console.warn('[ai-team] member fallback failed:', member.id, error?.message ?? error);
 					}
 				}
@@ -381,20 +419,26 @@ export function apply(ctx, config = {}) {
 				return { kind: 'retry' };
 			})
 			: () => {};
-		// 诊断：记录成员 agent 可见的工具名与 preset。DSH 以「scope carrier +
-		// agent」两个参数 emit（文档：both with the agent's scope carrier），
-		// 因此回调需兼容两种形状，取真正带 ctx 的那个。
+		// 诊断：记录成员 agent 可见的工具名与 preset。规范签名（cordis_inspect_query
+		// Event/agent/created 实测）：单参 payload = { agent, source, signal }，
+		// 不是 (scopeCarrier, agent)。此前按双参取会把 payload 当 agent，agentId 恒 null。
 		const offAgentCreated = typeof ctx.on === 'function'
-			? ctx.on('agent/created', (first, second) => {
+			? ctx.on('agent/created', (payload) => {
 				try {
-					const agent = second?.ctx !== undefined ? second : (first?.ctx !== undefined ? first : (second ?? first));
-					if (agent?.ctx?.tools === undefined) return;
-					const runtime = runtimeForAgent(agent?.id);
+					const agent = payload?.agent;
+					const agentId = agent?.id ?? null;
+					if (agentId === null) return;
+					const runtime = runtimeForAgent(agentId);
 					if (runtime === null) return; // 只关注成员会话
-					const names = (agent.ctx.tools.definitions?.() ?? []).map((definition) => definition.name);
+					const presets = serviceOf(ctx, 'agentPresets');
+					const tools = agent?.ctx?.tools ?? presets?.serviceFor?.(agent, 'tools');
+					const names = (tools?.definitions?.() ?? []).map((definition) => definition.name);
+					let preset = null;
+					try { preset = presets?.composedPreset?.(agent.ctx) ?? null; } catch { /* preset is optional */ }
 					diag.append({
-						ev: 'agent.created.probe.fail',
-						agentId: agent?.id ?? null,
+						ev: 'agent.created.probe',
+						agentId,
+						preset,
 						toolCount: names.length,
 						hasTeam: names.includes('team'),
 						names: names.slice(0, 40),
@@ -416,7 +460,7 @@ export function apply(ctx, config = {}) {
 							.filter(Boolean)
 							.join('\n');
 						diag.append({
-							ev: 'member.output.probe.fail',
+							ev: 'member.output.probe',
 							sessionId: session?.id ?? null,
 							chars: text.length,
 							preview: text.slice(0, 240),
@@ -440,12 +484,28 @@ export function apply(ctx, config = {}) {
 					diag.append({ ev: 'session.flush.fail', sessionId: session?.id ?? null, message: error?.message ?? String(error) });
 					console.warn('[ai-team] member session flush failed:', error?.message ?? error);
 				}
-				if (event?.data?.reason?.kind !== 'completed') return;
+				// 回合结局必须全部可见：`blocked` 表示回合在发出模型请求前就被拒绝
+				// （典型原因：会话或血缘祖先被归档），`error` 表示模型/工具链失败。
+				// 旧实现只认 completed，这两种结局被静默丢弃，恢复链路永不触发。
+				const endKind = event?.data?.reason?.kind ?? 'unknown';
+				if (endKind !== 'completed') {
+					diag.append({
+						ev: 'member.turn.blocked',
+						memberId: member.id,
+						sessionId: session?.id ?? null,
+						kind: endKind,
+						reason: event?.data?.reason?.error?.message ?? null,
+					});
+					// blocked 最常见的原因是归档 gate：立刻复核一次血缘归档状态。
+					if (endKind === 'blocked') void repairArchivedHosts();
+					return;
+				}
 				if (member.lastFailure === undefined || member.lastFailure === null) return;
 				try {
 					await eventRuntime.service.recordMemberRecovery(member.id, member.attempts ?? 0, member.config ?? null, eventRuntime.id);
 					broadcast(undefined, eventRuntime);
 				} catch (error) {
+					diag.append({ ev: 'member.recovery.fail', memberId: member.id, message: error?.message ?? String(error) });
 					console.warn('[ai-team] member recovery record failed:', member.id, error?.message ?? error);
 				}
 			})
@@ -457,6 +517,9 @@ export function apply(ctx, config = {}) {
 		let host = null;
 		let hostPromise = null;
 		const wakeKeys = new Map();
+		// PMO tick 是 fire-and-forget：慢 tick（模型/IO）会被下一分钟的定时器再入，
+		// 造成 autoAnswerDecisions/reconcileJobs 并发执行同一条账本。按 Project 去重。
+		const pmoBusy = new Set();
 		const activationTasks = new Map();
 		const pmoLastKick = new Map();
 		const pmoLastStall = new Map();
@@ -481,7 +544,7 @@ export function apply(ctx, config = {}) {
 			// 驱动，不断 Human 通道。
 			const gateProject = projectRuntime.service.state.projects?.[projectRuntime.id];
 			if (gateProject !== undefined && gateProject.runState === 'stopped' && actor?.kind !== 'human') return;
-			const plans = planWakes(projectRuntime.service.state, result, actor);
+			const plans = planWakes(projectRuntime.service.state, result, actor, { projectId: projectRuntime.id });
 			if (plans.length === 0) return;
 			// Window eviction: a key older than this horizon can no longer dedupe
 			// a relevant event, so drop it instead of growing the Map forever.
@@ -505,16 +568,18 @@ export function apply(ctx, config = {}) {
 				if (wakeKeys.has(plan.key)) continue;
 				let member = projectRuntime.service.state.members?.[plan.memberId];
 				if (member === undefined) continue;
-				// Reserve before the async delivery: the HTTP result and the ledger
-				// event both schedule the same plan, and only one may deliver it.
-				wakeKeys.set(plan.key, result?.event?.seq ?? head);
 				// 无工作目录的项目不 wake（与 activate 的 fail-closed 同一不变量）：
 				// 冷恢复/直连唤醒都会在会话原 cwd 里干活，不该落到插件数据目录。
+				// 必须在占用去重键**之前**判定：这些键多数不带时间桶，跳过时若已占用，
+				// 同一事件（startup/thread/reflection）之后再也不会被重新规划。
 				const projectWorkspacePath = projectWorkspace(projectRuntime, member);
 				if (projectWorkspacePath === null || projectWorkspacePath.trim?.() === '') {
 					diag?.append({ ev: 'wake.skip', projectId: projectRuntime.id, memberId: plan.memberId, reason: 'E_WORKSPACE_REQUIRED' });
 					continue;
 				}
+				// Reserve before the async delivery: the HTTP result and the ledger
+				// event both schedule the same plan, and only one may deliver it.
+				wakeKeys.set(plan.key, result?.event?.seq ?? head);
 				const cwd = projectWorkspacePath;
 				try {
 					// Idle default members have no Agent session yet. A wake must
@@ -597,7 +662,14 @@ export function apply(ctx, config = {}) {
 						sessionIdType: typeof targetMember?.sessionId,
 						failureText: failureText.slice(0, 160),
 					});
-					const legacySession = /subagent|not-found|not found|E_SESSION_MISSING|NOT_RESUMABLE|unavailable/i.test(failureText)
+					// 只按结构化错误码判定：对整段 message 做宽词匹配会把「sessions
+					// service is unavailable」「task not found」这类瞬时/无关错误也算命中，
+					// 进而 force reseat 丢掉成员会话上下文。
+					const failureCode = String(error?.code ?? '').toUpperCase();
+					const deadSessionPool = failureCode === 'E_SESSION_MISSING'
+						|| failureCode === 'NOT_RESUMABLE'
+						|| failureCode === 'ENOTFOUND';
+					const legacySession = deadSessionPool
 						&& typeof targetMember?.sessionId === 'string' && targetMember.sessionId !== '';
 					diag.append({
 						ev: 'wake.catch.probe.fail',
@@ -643,6 +715,9 @@ export function apply(ctx, config = {}) {
 		};
 		const pmoTick = async (projectRuntime) => {
 			if (projectRuntime === null || projectRuntime === undefined) return;
+			// 归档修复重试点：boot 时 workspaceRegistry 往往还没 active，等 tick
+			// （60s 后）再试一次；修好即置位，之后每个 tick 直接返回。
+			await repairArchivedHosts();
 			const state = projectRuntime.service.state;
 			const project = state.projects?.[projectRuntime.id];
 			// job 收割先于 pmoAuto 门：Human 启动的优化 job 与 PMO 派发无关，
@@ -663,7 +738,9 @@ export function apply(ctx, config = {}) {
 						ensureParent: () => ensureParent(),
 						votes: config.skilloptJudgeVotes ?? 3,
 						startChild: async (label, spec) => {
-							const child = await subagents.startActivation({ ...spec, label });
+							// 必须走 serviceOf：这里不在 activateMember/wakeFromResult 的
+							// 词法作用域内，裸写 subagents 会在判官轮抛 ReferenceError。
+							const child = await serviceOf(ctx, 'subagents').startActivation({ ...spec, label });
 							return { childId: child.childId, outputStart: child.outputStart ?? null };
 						},
 						readText: (file) => readFileSync(file, 'utf8'),
@@ -914,17 +991,26 @@ export function apply(ctx, config = {}) {
 					readPair,
 					// 两阶段异步模式：工具 execute 内无法等待子代理，判据改为
 					// results.tsv 中该 skill 已存在 paired keep 记录（同步可查）。
-					hasKeepRecord: async ({ projectDir, skillPath }) => hasPairedKeepRecord(projectDir, skillPath),
+					hasKeepRecord: async ({ projectDir, skillPath, candidate }) => hasPairedKeepRecord(projectDir, skillPath, candidate),
 					diag: (line, extra) => diag.append({
 						ev: extra?.ev ?? 'skillopt.adoptgate',
 						message: line,
 						...(extra?.project === undefined ? {} : { project: extra.project }),
 					}),
 				});
+				// 授权门：这批工具是全局注册的，但 adopt/schedule 会改 live 文件与系统
+				// cron。只允许 Team 成员与 Human 面对的根会话；一次性子代理一律拒绝。
+				const skilloptCallerAllowed = (exec) => {
+					const agentId = exec?.agent?.id;
+					if (typeof agentId !== 'string' || agentId === '') return false;
+					if (runtimeForAgent(agentId) !== null) return true;
+					return exec?.agent?.session?.header?.origin !== 'subagent';
+				};
+				const guardedTools = wrapToolsWithSkilloptAccess(tools, skilloptCallerAllowed);
 				// Backend/timeout come from the plugin Config (patch layer), so an
 				// operator can move the skillopt_* tools off the safe mock default.
 				disposeSkillOpt = applySkillOpt({
-					tools: wrapToolsWithAdoptGate(tools, adoptGate),
+					tools: wrapToolsWithAdoptGate(guardedTools, adoptGate),
 					shell: shellProxy,
 					logger: console,
 				}, {
@@ -933,7 +1019,7 @@ export function apply(ctx, config = {}) {
 					timeoutMs: config.skilloptTimeoutMs ?? 120_000,
 				}) ?? (() => {});
 				// 9 维 rubric（triage）与独立 judge（keep/revert）作为新工具暴露。
-				const rubricTool = tools.register({
+				const rubricTool = guardedTools.register({
 					name: 'skillopt_rubric',
 					description: 'Score a SKILL.md against the 9-dimension Darwin rubric (triage only — absolute scores must not be used for keep/revert).',
 					parameters: {
@@ -958,7 +1044,7 @@ export function apply(ctx, config = {}) {
 						return formatRubric(result);
 					},
 				});
-				const judgeTool = tools.register({
+				const judgeTool = guardedTools.register({
 					name: 'skillopt_judge',
 					description: 'Paired independent-judge verdict (N odd votes, majority) for before/after SKILL.md — the authoritative keep/revert signal.',
 					parameters: {
@@ -991,7 +1077,7 @@ export function apply(ctx, config = {}) {
 				// 同一轮只改一个维度，版本化走干净 git 仓库，否则 .bak 备份。
 				// 两阶段异步：工具只启动生成子代理并写 job，收割由 PMO tick 完成
 				// （工具 execute 内无法同步等待一次性子代理——实测 result 永不 settle）。
-				const optimizeTool = tools.register({
+				const optimizeTool = guardedTools.register({
 					name: 'skillopt_optimize',
 					description: 'Start a Darwin hill-climbing job for one SKILL.md (diagnose, generate candidate, paired judge, keep/revert). The PMO tick harvests it; poll skillopt_jobs for the outcome.',
 					parameters: {
@@ -1077,7 +1163,7 @@ export function apply(ctx, config = {}) {
 						].join('\n');
 					},
 				});
-				const jobsTool = tools.register({
+				const jobsTool = guardedTools.register({
 					name: 'skillopt_jobs',
 					description: 'List optimize jobs (state, target dimension, verdict) for a project.',
 					parameters: { project: { type: 'string', description: 'Project directory' } },
@@ -1127,15 +1213,42 @@ export function apply(ctx, config = {}) {
 							const collected = collectReview({ service: runtime.service, job });
 							const expected = collected.expected ?? job.reviewOrders?.length ?? 3;
 							if (collected.votes.length < expected) {
+								// 评审通道被 reconcileJobs 明确排除，没有 TTL 兜底：评审官不回帖
+								// 时 job 会永久停在 judging、评审卡永久 active。这里补超时终态。
+								if (isJobExpired(job, Date.now(), REVIEW_JOB_TTL_MS)) {
+									writeJob(job.project, {
+										...job,
+										state: 'failed',
+										error: `review timed out after ${Math.round(REVIEW_JOB_TTL_MS / 60000)}min (${collected.votes.length}/${expected} votes)`,
+										updatedAt: Date.now(),
+									});
+									diag.append({ ev: 'skillopt.job.timeout', jobId: job.id, got: collected.votes.length, expected });
+									continue;
+								}
 								diag.append({ ev: 'skillopt.review.waiting', jobId: job.id, got: collected.votes.length, expected });
 								continue;
 							}
 							const kept = collected.decision.verdict === 'keep';
+							const jobDir = job.project;
+							// 落盘前先确认 live 仍是评审时的基线：评审期间的人工修改不能被
+							// 一次 revert 用陈旧快照覆盖（反之亦然）。
+							let liveText = null;
+							try { liveText = existsSync(job.skillPath) ? readFileSync(job.skillPath, 'utf8') : null; } catch { liveText = null; }
+							if (liveText !== null && typeof job.before === 'string' && sha12(liveText) !== sha12(job.before)) {
+								writeJob(jobDir, { ...job, state: 'failed', error: 'live SKILL.md changed during review (conflict)', updatedAt: Date.now() });
+								diag.append({ ev: 'skillopt.job.conflict', jobId: job.id, skillPath: job.skillPath });
+								continue;
+							}
+							let backupPath = null;
+							try {
+								backupPath = backupLive({ projectDir: jobDir, skillPath: job.skillPath, text: liveText ?? job.before ?? '' });
+							} catch (error) {
+								diag.append({ ev: 'skillopt.job.backup.fail', jobId: job.id, message: error?.message ?? String(error) });
+							}
 							// keep → 落盘候选；revert → 恢复基线（评审卡收票后才动文件）。
-							writeFileSync(job.skillPath, kept ? job.candidate : job.before, 'utf8');
+							applyLiveAtomically(job.skillPath, kept ? job.candidate : job.before);
 							const beforeScore = scoreSkillRubric(job.before, { measured: false })?.total ?? null;
 							const afterScore = scoreSkillRubric(kept ? job.candidate : job.before, { measured: false })?.total ?? null;
-							const jobDir = job.project;
 							const appender = makeResultAppender({ projectDir: jobDir });
 							await appender([
 								new Date().toISOString().slice(0, 19),
@@ -1147,22 +1260,45 @@ export function apply(ctx, config = {}) {
 								job.dimension ?? '-',
 								`${collected.decision.better}-${collected.decision.worse} ${collected.decision.verdict}` ,
 								'paired',
+								sha12(job.candidate),
 							].join('\t'));
-							writeJob(jobDir, { ...job, state: 'done', decision: collected.decision, updatedAt: Date.now() });
+							writeJob(jobDir, { ...job, state: 'done', decision: collected.decision, backup: backupPath ?? job.backup ?? null, updatedAt: Date.now() });
+							// 评审卡必须收口：否则它保持 pending 进入 PMO 的 active 集合，
+							// 会被 heartbeat/stall/escalate 反复唤醒评审官（每 job 永久留一张卡）。
+							try {
+								const card = runtime.service.state.tasks?.[job.reviewTaskId];
+								if (card !== undefined && card.status !== 'done' && card.status !== 'cancelled' && card.tombstone !== true) {
+									await runtime.service.dispatch({
+										type: 'task.cancel',
+										payload: {
+											taskId: job.reviewTaskId,
+											expectedRevision: card.revision,
+											reason: `blind review collected: ${collected.decision.verdict}`,
+										},
+										actor,
+										projectId: runtime.id,
+									});
+								}
+							} catch (error) {
+								diag.append({ ev: 'skillopt.review.card.close.fail', jobId: job.id, taskId: job.reviewTaskId, message: error?.message ?? String(error) });
+							}
 							diag.append({ ev: 'skillopt.job.done', jobId: job.id, verdict: collected.decision.verdict, better: collected.decision.better, worse: collected.decision.worse, kept, source: 'reviewer-card' });
 						}
 						if (jobs.length === 0) return '[skillopt jobs] none';
 						return ['[skillopt jobs]', ...jobs.map((job) => `  ${job.id} ${job.state} ${job.dimension ?? '-'}${job.decision ? ` verdict=${job.decision.verdict} (${job.decision.better}-${job.decision.worse})` : ''}${job.error ? ` error=${job.error}` : ''}`)].join('\n');
 					},
 				});
+				// 先保存 applySkillOpt 的真实 disposer：直接把 disposeSkillOpt 指向
+				// disposeExtra 会形成自引用递归（teardown 时栈溢出且原始 disposer 永不可达）。
+				const innerSkillOptDispose = disposeSkillOpt;
 				const disposeExtra = () => {
-					try { disposeSkillOpt?.(); } catch { /* already disposed */ }
+					try { innerSkillOptDispose?.(); } catch { /* already disposed */ }
 					try { rubricTool?.(); } catch { /* noop */ }
 					try { judgeTool?.(); } catch { /* noop */ }
 					try { optimizeTool?.(); } catch { /* noop */ }
 					try { jobsTool?.(); } catch { /* noop */ }
 				};
-								disposeSkillOpt = disposeExtra;
+				disposeSkillOpt = disposeExtra;
 				diag.append({ ev: 'skillopt.registered', backend: config.skilloptBackend ?? 'mock', timeoutMs: config.skilloptTimeoutMs ?? 120_000, adoptGate: true, judgeVotes: config.skilloptJudgeVotes ?? 3, optimize: true });
 			}
 		} catch (error) {
@@ -1182,7 +1318,13 @@ export function apply(ctx, config = {}) {
 						return runtime.service.dispatch(command);
 					},
 				}), {
-					when: (activation) => runtimeForAgent(activation?.agent?.id) !== null,
+					// 可见性判定不能按「请求者是已知成员」来算：
+					//   * 成员的首个 model step 发生在 bindMemberSession 写入 sessionId 之前
+					//     （activate() 返回后才写），此时 runtimeForAgent(请求者) 为 null，
+					//     实测首个 header 43 个工具、第二个起 44 个，差集恰好是 team；
+					//   * owner/宿主永远不是成员，按此判定它也拿不到 team。
+					// 因此只要本进程内 AI Team runtime 已 boot，团队板工具即对 agent 可见。
+					when: () => booted !== null,
 				})
 				: () => {};
 		} catch (error) {
@@ -1190,8 +1332,48 @@ export function apply(ctx, config = {}) {
 			console.warn('[ai-team] team tool registration failed:', error?.message ?? error);
 		}
 
+		// 历史归档修复：成员是 host 的子会话，`archived-session-gate` 会沿 subagent
+		// 血缘上溯，父会话被归档即拒绝整条血缘 —— 回合以 {kind:'blocked'} 结束且不发
+		// 模型请求（实测 453 blocked / 0 completed）。旧版本把 host 归档用于隐藏会话。
+		let hostRepaired = false;
+		let hostRepairWarned = false;
+		const repairArchivedHosts = async () => {
+			if (hostRepaired) return;
+			try {
+				const registry = serviceOf(ctx, 'workspaceRegistry');
+				const repaired = await repairHostSessions({
+					runtimes: booted?.runtimes?.values() ?? [],
+					sessions: serviceOf(ctx, 'sessions'),
+					workspaceRegistry: registry,
+					diag,
+				});
+				// null = workspaceRegistry 尚未 active（它要等 sessionPersistence 与
+				// 历史 bootstrap）。保持未修复状态，交给下一次 tick/ensureParent 重试；
+				// 否则一次早跑就永久放弃，正是上一版静默失效的原因。
+				if (repaired === null) {
+					if (!hostRepairWarned) {
+						hostRepairWarned = true;
+						let keys = [];
+						try { keys = registry === null || registry === undefined ? [] : Object.keys(registry).slice(0, 8); } catch { keys = ['<unreadable>']; }
+						diag.append({
+							ev: 'host.repair.deferred.fail',
+							reason: 'workspaceRegistry not ready',
+							registryType: typeof registry,
+							hasUnarchive: typeof registry?.unarchiveSession,
+							keys,
+						});
+					}
+					return;
+				}
+				hostRepaired = true;
+			} catch (error) {
+				hostRepaired = true;
+				diag.append({ ev: 'host.unarchive.sweep.fail', error: error?.message ?? String(error) });
+			}
+		};
 		const ensureParent = async () => {
 			if (host !== null) return host;
+			await repairArchivedHosts();
 			if (hostPromise === null) {
 				const existingHost = [...(booted?.runtimes?.values() ?? [])]
 					.map((runtime) => runtime.service.state.hostSessionId)
@@ -1935,6 +2117,30 @@ export function apply(ctx, config = {}) {
 								projectId: runtime.id,
 								correlationId: typeof body.correlationId === 'string' ? body.correlationId : undefined,
 							});
+							// 归档必须同时落到全局 registry：否则 bootstrap 仍报 archived:false，
+							// 项目留在树上，且「最后一个 active 项目」保护对后续归档永远失效。
+							if (body.type === 'project.archive' && body.payload?.archived !== false) {
+								try {
+									booted.registry.setArchived(runtime.id, true);
+								} catch (error) {
+									diag.append({ ev: 'project.archive.registry.fail', projectId: runtime.id, message: error?.message ?? String(error) });
+								}
+							}
+							// 退役/离队后必须释放常驻子代理：否则 activation 句柄只在 force
+							// 重建或插件卸载时才回收，退役成员的会话会一直挂在进程里。
+							if (body.type === 'member.retire' || body.type === 'member.leave') {
+								const retiredId = body.payload?.memberId;
+								const retired = runtime.service.state.members?.[retiredId];
+								const retiredSession = retired?.sessionId;
+								if (typeof retiredSession === 'string') {
+									const activation = activations.get(retiredSession);
+									if (activation !== undefined) {
+										activations.delete(retiredSession);
+										try { await activation.dispose?.(); } catch { /* already gone */ }
+										diag.append({ ev: 'member.activation.disposed', memberId: retiredId, sessionId: retiredSession, reason: body.type });
+									}
+								}
+							}
 							send(res, { ok: true, ...result });
 							void wakeFromResult(runtime, result, { agentId: HUMAN_ID }).catch((error) => {
 								diag.append({ ev: 'wake.plan.fail', projectId: runtime.id, eventType: result?.event?.type ?? null, message: error?.message ?? String(error) });

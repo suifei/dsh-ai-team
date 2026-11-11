@@ -129,21 +129,26 @@ test('wake re-checks permission before sendMessage', async () => {
 	assert.equal(sessions.get('session-member-1').sandbox, TEAM_PRESET);
 });
 
-test('wake explicitly resumes the child under the live parent before delivery', async () => {
+test('wake resumes the cold child exactly once and delivers through the resumed agent', async () => {
 	const { runtime, sessions, calls } = makeRuntime();
 	let resumed = null;
+	const followed = [];
 	runtime.agents = {
 		resume: async ({ resumeSessionId }) => {
 			resumed = resumeSessionId;
 			sessions.set(resumeSessionId, { id: resumeSessionId, sandbox: 'workspace-write' });
-			return { agent: { id: resumeSessionId }, dispose: async () => {} };
+			return { agent: { id: resumeSessionId, followup: (message) => { followed.push(message); } }, dispose: async () => {} };
 		},
 	};
 	const result = await runtime.wake({ id: 'mem_1', name: '沈舟', sessionId: 'session-cold' }, { prompt: '继续' });
 	assert.equal(resumed, 'session-cold');
-	assert.equal(result.cold, false);
+	assert.equal(result.cold, true);
+	assert.equal(result.resumed, true);
 	assert.equal(sessions.get('session-cold').sandbox, TEAM_PRESET);
-	assert.equal(calls.send.length, 1);
+	// 关键回归：resume 之后不得再走 sendMessage 的冷恢复（那会以 NOT_RESUMABLE
+	// 失败并触发上层强制重建、丢掉成员历史）。
+	assert.equal(calls.send.length, 0, 'the resumed agent delivers the message itself');
+	assert.equal(followed.length, 1);
 });
 
 test('wake cold-resumes a member whose session is not live', async () => {
