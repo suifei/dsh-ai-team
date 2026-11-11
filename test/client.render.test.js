@@ -74,6 +74,20 @@ function makeReact() {
 	let currentSlots = null;
 	let currentComponentType = null;
 	const createElement = (type, props = null, ...children) => {
+		// HTML forbids nested <button>; a misplaced closer silently reparents
+		// sibling buttons as children (user-visible as one giant button box).
+		const containsButton = (node) => {
+			if (node === null || node === undefined) return false;
+			if (Array.isArray(node)) return node.some(containsButton);
+			if (typeof node !== 'object') return false;
+			if (node.type === 'button') return true;
+			if (Array.isArray(node.children)) return node.children.some(containsButton);
+			if (node.children !== undefined) return containsButton(node.children);
+			return false;
+		};
+		if (type === 'button' && children.some(containsButton)) {
+			throw new Error('E2E nested-button guard: a <button> rendered with another <button> inside — check the element closers');
+		}
 		if (type !== null && typeof type === 'function') {
 			const prev = currentSlots;
 			const prevType = currentComponentType;
