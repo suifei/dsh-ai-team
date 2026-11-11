@@ -46,7 +46,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell'];
 
-const VERSION = '0.3.90';
+const VERSION = '0.3.98';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -753,28 +753,35 @@ export function apply(ctx, config = {}) {
 		const tools = ctx.get('tools');
 		let disposeSkillOpt = () => {};
 		try {
-			const shell = ctx.get('shell');
-			// 探针：SkillOpt 注册依赖 tools.register + shell 两个服务。历史上这条
-			// if 为假时无任何诊断，导致「技能进化静默未启用」（用户实证盘查）。
-			if (!tools?.register || !shell) {
-				diag.append({
-					ev: 'skillopt.skip.fail',
-					hasToolsRegister: typeof tools?.register === 'function',
-					hasShell: Boolean(shell),
-				});
-				console.warn('[ai-team] SkillOpt tools not registered:', { hasToolsRegister: typeof tools?.register === 'function', hasShell: Boolean(shell) });
+			// shell 惰性代理：注入时机早于 shell 服务就绪时，注册仍必须完成——
+			// 每次调用现取，避免「boot 时 shell 未就绪 → 整条技能链静默跳过」。
+			const shellProxy = {
+				resolve: (spec) => {
+					const service = ctx.get('shell');
+					if (service === undefined || service === null) throw new Error('shell service is not available');
+					return typeof service.resolve === 'function' ? service.resolve(spec) : spec;
+				},
+				execute: async (spec) => {
+					const service = ctx.get('shell');
+					if (service === undefined || service === null) throw new Error('shell service is not available');
+					return typeof service.execute === 'function' ? service.execute(spec) : service.run(spec);
+				},
+			};
+			if (!tools?.register) {
+				diag.append({ ev: 'skillopt.skip.fail', hasToolsRegister: false, hasShell: Boolean(ctx.get('shell')) });
+				console.warn('[ai-team] SkillOpt tools not registered: no tool registry');
 			}
-			if (tools?.register && shell) {
+			if (tools?.register) {
 				// Darwin validation gate（对齐 darwin-skill v2.1）：adopt 之前必须
 				// 通过 paired 独立 judge 的多数决；绝对 rubric 分只做 triage。
 				const engineScript = fileURLToPath(new URL('./lib/vendor/skillopt/scripts/sleep.py', import.meta.url));
-				const readPair = makeReadPair({ shell, engineScript, diag });
+				const readPair = makeReadPair({ shell: shellProxy, engineScript, diag });
 				const judge = makeJudge({
 					subagents: ctx.get('subagents'),
 					// 惰性解析：ensureParent 在 apply 之后才定义（const TDZ），
 					// judge 只在 adopt 时调用，此处不能立即取值。
 					ensureParent: () => ensureParent(),
-					providerName: () => providers[0],
+					providerName: () => (ctx.get('subagents')?.list?.() ?? [])[0],
 					votes: config.skilloptJudgeVotes ?? 3,
 					diag,
 				});
@@ -791,7 +798,7 @@ export function apply(ctx, config = {}) {
 				// operator can move the skillopt_* tools off the safe mock default.
 				disposeSkillOpt = applySkillOpt({
 					tools: wrapToolsWithAdoptGate(tools, adoptGate),
-					shell,
+					shell: shellProxy,
 					logger: console,
 				}, {
 					backend: config.skilloptBackend ?? 'mock',
@@ -869,7 +876,7 @@ export function apply(ctx, config = {}) {
 						const skillPath = typeof args?.skillPath === 'string' && args.skillPath !== '' ? args.skillPath : join(project, 'SKILL.md');
 						if (!existsSync(skillPath)) return `[skillopt optimize] SKILL.md not found: ${skillPath}`;
 						const rounds = Number.isSafeInteger(args?.rounds) ? Math.max(1, Math.min(5, args.rounds)) : 3;
-						const vcs = await makeVcs({ shell, projectDir: project });
+						const vcs = await makeVcs({ shell: shellProxy, projectDir: project });
 						const result = await runOptimizeLoop({
 							skillPath,
 							rounds,
@@ -879,14 +886,15 @@ export function apply(ctx, config = {}) {
 							generate: makeGenerator({
 								subagents: ctx.get('subagents'),
 								ensureParent: () => ensureParent(),
-								providerName: () => providers[0],
+								providerName: () => (ctx.get('subagents')?.list?.() ?? [])[0],
 								cwd: project,
+								diag,
 							}),
 							judge: async ({ before, after }) => {
 								const judge = makeJudge({
 									subagents: ctx.get('subagents'),
 									ensureParent: () => ensureParent(),
-									providerName: () => providers[0],
+									providerName: () => (ctx.get('subagents')?.list?.() ?? [])[0],
 									votes: config.skilloptJudgeVotes ?? 3,
 									diag,
 								});
@@ -904,6 +912,13 @@ export function apply(ctx, config = {}) {
 						return lines.join('\n');
 					},
 				});
+				// 汇总释放：引擎工具 + 三个附加工具（顺序无关，各自 try）。
+				const disposeExtra = () => {
+					try { disposeSkillOpt?.(); } catch { /* already disposed */ }
+					try { rubricTool?.(); } catch { /* noop */ }
+					try { judgeTool?.(); } catch { /* noop */ }
+					try { optimizeTool?.(); } catch { /* noop */ }
+				};
 				disposeSkillOpt = disposeExtra;
 				diag.append({ ev: 'skillopt.registered', backend: config.skilloptBackend ?? 'mock', timeoutMs: config.skilloptTimeoutMs ?? 120_000, adoptGate: true, judgeVotes: config.skilloptJudgeVotes ?? 3, optimize: true });
 			}

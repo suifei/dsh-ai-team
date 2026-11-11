@@ -1,0 +1,6 @@
+timestamp	commit	skill	old_score	new_score	status	dimension	note	eval_mode
+2026-11-11T12:53:22	-	ai-team-core	50.9	-	skipped	失败模式编码	generator returned an empty candidate	structural
+2026-11-11T12:56:35	-	ai-team-core	50.9	-	skipped	失败模式编码	generator returned an empty candidate	structural
+2026-11-11T12:59:43	-	ai-team-core	50.9	-	skipped	失败模式编码	generator returned an empty candidate	structural
+2026-11-11T13:02:08	-	ai-team-core	50.9	-	skipped	失败模式编码	generator returned an empty candidate	structural
+2026-11-11T13:06:30	-	ai-team-core	50.9	-	skipped	失败模式编码	generator returned an empty candidate	structural

@@ -31,6 +31,9 @@ test('weakestDimension: picks the largest weighted gap, ties broken by lower raw
 	const tie = weakestDimension(rubricOf([[1, 5, 10], [2, 5, 10], [3, 4, 10]]));
 	assert.equal(tie.id, 3, 'equal gap prefers the lower raw score');
 	assert.equal(weakestDimension({ dimensions: [] }), null);
+	// dim8 (实测表现) is excluded: it is not improvable by a static rewrite.
+	const withMeasured = weakestDimension(rubricOf([[8, 1, 23], [3, 6, 12]]));
+	assert.equal(withMeasured.id, 3, 'dim8 must never be selected as the target');
 });
 
 test('isPlateau: two consecutive all-slight/tie rounds top out', () => {

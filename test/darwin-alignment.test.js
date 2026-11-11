@@ -11,6 +11,7 @@ import { NINE_DIMENSIONS, scoreSkillRubric, formatRubric } from '../lib/skillopt
 import { buildPairPrompt, decideByMajority, normalizeVoteCount, parseJudgeOutput, voteFromParsed } from '../lib/skillopt/judge.js';
 import { judgePair } from '../lib/skillopt/judge-runner.js';
 import { createAdoptGate, wrapToolsWithAdoptGate } from '../lib/skillopt/adopt-gate.js';
+import { awaitActivationText, extractAssistantText } from '../lib/skillopt/subagent-text.js';
 
 // ── rubric ──────────────────────────────────────────────────────────────
 const GOOD_SKILL = [
@@ -111,16 +112,24 @@ test('judge: votes map A/B back to after-version and majority decides keep/rever
 
 test('judge-runner: spawns N independent subagents and aggregates majority', async () => {
 	const activations = [];
+	const judgeText = '{"better":"A","margin":"clear","reason":"clearer workflow"}';
 	const subagents = {
 		startActivation: async (spec) => {
 			activations.push(spec);
-			// Each judge answers "A is better"; random order decides the vote.
-			const activation = {
+			// 真实路径：输出来自 handle.agent.session.snapshotEvents 的最后一个
+			// 非空 assistant/message（不是 activation.result）。
+			return {
 				childId: 'judge-' + activations.length,
-				result: Promise.resolve({ output: [{ type: 'text', text: '{"better":"A","margin":"clear","reason":"clearer workflow"}' }] }),
+				handle: {
+					agent: {
+						status: 'idle',
+						session: {
+							snapshotEvents: () => [{ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: judgeText }] } } }],
+						},
+					},
+				},
 				dispose: async () => {},
 			};
-			return activation;
 		},
 	};
 	// deterministic random: first two calls 'ba' (after=A → A better means better),
@@ -140,7 +149,14 @@ test('judge-runner: unparseable judge output becomes an invalid vote, not a pass
 	const subagents = {
 		startActivation: async () => ({
 			childId: 'j',
-			result: Promise.resolve({ output: 'I think both are fine.' }),
+			handle: {
+				agent: {
+					status: 'idle',
+					session: {
+						snapshotEvents: () => [{ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'I think both are fine.' }] } } }],
+					},
+				},
+			},
 			dispose: async () => {},
 		}),
 	};
@@ -148,6 +164,31 @@ test('judge-runner: unparseable judge output becomes an invalid vote, not a pass
 	assert.equal(result.verdict, 'inconclusive');
 	assert.equal(result.valid, 0);
 	assert.equal(result.errors.length, 3);
+});
+
+test('subagent-text: last non-empty assistant message wins; empty-content messages do not replace earlier output', () => {
+	const events = [
+		{ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'first answer' }] } } },
+		{ type: 'tool/call', data: {} },
+		{ type: 'assistant/message', data: { message: { content: [] } } },
+		{ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'final answer' }] } } },
+	];
+	assert.equal(extractAssistantText(events), 'final answer');
+	assert.equal(extractAssistantText([]), '', 'no messages -> empty');
+	// stream fallback when no non-empty message exists.
+	const streamed = [{ type: 'assistant/attempt', data: { stream: [{ text: 'par' }, { text: 'tial' }] } }];
+	assert.equal(extractAssistantText(streamed), 'partial');
+});
+
+test('subagent-text: waiter returns on end event and on idle-with-events', async () => {
+	const makeActivation = (events, status) => ({
+		outputStart: 0,
+		handle: { agent: { status, session: { snapshotEvents: () => events } } },
+	});
+	const ended = makeActivation([{ type: 'subagent/end', data: {} }, { type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'done' }] } } }], 'running');
+	assert.equal(await awaitActivationText(ended, { pollMs: 1 }), 'done');
+	const idle = makeActivation([{ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'idle answer' }] } } }], 'idle');
+	assert.equal(await awaitActivationText(idle, { pollMs: 1 }), 'idle answer');
 });
 
 // ── adopt gate ──────────────────────────────────────────────────────────
