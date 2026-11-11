@@ -28,10 +28,12 @@ import { apply as applySkillOpt } from './lib/vendor/skillopt/src/index.js';
 import { createAdoptGate, wrapToolsWithAdoptGate } from './lib/skillopt/adopt-gate.js';
 import { formatRubric, scoreSkillRubric } from './lib/skillopt/rubric.js';
 import { makeJudge, makeReadPair } from './lib/skillopt/gate-wiring.js';
-import { runOptimizeLoop, weakestDimension } from './lib/skillopt/optimizer.js';
+import { runOptimizeLoop, validateCandidate, weakestDimension } from './lib/skillopt/optimizer.js';
 import { hasPairedKeepRecord, makeGenerator, makeResultAppender, makeVcs } from './lib/skillopt/optimize-wiring.js';
 import { listJobs, readJob, writeJob } from './lib/skillopt/jobs.js';
 import { reconcileJobs } from './lib/skillopt/job-runner.js';
+import { collectReview, startReview } from './lib/skillopt/review-runner.js';
+import { REVIEWER_NAME } from './lib/skillopt/reviewer.js';
 import { createMemberPermissionGuard } from './lib/host/permission-guard.js';
 import { installFaultAdapter } from './lib/host/fault-adapter.js';
 import { buildModelCatalog } from './lib/host/model-catalog.js';
@@ -50,7 +52,7 @@ export const name = 'ai-team';
 // 实际使用的服务（含可选服务：缺失时 serviceOf 回退 ctx.get 并返回 undefined）。
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'];
 
-const VERSION = '0.4.8';
+const VERSION = '0.4.13';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -933,6 +935,7 @@ export function apply(ctx, config = {}) {
 					parameters: {
 						project: { type: 'string', description: 'Project directory' },
 						skillPath: { type: 'string', description: 'Path to SKILL.md to optimize' },
+						candidate: { type: 'string', description: 'Full improved SKILL.md text. Omit to get the diagnosis + rewrite request first; pass it to start the reviewer round.' },
 					},
 					output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: String(value) }] },
 					async execute(args) {
@@ -943,37 +946,50 @@ export function apply(ctx, config = {}) {
 						const rubric = scoreSkillRubric(text0, { measured: false });
 						const dimension = weakestDimension(rubric);
 						if (dimension === null) return '[skillopt optimize] rubric produced no scorable dimension';
-						const parentInfo = await ensureParent();
-						const generator = makeGenerator({
-							subagents: serviceOf(ctx, 'subagents'),
-							ensureParent: () => ensureParent(),
-							providerName: () => (serviceOf(ctx, 'subagents')?.list?.() ?? [])[0],
-							cwd: project,
-							diag,
-						});
+						const candidate = typeof args?.candidate === 'string' ? args.candidate : '';
+						if (candidate.trim() === '') {
+							// 阶段一：只给诊断与改写要求（候选由调用方 agent 生成——它才是 LLM；
+							// 插件不再尝试读一次性子代理的输出）。
+							// 复用 weakestDimension（已排除 dim8：实测表现不可静态改写）。
+							const weakest = dimension;
+							return [
+								`[skillopt optimize] diagnosis: total=${rubric.total} weakest=dim${weakest.id} ${weakest.name} (${weakest.score}/10 ×${weakest.weight})`,
+								'  next: rewrite SKILL.md addressing ONLY that dimension (keep failure branches/checkpoints/counterexamples, stay under 150% size, no soft wording), then call skillopt_optimize again with the full text as `candidate`. A dedicated reviewer member will blind-compare the two versions.',
+							].join('\n');
+						}
+						const validation = validateCandidate({ before: text0, after: candidate });
+						if (!validation.ok) return `[skillopt optimize] candidate rejected: ${validation.reason}`;
+						const runtime = currentRuntime();
+						if (runtime === null) return '[skillopt optimize] no active project runtime';
 						const jobId = 'job_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-						// job 归属项目数据目录（tick 收割处相同），与调用者的路径参数解耦。
-						const jobRoot = currentRuntime()?.dir ?? project;
-						const child = await generator.start({
-							skillPath,
-							before: text0,
-							dimension,
-							round: 1,
+						const actor = { kind: 'human', memberId: HUMAN_ID };
+						const started = await startReview({
+							service: runtime.service,
+							projectRuntime: runtime,
+							job: { id: jobId, skillPath, skillName: skillPath.split(/[\\/]/).slice(-2, -1)[0] ?? skillPath, before: text0, candidate },
+							actor,
+							votes: config.skilloptJudgeVotes ?? 3,
 						});
-						writeJob(jobRoot, {
+						writeJob(runtime.dir, {
 							id: jobId,
-							state: 'generating',
-							project,
+							state: 'judging',
+							project: runtime.dir,
 							skillPath,
 							skillName: skillPath.split(/[\\/]/).slice(-2, -1)[0] ?? skillPath,
-							dimension: `dim${dimension.id}` + ' ' + dimension.name,
-							generatorChildId: child.childId,
-							outputStart: child.outputStart ?? null,
-							parentId: parentInfo?.agent?.id ?? null,
+							dimension: `dim${dimension.id} ` + dimension.name,
+							before: text0,
+							candidate,
+							reviewTaskId: started.reviewTaskId,
+							reviewerId: started.reviewerId,
+							reviewOrders: started.orders,
 							createdAt: Date.now(),
 						});
-						diag.append({ ev: 'skillopt.job.started', jobId, project, skillPath, dimension: `dim${dimension.id}`, generatorChildId: child.childId });
+						diag.append({ ev: 'skillopt.job.started', jobId, project: runtime.dir, skillPath, dimension: `dim${dimension.id}`, reviewTaskId: started.reviewTaskId, votes: started.orders.length });
 						return [
+							`[skillopt optimize] reviewing job=${jobId} target=dim${dimension.id} ${dimension.name} baseline=${rubric.total}`,
+							`  reviewer=${REVIEWER_NAME} card=${started.reviewTaskId} votes=${started.orders.length} (blind A/B, odd majority)`,
+							'  call skillopt_jobs to collect the verdict when the reviewer answers.',
+						].join('\n');						return [
 							`[skillopt optimize] started job=${jobId} target=dim${dimension.id} ${dimension.name} baseline=${rubric.total}` ,
 							'  two-phase async: the PMO tick harvests generator -> judges -> keep/revert and appends results.tsv',
 							'  poll with skillopt_jobs',
@@ -1021,6 +1037,39 @@ export function apply(ctx, config = {}) {
 						}
 						const roots = jobRoots.length > 0 ? jobRoots : [process.cwd()];
 						const jobs = roots.flatMap((jobRoot) => listJobs(jobRoot));
+						// judging 状态的 job：从评审卡收票（账本通道），不走子代理 reconcile。
+						const actor = { kind: 'human', memberId: HUMAN_ID };
+						for (const job of jobs) {
+							if (job.state !== 'judging' || typeof job.reviewTaskId !== 'string') continue;
+							const runtime = [...(booted?.runtimes?.values?.() ?? [])].find((entry) => entry.dir === job.project);
+							if (runtime === undefined) continue;
+							const collected = collectReview({ service: runtime.service, job });
+							const expected = collected.expected ?? job.reviewOrders?.length ?? 3;
+							if (collected.votes.length < expected) {
+								diag.append({ ev: 'skillopt.review.waiting', jobId: job.id, got: collected.votes.length, expected });
+								continue;
+							}
+							const kept = collected.decision.verdict === 'keep';
+							// keep → 落盘候选；revert → 恢复基线（评审卡收票后才动文件）。
+							writeFileSync(job.skillPath, kept ? job.candidate : job.before, 'utf8');
+							const beforeScore = scoreSkillRubric(job.before, { measured: false })?.total ?? null;
+							const afterScore = scoreSkillRubric(kept ? job.candidate : job.before, { measured: false })?.total ?? null;
+							const jobDir = job.project;
+							const appender = makeResultAppender({ projectDir: jobDir });
+							await appender([
+								new Date().toISOString().slice(0, 19),
+								'-',
+								job.skillName,
+								String(beforeScore ?? '-'),
+								String(afterScore ?? '-'),
+								kept ? 'keep' : 'revert',
+								job.dimension ?? '-',
+								`${collected.decision.better}-${collected.decision.worse} ${collected.decision.verdict}` ,
+								'paired',
+							].join('\t'));
+							writeJob(jobDir, { ...job, state: 'done', decision: collected.decision, updatedAt: Date.now() });
+							diag.append({ ev: 'skillopt.job.done', jobId: job.id, verdict: collected.decision.verdict, better: collected.decision.better, worse: collected.decision.worse, kept, source: 'reviewer-card' });
+						}
 						if (jobs.length === 0) return '[skillopt jobs] none';
 						return ['[skillopt jobs]', ...jobs.map((job) => `  ${job.id} ${job.state} ${job.dimension ?? '-'}${job.decision ? ` verdict=${job.decision.verdict} (${job.decision.better}-${job.decision.worse})` : ''}${job.error ? ` error=${job.error}` : ''}`)].join('\n');
 					},
