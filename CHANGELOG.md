@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.67 — 2026-11-11
+
+- review 整改：PMO tick 的 prune 数组补入 `pmoLastDispatch`——补派节流时钟的任务条目在离开 active 集后随其余四个时钟一并清理，消除慢性 Map 增长（与 0.3.57 同类问题的复发面闭合）。
+
 ## 0.3.66 — 2026-11-11
 
 - **pending 快速补派（用户实证的开工等待问题）**：取证发现 task/created 的事件唤醒可能在责任位正忙时被投递语义吞掉，而账本没有「回合结束/空闲」事件（member.status 只有 running/failed 写点，idle 一直是 bootstrap 显示兜底）——pending 卡的第二次提示要等 10 分钟心跳、30 分钟停滞，这正是「待处理等很久不开工」的根源。现 PMO 60s tick 增加状态检查兜底：pending 且责任位**非 running** → 立即 `pmo/dispatch` 补派（每分钟最多一次，bucket 参与 dedupe key），开工等待从最长 10 分钟压到一个 tick；prompt 明确「认领推进，不再负责则 reassign 交还」。in_progress/done 不补派；retired/failed 不唤醒。waker 分支 3 项新测试（136 总）。
