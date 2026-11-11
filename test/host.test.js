@@ -178,7 +178,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 	try {
 		apply(ctx);
 		assert.equal(name, 'ai-team');
-		assert.deepEqual(inject, ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell'], 'inject waits for tools/shell so SkillOpt registers only when they are live');
+		assert.deepEqual(inject, ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'], 'inject declares every service the plugin touches (cordis proxies need it)');
 		assert.equal(routes.length, 1);
 		const route = routes[0];
 		assert.equal(route.kind, 'prefix');

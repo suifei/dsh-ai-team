@@ -46,9 +46,11 @@ import { createDiagLogger, defaultDiagDir } from './lib/diaglog.js';
 export const name = 'ai-team';
 
 /** The workbench only makes sense where the Web carrier exists. */
-export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell'];
+// cordis 按 inject 保证属性注入；未声明的属性访问会抛错，因此这里列全插件
+// 实际使用的服务（含可选服务：缺失时 serviceOf 回退 ctx.get 并返回 undefined）。
+export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'];
 
-const VERSION = '0.4.4';
+const VERSION = '0.4.6';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -79,9 +81,23 @@ export const Config = z.object({
  * 惰性 shell 服务代理：插件注入时机可能早于 shell 服务就绪，注册与 tick 都
  * 必须在调用时现取，避免「boot 时未就绪 → 整条技能链静默跳过」。
  */
+/**
+ * 取 DSH 服务：cordis 以属性形式注入（ctx.tools / ctx.shell …），
+ * ctx.get(name) 是另一套查询；两者在不同宿主版本上可用性不同，故先属性后 get。
+ */
+function serviceOf(ctx, name) {
+	// cordis Context 是 Proxy：访问未注入的属主会抛错，故必须 try/catch；
+	// 属性不可用时回退 ctx.get(name)（可选服务缺失返回 undefined）。
+	try {
+		const direct = ctx?.[name];
+		if (direct !== undefined && direct !== null) return direct;
+	} catch { /* not injected: fall back to ctx.get */ }
+	return ctx?.get?.(name);
+}
+
 function lazyShellService(ctx) {
 	const get = () => {
-		const service = ctx.get('shell');
+		const service = serviceOf(ctx, 'shell');
 		if (service === undefined || service === null) throw new Error('shell service is not available');
 		return service;
 	};
@@ -192,7 +208,7 @@ export function apply(ctx, config = {}) {
 		send(res, { error: { code, message: error?.message ?? 'command failed', details: error?.details ?? null } }, status);
 	};
 	ctx.effect(() => {
-		const webServer = ctx.get('webServer');
+		const webServer = serviceOf(ctx, 'webServer');
 		if (webServer === undefined) return () => {};
 
 		let booted = null;
@@ -208,7 +224,7 @@ export function apply(ctx, config = {}) {
 			return null;
 		};
 		const workspaceForProject = async (projectRuntime) => {
-			const registry = ctx.get('workspaceRegistry');
+			const registry = serviceOf(ctx, 'workspaceRegistry');
 			const path = projectRuntime?.service?.state?.projects?.[projectRuntime.id]?.workspacePath;
 			if (registry === undefined || typeof path !== 'string' || path === '') return null;
 			try {
@@ -227,8 +243,8 @@ export function apply(ctx, config = {}) {
 		const projectNameOf = (projectRuntime) => projectRuntime?.service?.state?.projects?.[projectRuntime?.id]?.name ?? '';
 		const titleMemberSession = async (projectRuntime, member) => {
 			if (member === undefined) return;
-			const sessions = ctx.get('sessions');
-			const titleService = ctx.get('sessionTitle');
+			const sessions = serviceOf(ctx, 'sessions');
+			const titleService = serviceOf(ctx, 'sessionTitle');
 			const session = sessions?.get?.(member.sessionId);
 			if (session === undefined || session === null || typeof titleService?.rename !== 'function') return;
 			const title = memberSessionTitle(member, projectNameOf(projectRuntime));
@@ -262,7 +278,7 @@ export function apply(ctx, config = {}) {
 			const route = `${selection.provider}/${selection.model}`;
 			if (modelSelectionLogged.get(sessionId) === route) return;
 			try {
-				const session = ctx.get('sessions')?.get?.(sessionId);
+				const session = serviceOf(ctx, 'sessions')?.get?.(sessionId);
 				if (session === undefined || session === null || typeof session.append !== 'function') return;
 				session.append('model/selection', { provider: selection.provider, model: selection.model });
 				modelSelectionLogged.set(sessionId, route);
@@ -273,8 +289,8 @@ export function apply(ctx, config = {}) {
 			}
 		};
 		const access = validatePermissionProfile({
-			permissionPresets: ctx.get('permissionPresets'),
-			sandboxPolicy: ctx.get('sandboxPolicy'),
+			permissionPresets: serviceOf(ctx, 'permissionPresets'),
+			sandboxPolicy: serviceOf(ctx, 'sandboxPolicy'),
 		});
 		const ready = access.ok
 			? Promise.resolve().then(() => boot(diag))
@@ -373,7 +389,7 @@ export function apply(ctx, config = {}) {
 				// The child Agent owns a persisted session, but its live events are
 				// buffered by the JSONL writer until a session/flush checkpoint. Flush
 				// every member turn boundary so restart/memory can replay the history.
-				const sessions = ctx.get('sessions');
+				const sessions = serviceOf(ctx, 'sessions');
 				try {
 					await sessions?.flush?.(session);
 				} catch (error) {
@@ -392,7 +408,7 @@ export function apply(ctx, config = {}) {
 			: () => {};
 		let llmFaultMode = null;
 		const offLlmFault = process.env.DSH_AI_TEAM_TEST === '1'
-			? installFaultAdapter(ctx.get('llm'), () => llmFaultMode)
+			? installFaultAdapter(serviceOf(ctx, 'llm'), () => llmFaultMode)
 			: () => {};
 		let host = null;
 		let hostPromise = null;
@@ -429,10 +445,10 @@ export function apply(ctx, config = {}) {
 			for (const [key, seq] of wakeKeys) {
 				if (Number.isSafeInteger(seq) && head - seq > 500) wakeKeys.delete(key);
 			}
-			const subagents = ctx.get('subagents');
-			const sessions = ctx.get('sessions');
-			const permissionPresets = ctx.get('permissionPresets');
-			const sandboxPolicy = ctx.get('sandboxPolicy');
+			const subagents = serviceOf(ctx, 'subagents');
+			const sessions = serviceOf(ctx, 'sessions');
+			const permissionPresets = serviceOf(ctx, 'permissionPresets');
+			const sandboxPolicy = serviceOf(ctx, 'sandboxPolicy');
 			if (subagents === undefined || sessions === undefined || permissionPresets === undefined || sandboxPolicy === undefined) return;
 			const providers = typeof subagents.list === 'function' ? subagents.list() : [];
 			if (providers.length === 0) return;
@@ -482,11 +498,11 @@ export function apply(ctx, config = {}) {
 						await titleMemberSession(projectRuntime, member);
 						const runtime = new MemberRuntime({
 							subagents, sessions, permissionPresets, sandboxPolicy,
-							agents: ctx.get('agents'),
-							agentPresets: ctx.get('agentPresets'),
+							agents: serviceOf(ctx, 'agents'),
+							agentPresets: serviceOf(ctx, 'agentPresets'),
 							direct: false,
 							parent: parentInfo.agent,
-							provider: (ctx.get('subagents')?.list?.() ?? [])[0],
+							provider: (serviceOf(ctx, 'subagents')?.list?.() ?? [])[0],
 							preset: 'standard',
 							cwd,
 							trackHandle: (sessionId, handle) => resumedHandles.set(sessionId, handle),
@@ -577,7 +593,7 @@ export function apply(ctx, config = {}) {
 					projectDir: projectRuntime.dir,
 					deps: {
 						now: () => Date.now(),
-						provider: (ctx.get('subagents')?.list?.() ?? [])[0],
+						provider: (serviceOf(ctx, 'subagents')?.list?.() ?? [])[0],
 						// parent 惰性解析：仅启动 judge 子代理时需要；generating 阶段
 						// 不依赖 agents 服务，避免 tick 阶段服务不可用时整块失败。
 						ensureParent: () => ensureParent(),
@@ -727,13 +743,13 @@ export function apply(ctx, config = {}) {
 			if (member === undefined || member.kind !== 'agent') {
 				return { error: { code: 'E_NOT_FOUND', message: 'agent not found' }, status: 404 };
 			}
-			const llm = ctx.get('llm');
+			const llm = serviceOf(ctx, 'llm');
 			if (llm?.stream === undefined) {
 				return { error: { code: 'E_RUNTIME_UNAVAILABLE', message: 'llm service is unavailable' }, status: 503 };
 			}
 			const selection = member.config?.provider && member.config?.model
 				? { provider: member.config.provider, model: member.config.model }
-				: ctx.get('agentDefaultModel')?.currentSelection?.();
+				: serviceOf(ctx, 'agentDefaultModel')?.currentSelection?.();
 			if (!selection?.provider || !selection?.model) {
 				return { error: { code: 'E_RUNTIME_UNAVAILABLE', message: 'no provider/model configured' }, status: 503 };
 			}
@@ -792,7 +808,7 @@ export function apply(ctx, config = {}) {
 			return { ok: true, member: result.member, distilled: { provider: selection.provider, model: selection.model } };
 		};
 
-		const skillsService = ctx.get('skills');
+		const skillsService = serviceOf(ctx, 'skills');
 		let disposeSkillProvider = () => {};
 		try {
 			// A vendor failure must never fail composition activation: that left
@@ -806,14 +822,14 @@ export function apply(ctx, config = {}) {
 			diag.append({ ev: 'skill.provider.fail', message: error?.message ?? String(error) });
 			console.warn('[ai-team] file skill provider failed:', error?.message ?? error);
 		}
-		const tools = ctx.get('tools');
+		const tools = serviceOf(ctx, 'tools');
 		let disposeSkillOpt = () => {};
 		try {
 			// shell 惰性代理：注入时机早于 shell 服务就绪时，注册仍必须完成——
 			// 每次调用现取，避免「boot 时 shell 未就绪 → 整条技能链静默跳过」。
 			const shellProxy = lazyShellService(ctx);
 			if (!tools?.register) {
-				diag.append({ ev: 'skillopt.skip.fail', hasToolsRegister: false, hasShell: Boolean(ctx.get('shell')) });
+				diag.append({ ev: 'skillopt.skip.fail', hasToolsRegister: false, hasShell: Boolean(serviceOf(ctx, 'shell')) });
 				console.warn('[ai-team] SkillOpt tools not registered: no tool registry');
 			}
 			if (tools?.register) {
@@ -822,11 +838,11 @@ export function apply(ctx, config = {}) {
 				const engineScript = fileURLToPath(new URL('./lib/vendor/skillopt/scripts/sleep.py', import.meta.url));
 				const readPair = makeReadPair({ shell: shellProxy, engineScript, diag });
 				const judge = makeJudge({
-					subagents: ctx.get('subagents'),
+					subagents: serviceOf(ctx, 'subagents'),
 					// 惰性解析：ensureParent 在 apply 之后才定义（const TDZ），
 					// judge 只在 adopt 时调用，此处不能立即取值。
 					ensureParent: () => ensureParent(),
-					providerName: () => (ctx.get('subagents')?.list?.() ?? [])[0],
+					providerName: () => (serviceOf(ctx, 'subagents')?.list?.() ?? [])[0],
 					votes: config.skilloptJudgeVotes ?? 3,
 					diag,
 				});
@@ -929,9 +945,9 @@ export function apply(ctx, config = {}) {
 						if (dimension === null) return '[skillopt optimize] rubric produced no scorable dimension';
 						const parentInfo = await ensureParent();
 						const generator = makeGenerator({
-							subagents: ctx.get('subagents'),
+							subagents: serviceOf(ctx, 'subagents'),
 							ensureParent: () => ensureParent(),
-							providerName: () => (ctx.get('subagents')?.list?.() ?? [])[0],
+							providerName: () => (serviceOf(ctx, 'subagents')?.list?.() ?? [])[0],
 							cwd: project,
 							diag,
 						});
@@ -1018,10 +1034,10 @@ export function apply(ctx, config = {}) {
 					.map((runtime) => runtime.service.state.hostSessionId)
 					.find((value) => value !== undefined && value !== null);
 				hostPromise = ensureHostAgent({
-					agents: ctx.get('agents'),
-					agentDefaultModel: ctx.get('agentDefaultModel'),
-					workspaceRegistry: ctx.get('workspaceRegistry'),
-					sessions: ctx.get('sessions'),
+					agents: serviceOf(ctx, 'agents'),
+					agentDefaultModel: serviceOf(ctx, 'agentDefaultModel'),
+					workspaceRegistry: serviceOf(ctx, 'workspaceRegistry'),
+					sessions: serviceOf(ctx, 'sessions'),
 					cwd: booted?.dataDir ?? process.cwd(),
 					resumeSessionId: existingHost,
 				}).then(async (value) => {
@@ -1078,10 +1094,10 @@ export function apply(ctx, config = {}) {
 				}
 				diag?.append({ ev: 'member.reseat', memberId: member.id, oldSessionId: staleId, projectId: projectRuntime.id });
 			}
-			const subagents = ctx.get('subagents');
-			const sessions = ctx.get('sessions');
-			const permissionPresets = ctx.get('permissionPresets');
-			const sandboxPolicy = ctx.get('sandboxPolicy');
+			const subagents = serviceOf(ctx, 'subagents');
+			const sessions = serviceOf(ctx, 'sessions');
+			const permissionPresets = serviceOf(ctx, 'permissionPresets');
+			const sandboxPolicy = serviceOf(ctx, 'sandboxPolicy');
 			if (subagents === undefined || sessions === undefined || permissionPresets === undefined || sandboxPolicy === undefined) {
 				diag?.append({ ev: 'activate.reject', projectId: projectRuntime.id, memberId: member.id, code: 'E_RUNTIME_UNAVAILABLE' });
 				return { error: { code: 'E_RUNTIME_UNAVAILABLE', message: 'member runtime services are unavailable' }, status: 503 };
@@ -1092,7 +1108,7 @@ export function apply(ctx, config = {}) {
 				return { error: { code: 'E_RUNTIME_UNAVAILABLE', message: 'no subagent provider is registered' }, status: 503 };
 			}
 			try {
-				const selection = ctx.get('agentDefaultModel')?.currentSelection?.();
+				const selection = serviceOf(ctx, 'agentDefaultModel')?.currentSelection?.();
 				const activationMember = member.config?.provider && member.config?.model
 					? member
 					: {
@@ -1112,11 +1128,11 @@ export function apply(ctx, config = {}) {
 					sessions,
 					permissionPresets,
 					sandboxPolicy,
-					agents: ctx.get('agents'),
-					agentPresets: ctx.get('agentPresets'),
+					agents: serviceOf(ctx, 'agents'),
+					agentPresets: serviceOf(ctx, 'agentPresets'),
 					direct: false,
 					parent: parentInfo.agent,
-					provider: (ctx.get('subagents')?.list?.() ?? [])[0],
+					provider: (serviceOf(ctx, 'subagents')?.list?.() ?? [])[0],
 					preset: 'standard',
 					cwd: effectiveDir,
 					trackHandle: (sessionId, handle) => resumedHandles.set(sessionId, handle),
@@ -1190,8 +1206,8 @@ export function apply(ctx, config = {}) {
 					};
 					disposePermissionGuard = tools.guard(createMemberPermissionGuard({
 						service: allMembers,
-						permissionPresets: ctx.get('permissionPresets'),
-						sandboxPolicy: ctx.get('sandboxPolicy'),
+						permissionPresets: serviceOf(ctx, 'permissionPresets'),
+						sandboxPolicy: serviceOf(ctx, 'sandboxPolicy'),
 					})) ?? (() => {});
 				}
 				// A restart is an explicit lifecycle event: resume unfinished Tasks
@@ -1311,7 +1327,7 @@ export function apply(ctx, config = {}) {
 						});
 					}
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/models') {
-						const catalog = await buildModelCatalog(ctx.get('llm'), ctx.get('agentDefaultModel'));
+						const catalog = await buildModelCatalog(serviceOf(ctx, 'llm'), serviceOf(ctx, 'agentDefaultModel'));
 						return send(res, catalog);
 					}
 				// R-17 person 别名：视图层绑定（name → personId），文件存策略数据
@@ -1424,19 +1440,19 @@ export function apply(ctx, config = {}) {
 								active: runtime.id === booted.activeProjectId,
 							})),
 							runtime: {
-								roots: ctx.get('agents')?.roots?.().length ?? null,
+								roots: serviceOf(ctx, 'agents')?.roots?.().length ?? null,
 								// 服务探测（技能进化链路依赖 tools.register + shell）：
 								// 同步可观测，避免历史「静默未启用」盲区。
 								services: {
-									tools: typeof ctx.get('tools')?.register === 'function',
-									shell: Boolean(ctx.get('shell')),
-									skilloptTools: (ctx.get('tools')?.definitions?.() ?? []).map((definition) => definition.name).filter((toolName) => String(toolName).startsWith('skillopt_')),
+									tools: typeof serviceOf(ctx, 'tools')?.register === 'function',
+									shell: Boolean(serviceOf(ctx, 'shell')),
+									skilloptTools: (serviceOf(ctx, 'tools')?.definitions?.() ?? []).map((definition) => definition.name).filter((toolName) => String(toolName).startsWith('skillopt_')),
 								},
-								defaultModel: ctx.get('agentDefaultModel')?.currentSelection?.() ?? null,
-								llmProviders: ctx.get('llm')?.listProviders?.() ?? [],
-								providers: ctx.get('subagents')?.list?.() ?? [],
-								providerCaps: (ctx.get('subagents')?.list?.() ?? []).map((providerName) => {
-									const provider = ctx.get('subagents')?.getProvider?.(providerName);
+								defaultModel: serviceOf(ctx, 'agentDefaultModel')?.currentSelection?.() ?? null,
+								llmProviders: serviceOf(ctx, 'llm')?.listProviders?.() ?? [],
+								providers: serviceOf(ctx, 'subagents')?.list?.() ?? [],
+								providerCaps: (serviceOf(ctx, 'subagents')?.list?.() ?? []).map((providerName) => {
+									const provider = serviceOf(ctx, 'subagents')?.getProvider?.(providerName);
 									return {
 										name: providerName,
 										capabilities: provider?.capabilities ?? null,
@@ -1445,17 +1461,17 @@ export function apply(ctx, config = {}) {
 										start: typeof provider?.start === 'function',
 									};
 								}),
-								teamTool: ctx.get('tools')?.definitions?.().some((definition) => definition.name === 'team') ?? null,
+								teamTool: serviceOf(ctx, 'tools')?.definitions?.().some((definition) => definition.name === 'team') ?? null,
 								skillsService: skillsService !== null && skillsService !== undefined,
 								skillNames: skillsService?.list
 									? await Promise.resolve(skillsService.list({})).then((rows) => rows.map((skill) => skill.name).filter((skillName) => !isSkillExcluded(skillName))).catch(() => [])
 									: [],
 								skilloptTools: tools?.definitions?.().map((definition) => definition.name).filter((name) => name.startsWith('skillopt_')) ?? [],
-								presets: await Promise.resolve(ctx.get('agentPresets')?.list?.()).catch(() => []),
+								presets: await Promise.resolve(serviceOf(ctx, 'agentPresets')?.list?.()).catch(() => []),
 								members: Object.values(booted.service.state.members ?? {})
 									.filter((member) => member.kind === 'agent')
 									.map((member) => {
-										const agent = ctx.get('agents')?.get?.(member.sessionId);
+										const agent = serviceOf(ctx, 'agents')?.get?.(member.sessionId);
 										let lastEvent = null;
 										let seq = null;
 										try {
@@ -1528,8 +1544,8 @@ export function apply(ctx, config = {}) {
 									};
 								}),
 							runtime: {
-								defaultModel: ctx.get('agentDefaultModel')?.currentSelection?.() ?? null,
-								providers: ctx.get('subagents')?.list?.() ?? [],
+								defaultModel: serviceOf(ctx, 'agentDefaultModel')?.currentSelection?.() ?? null,
+								providers: serviceOf(ctx, 'subagents')?.list?.() ?? [],
 							},
 						});
 					}
@@ -1636,16 +1652,16 @@ export function apply(ctx, config = {}) {
 								return send(res, { error: { code: 'E_FORBIDDEN', message: 'test hook is disabled' } }, 403);
 							}
 							const member = runtime.service.state.members?.[body.payload?.memberId];
-							const agent = member?.sessionId === undefined ? undefined : ctx.get('agents')?.get?.(member.sessionId);
+							const agent = member?.sessionId === undefined ? undefined : serviceOf(ctx, 'agents')?.get?.(member.sessionId);
 							const session = agent?.session;
 							if (session === undefined || session === null) {
 								return send(res, { error: { code: 'E_NOT_FOUND', message: 'member session not found' } }, 404);
 							}
-							const permissionPresets = ctx.get('permissionPresets');
+							const permissionPresets = serviceOf(ctx, 'permissionPresets');
 							permissionPresets?.set?.(session, 'workspace-write');
 							return send(res, {
 								ok: true,
-								mode: ctx.get('sandboxPolicy')?.overrideOf?.(session) ?? null,
+								mode: serviceOf(ctx, 'sandboxPolicy')?.overrideOf?.(session) ?? null,
 							});
 						}
 						if (body.type === 'test.permission.read') {
@@ -1653,13 +1669,13 @@ export function apply(ctx, config = {}) {
 								return send(res, { error: { code: 'E_FORBIDDEN', message: 'test hook is disabled' } }, 403);
 							}
 							const member = runtime.service.state.members?.[body.payload?.memberId];
-							const agent = member?.sessionId === undefined ? undefined : ctx.get('agents')?.get?.(member.sessionId);
+							const agent = member?.sessionId === undefined ? undefined : serviceOf(ctx, 'agents')?.get?.(member.sessionId);
 							const session = agent?.session;
 							return send(res, {
 								ok: true,
 								mode: session === undefined || session === null
 									? null
-									: ctx.get('sandboxPolicy')?.overrideOf?.(session) ?? null,
+									: serviceOf(ctx, 'sandboxPolicy')?.overrideOf?.(session) ?? null,
 							});
 						}
 						if (body.type === 'member.distill' && body.payload?.mode === 'model') {
