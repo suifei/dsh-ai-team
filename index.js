@@ -41,7 +41,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.84';
+const VERSION = '0.3.86';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -747,6 +747,16 @@ export function apply(ctx, config = {}) {
 		let disposeSkillOpt = () => {};
 		try {
 			const shell = ctx.get('shell');
+			// 探针：SkillOpt 注册依赖 tools.register + shell 两个服务。历史上这条
+			// if 为假时无任何诊断，导致「技能进化静默未启用」（用户实证盘查）。
+			if (!tools?.register || !shell) {
+				diag.append({
+					ev: 'skillopt.skip.fail',
+					hasToolsRegister: typeof tools?.register === 'function',
+					hasShell: Boolean(shell),
+				});
+				console.warn('[ai-team] SkillOpt tools not registered:', { hasToolsRegister: typeof tools?.register === 'function', hasShell: Boolean(shell) });
+			}
 			if (tools?.register && shell) {
 				// Backend/timeout come from the plugin Config (patch layer), so an
 				// operator can move the skillopt_* tools off the safe mock default.
@@ -1200,6 +1210,13 @@ export function apply(ctx, config = {}) {
 							})),
 							runtime: {
 								roots: ctx.get('agents')?.roots?.().length ?? null,
+								// 服务探测（技能进化链路依赖 tools.register + shell）：
+								// 同步可观测，避免历史「静默未启用」盲区。
+								services: {
+									tools: typeof ctx.get('tools')?.register === 'function',
+									shell: Boolean(ctx.get('shell')),
+									skilloptTools: (ctx.get('tools')?.definitions?.() ?? []).map((definition) => definition.name).filter((toolName) => String(toolName).startsWith('skillopt_')),
+								},
 								defaultModel: ctx.get('agentDefaultModel')?.currentSelection?.() ?? null,
 								llmProviders: ctx.get('llm')?.listProviders?.() ?? [],
 								providers: ctx.get('subagents')?.list?.() ?? [],

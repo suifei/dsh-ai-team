@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.86 - 2026-11-12
+
+- **技能进化链路可观测性**：health 新增 `runtime.services`（tools.register / shell / 已注册的 skillopt_* 工具清单）；SkillOpt 注册条件不满足时记 `skillopt.skip.fail` 诊断——消除「静默未启用」的排查盲区（此前只能靠 diag 猜）。
+- 实证：本机 7 个 skillopt 工具全部注册、Python 3.11 引擎可运行（`status` 实跑 `nights so far: 0`）；技能进化链路**已就绪但从未运行**（默认 mock backend 为安全默认）。
+
+
 ## 0.3.84 - 2026-11-12
 
 - **旧会话自动迁移（review 修复）**：唤醒失败且错误表明 subagent 不可用时（旧形态成员会话由 agents.create 创建、不在 subagent catalog），自动以 subagent 形态重建一次（重置会话）并记录 member.autoreseat 诊断——避免成员在重构后静默不再被唤醒，用户无需手动迁移。
