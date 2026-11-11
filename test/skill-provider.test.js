@@ -49,3 +49,19 @@ test('file skill provider installs through the skills registry', () => {
 	assert.equal(registered.name, 'ai-team-files');
 	assert.equal(typeof dispose, 'function');
 });
+
+test('file skill provider parses CRLF frontmatter (description on the last line)', async (t) => {
+	const root = mkdtempSync(join(tmpdir(), 'ai-team-crlf-'));
+	t.after(() => rmSync(root, { recursive: true, force: true }));
+	const home = join(root, 'home');
+	const cwd = join(root, 'project');
+	mkdirSync(join(home, 'skills', 'crlf-skill'), { recursive: true });
+	// Windows 编辑器默认 CRLF：`\r` 是 JS 行终止符，`^...$` 无法越过它，
+	// 于是末尾那一行（常见是 description）整行失配、技能被当成「缺少描述」丢弃。
+	const crlf = ['---', 'name: crlf-skill', 'description: CRLF skill description.', '---', '# body', ''].join('\r\n');
+	writeFileSync(join(home, 'skills', 'crlf-skill', 'SKILL.md'), crlf, 'utf8');
+	const provider = createFileSkillProvider({ dshHome: home, projectCwd: cwd });
+	const list = await provider.list({ cwd });
+	assert.deepEqual(list.map((skill) => skill.name), ['crlf-skill']);
+	assert.equal(list[0].description, 'CRLF skill description.');
+});

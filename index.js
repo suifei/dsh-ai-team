@@ -11,7 +11,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import z from '@deepseek-ai/schemastery';
 import { ProjectRuntime } from './lib/host/project-runtime.js';
 import { ProjectRegistry } from './lib/host/project-registry.js';
@@ -991,7 +991,21 @@ export function apply(ctx, config = {}) {
 					readPair,
 					// 两阶段异步模式：工具 execute 内无法等待子代理，判据改为
 					// results.tsv 中该 skill 已存在 paired keep 记录（同步可查）。
-					hasKeepRecord: async ({ projectDir, skillPath, candidate }) => hasPairedKeepRecord(projectDir, skillPath, candidate),
+					// results.tsv 的写入根是插件数据目录（job.project = runtime.dir），而
+					// adopt 门拿到的是模型传入的 args.project（通常是工作区）。只查后者的
+					// 话，keep 记录永远找不到、adopt 恒被拒——这里把两个根都查。
+					hasKeepRecord: async ({ projectDir, skillPath, candidate }) => {
+						const roots = new Set();
+						if (typeof projectDir === 'string' && projectDir !== '') roots.add(projectDir);
+						for (const runtime of booted?.runtimes?.values() ?? []) {
+							if (typeof runtime?.dir === 'string' && runtime.dir !== '') roots.add(runtime.dir);
+						}
+						for (const root of roots) {
+							if (hasPairedKeepRecord(root, skillPath, candidate)) return true;
+						}
+						diag.append({ ev: 'skillopt.adoptgate.norecord.fail', projectDir: projectDir ?? null, skillPath: skillPath ?? null, roots: roots.size });
+						return false;
+					},
 					diag: (line, extra) => diag.append({
 						ev: extra?.ev ?? 'skillopt.adoptgate',
 						message: line,
@@ -1847,8 +1861,16 @@ export function apply(ctx, config = {}) {
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/bootstrap') {
 						const requested = url.searchParams.get('project');
 						const requestedRuntime = requested === null ? null : projectRuntime(requested);
-						const bootstrapRuntime = requestedRuntime ?? currentRuntime();
-						const bootstrap = bootstrapRuntime.service.bootstrap(bootstrapRuntime.id);
+						// 账本里真实存在的项目（registry 的 active 可能与正在服务的账本脱钩）。
+						const servedProjects = (runtime) => Object.keys(runtime?.service?.state?.projects ?? {});
+						let bootstrapRuntime = requestedRuntime ?? currentRuntime();
+						if (requested === null && servedProjects(bootstrapRuntime).length === 0 && servedProjects(booted?.runtime).length > 0) {
+							bootstrapRuntime = booted.runtime;
+						}
+						// 隐式请求用该 runtime 账本里的第一个项目；显式传了不存在的 id 仍由
+						// service 的严格校验报错（保留审计修复，不再静默返回空壳）。
+						const servedProjectId = servedProjects(bootstrapRuntime)[0] ?? bootstrapRuntime.id;
+						const bootstrap = bootstrapRuntime.service.bootstrap(requested === null ? servedProjectId : bootstrapRuntime.id);
 						// 跨项目收件箱聚合：其它项目只读 state.inbox 过滤（此前对每个
 						// 项目整调 bootstrap——board+quadrants+threads 全算，O(项目数×
 						// 全视图)/请求）。
@@ -2035,7 +2057,20 @@ export function apply(ctx, config = {}) {
 							if (name === '') return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'project name is required' } }, 400);
 							// 工作目录可空（稍后设置）：讨论与建卡不受限；成员激活在
 							// activateMember 处 fail-closed，绝不落到宿主默认目录执行。
+							// 但给了就必须真实存在：非法路径若先写进 registry，boot 会在
+							// 该项上抛出，导致整个插件起不来（所有路由 503），只能手工改
+							// projects.json 才能恢复。
+							if (workspacePath !== '') {
+								let stat = null;
+								try { stat = statSync(workspacePath); } catch { stat = null; }
+								if (stat === null || (typeof stat.isDirectory === 'function' && stat.isDirectory() !== true)) {
+									return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: `工作目录不存在或不是目录：${workspacePath}` } }, 400);
+								}
+							}
 							const id = ids.project();
+							// 先校验工作目录（上面已做），再写 registry、最后开 runtime：
+							// activateProject 内部会调用 registry.setActive(id)，因此该行必须已
+							// 存在。校验前置后，不会再把一个打不开的项目写进 projects.json。
 							booted.registry.add({ id, name, goal, workspacePath });
 							const next = await activateProject(id, name, goal, workspacePath);
 							return send(res, { ok: true, project: next.service.state.projects[id] ?? { id, name } });
@@ -2046,7 +2081,9 @@ export function apply(ctx, config = {}) {
 								return send(res, { error: { code: 'NOT_FOUND', message: 'project not found' } }, 404);
 							}
 							const record = booted.registry.list().find((project) => project.id === target);
-							const next = await activateProject(target, record?.name, record?.goal);
+							// 透传 workspacePath：否则账本里的 project/created 会把工作目录写成空，
+							// 之后该项目的成员激活永远 E_WORKSPACE_REQUIRED。
+							const next = await activateProject(target, record?.name, record?.goal, record?.workspacePath);
 							return send(res, { ok: true, project: next.service.state.projects[target] ?? record });
 						}
 						if (body.type === 'member.activate') {
@@ -2124,6 +2161,21 @@ export function apply(ctx, config = {}) {
 									booted.registry.setArchived(runtime.id, true);
 								} catch (error) {
 									diag.append({ ev: 'project.archive.registry.fail', projectId: runtime.id, message: error?.message ?? String(error) });
+								}
+								// 归档的正是当前 active：必须同步把 booted 指向 registry 选出的
+								// fallback，否则无参 bootstrap 仍落在已归档 runtime 上 → 工作台
+								// 直接 UNREACHABLE，刷新后也没有项目树可切走，只能重启宿主。
+								if (booted.activeProjectId === runtime.id) {
+									const fallbackId = booted.registry.activeProjectId;
+									const fallback = booted.registry.list().find((project) => project.id === fallbackId);
+									if (fallback !== undefined && fallback.id !== runtime.id) {
+										try {
+											await activateProject(fallback.id, fallback.name, fallback.goal, fallback.workspacePath);
+											diag.append({ ev: 'project.archive.reactivated', from: runtime.id, to: fallback.id });
+										} catch (error) {
+											diag.append({ ev: 'project.archive.reactivate.fail', from: runtime.id, to: fallback.id, message: error?.message ?? String(error) });
+										}
+									}
 								}
 							}
 							// 退役/离队后必须释放常驻子代理：否则 activation 句柄只在 force
