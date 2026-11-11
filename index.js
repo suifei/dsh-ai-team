@@ -52,7 +52,7 @@ export const name = 'ai-team';
 // 实际使用的服务（含可选服务：缺失时 serviceOf 回退 ctx.get 并返回 undefined）。
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'];
 
-const VERSION = '0.4.23';
+const VERSION = '0.4.24';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -406,6 +406,25 @@ export function apply(ctx, config = {}) {
 			: () => {};
 		const offSessionEvent = typeof ctx.on === 'function'
 			? ctx.on('session/event', async (session, event) => {
+				// 成员输出探针：直接观察成员回合产出了什么（判定「成员是否真的在
+				// 工作 / 是否调用工具」的唯一插件侧可见通道）。
+				try {
+					if (booted !== null && event?.type === 'assistant/message' && runtimeForAgent(session?.id) !== null) {
+						const content = event?.data?.message?.content ?? [];
+						const text = (Array.isArray(content) ? content : [])
+							.map((block) => (typeof block === 'string' ? block : block?.text ?? ``))
+							.filter(Boolean)
+							.join('\n');
+						diag.append({
+							ev: 'member.output.probe.fail',
+							sessionId: session?.id ?? null,
+							chars: text.length,
+							preview: text.slice(0, 240),
+						});
+					}
+				} catch (probeError) {
+					diag.append({ ev: 'member.output.probe.fail', error: probeError?.message ?? String(probeError) });
+				}
 				if (booted === null || event?.type !== 'turn/end') return;
 				const eventRuntime = runtimeForAgent(session?.id);
 				const member = eventRuntime === null ? undefined : Object.values(eventRuntime.service.state.members ?? {})
