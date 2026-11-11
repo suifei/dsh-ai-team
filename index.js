@@ -52,7 +52,7 @@ export const name = 'ai-team';
 // 实际使用的服务（含可选服务：缺失时 serviceOf 回退 ctx.get 并返回 undefined）。
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'];
 
-const VERSION = '0.4.13';
+const VERSION = '0.4.14';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -543,7 +543,9 @@ export function apply(ctx, config = {}) {
 					// 不在 subagent catalog）无法经父→子通道投递。识别该失败后自动以
 					// subagent 形态重建一次（重置会话），避免成员静默不再被唤醒。
 					const failureText = `${error?.code ?? ''} ${error?.message ?? String(error)}`;
-					const legacySession = /subagent|not-found|not found|E_SESSION_MISSING/i.test(failureText)
+					// 含 NOT_RESUMABLE / is unavailable：DSH 重启后 subagent 会话不可恢复/
+					// 不可投递（diag 实测），此时必须重建会话，否则成员永久失联。
+					const legacySession = /subagent|not-found|not found|E_SESSION_MISSING|NOT_RESUMABLE|unavailable/i.test(failureText)
 						&& typeof member?.sessionId === 'string' && member.sessionId !== '';
 					if (legacySession) {
 						try {
