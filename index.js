@@ -599,7 +599,7 @@ export function apply(ctx, config = {}) {
 				// Prune per-task clock entries whose task left the active set, so
 				// the five Map keys track live work instead of growing forever.
 				const live = new Set(active.map((task) => task.id));
-				for (const map of [pmoLastReview, pmoLastHeartbeat, pmoLastEscalate, pmoLastStall]) {
+				for (const map of [pmoLastReview, pmoLastHeartbeat, pmoLastEscalate, pmoLastStall, pmoLastDispatch]) {
 					for (const taskId of map.keys()) {
 						if (!live.has(taskId)) map.delete(taskId);
 					}
