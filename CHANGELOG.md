@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.84 - 2026-11-12
+
+- **旧会话自动迁移（review 修复）**：唤醒失败且错误表明 subagent 不可用时（旧形态成员会话由 agents.create 创建、不在 subagent catalog），自动以 subagent 形态重建一次（重置会话）并记录 member.autoreseat 诊断——避免成员在重构后静默不再被唤醒，用户无需手动迁移。
+
+
 ## 0.3.83 - 2026-11-12
 
 - **人员池模型下拉 [object Object] 修复**：modelCatalog 的 providers[].models 元素是 {id,name} 对象，P2 之前按字符串拼接。改为按 {id,name} 取值，并用索引映射代替字符串拆解（模型显示名可能含分隔符）。

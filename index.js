@@ -41,7 +41,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.83';
+const VERSION = '0.3.84';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -490,6 +490,38 @@ export function apply(ctx, config = {}) {
 						message: error?.message ?? String(error),
 					});
 					console.warn('[ai-team] wake failed:', plan.memberId, error?.code ?? error?.message ?? error);
+					// 一次性迁移自愈：旧形态成员会话（历史上由 agents.create 创建、
+					// 不在 subagent catalog）无法经父→子通道投递。识别该失败后自动以
+					// subagent 形态重建一次（重置会话），避免成员静默不再被唤醒。
+					const failureText = `${error?.code ?? ''} ${error?.message ?? String(error)}`;
+					const legacySession = /subagent|not-found|not found|E_SESSION_MISSING/i.test(failureText)
+						&& typeof member?.sessionId === 'string' && member.sessionId !== '';
+					if (legacySession) {
+						try {
+							const reseated = await activateMember({
+								payload: {
+									memberId: plan.memberId,
+									force: true,
+									prompt: '会话已升级为团队子智能体形态（历史会话迁移）。先读 tasks/thread 当前状态，继续推进；不要重复已完成的工作。',
+								},
+							}, projectRuntime);
+							diag.append({
+								ev: 'member.autoreseat',
+								projectId: projectRuntime.id,
+								memberId: plan.memberId,
+								oldSessionId: member.sessionId,
+								newSessionId: reseated?.sessionId ?? null,
+								ok: reseated?.error === undefined,
+							});
+						} catch (reseatError) {
+							diag.append({
+								ev: 'member.autoreseat.fail',
+								projectId: projectRuntime.id,
+								memberId: plan.memberId,
+								message: reseatError?.message ?? String(reseatError),
+							});
+						}
+					}
 					try {
 						await projectRuntime.service.recordWake(plan.memberId, {
 							ok: false, taskId: plan.taskId, reason: plan.reason, error: error?.code ?? error?.message ?? String(error),
