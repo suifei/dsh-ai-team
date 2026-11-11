@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.68 — 2026-11-11
+
+- **【致命】取消任务对话框卡死修复（用户实证三连）**：①根因是 `WorkbenchDialog` 挂载处**漏传 `onDismiss` prop**——settle/cancel 调用 `onDismiss()` 抛 TypeError，`setDialog(null)` 永不执行，对话框永久驻留无法关闭；②「确定没反应」实为 resolve 已执行（任务在后台真实取消）但关框崩溃吞掉了全部反馈；③「理由可留空」的提示与确定按钮禁用矛盾，且 host 域层 `cancelTask/reopenTask` 的 `requireText(reason)` 也强制必填——三层各自为政。现修复：挂载处显式传 `onDismiss: () => setDialog(null)`；settle 先关框后 resolve（后续异步不再阻断）；对话框新增 `optional` 语义（理由类输入允许留空）；domain 层 cancel/reopen 理由改 `optionalText`（留空记空串，超长边界保留）。新增 cancel/reason 链路测试 2 项（138 总）。
+
 ## 0.3.67 — 2026-11-11
 
 - review 整改：PMO tick 的 prune 数组补入 `pmoLastDispatch`——补派节流时钟的任务条目在离开 active 集后随其余四个时钟一并清理，消除慢性 Map 增长（与 0.3.57 同类问题的复发面闭合）。

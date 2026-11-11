@@ -1613,12 +1613,14 @@ window.__ModuleLoader__.load({
 		function WorkbenchDialog({ t, dialog, onDismiss }) {
 			const [value, setValue] = React.useState(dialog.value ?? '');
 			const settle = (result) => {
-				dialog.resolve(result);
+				// 先关框再 resolve：resolve 触发的后续异步命令不应阻断关框。
 				onDismiss();
+				dialog.resolve(result);
 			};
 			const cancel = () => settle(dialog.mode === 'confirm' ? false : null);
 			const submit = () => settle(dialog.mode === 'confirm' ? true : value.trim());
-			const canSubmit = dialog.mode === 'confirm' || value.trim() !== '';
+			// optional 语义：理由类输入允许留空（placeholder 已声明「可留空」）。
+			const canSubmit = dialog.mode === 'confirm' || dialog.optional === true || value.trim() !== '';
 			return h(ModalBack, { onClose: cancel },
 				h('div', {
 					className: 'at-modal',
@@ -2601,7 +2603,7 @@ window.__ModuleLoader__.load({
 				dialogSeqRef.current += 1;
 				setDialog({ mode: 'confirm', title, body, resolve });
 			});
-			const askPrompt = (title, { placeholder = '', value = '', options = null } = {}) => new Promise((resolve) => {
+			const askPrompt = (title, { placeholder = '', value = '', options = null, optional = false } = {}) => new Promise((resolve) => {
 				dialogSeqRef.current += 1;
 				setDialog({
 					mode: options === null ? 'prompt' : 'choice',
@@ -2609,6 +2611,7 @@ window.__ModuleLoader__.load({
 					placeholder,
 					value: value ?? (options && options.length > 0 ? options[0] : ''),
 					options,
+					optional,
 					resolve,
 				});
 			});
@@ -3641,7 +3644,7 @@ window.__ModuleLoader__.load({
 			}
 			async function cancelSelected() {
 				if (!selectedTask) return;
-				const reason = await askPrompt(t('cancelPrompt'));
+				const reason = await askPrompt(t('cancelPrompt'), { optional: true });
 				if (reason === null) return;
 				try {
 					await runCommand('task.cancel', { taskId: selectedTask.id, expectedRevision: selectedTask.revision, reason });
@@ -3653,7 +3656,7 @@ window.__ModuleLoader__.load({
 			}
 			async function reopenSelected() {
 				if (!selectedTask) return;
-				const reason = await askPrompt(t('reopenPrompt'));
+				const reason = await askPrompt(t('reopenPrompt'), { optional: true });
 				if (reason === null) return;
 				try {
 					await runCommand('task.reopen', { taskId: selectedTask.id, expectedRevision: selectedTask.revision, reason });
@@ -4171,7 +4174,7 @@ window.__ModuleLoader__.load({
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setNewOpen(false), disabled: nBusy }, t('cancel')),
 								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: nBusy || !nName.trim() || !nWorkspace.trim() }, nBusy ? t('saving') : t('projectCreate'))))) : null,
-					dialog ? h(WorkbenchDialog, { key: dialogSeqRef.current, t, dialog }) : null,
+					dialog ? h(WorkbenchDialog, { key: dialogSeqRef.current, t, dialog, onDismiss: () => setDialog(null) }) : null,
 					shortcutsOpen ? h(ModalBack, { onClose: () => setShortcutsOpen(false) },
 						h('div', { className: 'at-modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': t('shortcutTitle') },
 							h('h2', { className: 'at-modaltitle' }, t('shortcutTitle')),
