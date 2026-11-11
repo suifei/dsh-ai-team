@@ -2629,6 +2629,9 @@ window.__ModuleLoader__.load({
 			const [replyBase, setReplyBase] = React.useState(null);
 			// R-06 决策回流高亮：主对话中被指认的 stream 消息 id。
 			const [streamHighlight, setStreamHighlight] = React.useState(null);
+			// P1b 批量取消的忙碌标志——必须位于 Skeleton early-return 之前
+			// （React hooks 数量在渲染间必须恒定，否则 #310）。
+			const [cancelAllBusy, setCancelAllBusy] = React.useState(false);
 			// 自绘确认/输入对话框（替代原生 prompt/confirm，观感与宿主一致）。
 			// dialog: { mode: 'confirm'|'prompt'|'choice', title, body, placeholder,
 			//           value, options, resolve } — resolve(false|null|字符串)。
@@ -2881,7 +2884,6 @@ window.__ModuleLoader__.load({
 			const thread = threadFor(data, selectedTask?.id);
 			const quadrants = deriveQuadrants(data);
 			// P1b：批量取消全部待处理（逐卡 task.cancel，Human-only；汇总结果）。
-			const [cancelAllBusy, setCancelAllBusy] = React.useState(false);
 			async function cancelAllPending(pendingTasks) {
 				if (!Array.isArray(pendingTasks) || pendingTasks.length === 0) return;
 				setCancelAllBusy(true);

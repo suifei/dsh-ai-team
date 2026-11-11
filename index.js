@@ -41,7 +41,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy'];
 
-const VERSION = '0.3.70';
+const VERSION = '0.3.71';
 const PROJECT_ID = 'prj_main';
 const HUMAN_ID = 'mem_human';
 
@@ -386,9 +386,11 @@ export function apply(ctx, config = {}) {
 			|| null;
 		const wakeFromResult = async (projectRuntime, result, actor = {}) => {
 			if (projectRuntime === null || projectRuntime === undefined) return;
-			// P6 停止门（事件 hook 侧）：stopped 项目不再派发任何唤醒。
+			// P6 停止门（事件 hook 侧）：stopped 项目停止**自动派发**；Human
+			// 主动触发的唤醒（如私信 member.message）仍放行——停止的是机器
+			// 驱动，不断 Human 通道。
 			const gateProject = projectRuntime.service.state.projects?.[projectRuntime.id];
-			if (gateProject !== undefined && gateProject.runState === 'stopped') return;
+			if (gateProject !== undefined && gateProject.runState === 'stopped' && actor?.kind !== 'human') return;
 			const plans = planWakes(projectRuntime.service.state, result, actor);
 			if (plans.length === 0) return;
 			// Window eviction: a key older than this horizon can no longer dedupe

@@ -97,6 +97,13 @@ function makeReact() {
 			} finally {
 				currentSlots = prev;
 				currentComponentType = prevType;
+				// React #310 guard: hooks count must be constant across renders
+				// of the same component (a hook added after an early-return
+				// branch crashes real React on the data-arrive re-render).
+				if (slots.prevHookCount !== undefined && slots.cursor > slots.prevHookCount) {
+					throw new Error(`E2E #310 guard: ${type.name || 'component'} rendered ${slots.cursor} hooks after ${slots.prevHookCount} on the previous pass — hooks must not appear after early returns`);
+				}
+				slots.prevHookCount = Math.max(slots.prevHookCount ?? 0, slots.cursor);
 			}
 			return { type: type.name || 'Anonymous', props, children: [output] };
 		}

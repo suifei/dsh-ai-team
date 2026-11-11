@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.71 — 2026-11-11
+
+- **【致命】工作台 #310 崩溃修复（用户实证）**：批量取消的忙碌标志 useState 被放在了 Workbench 的 Skeleton early-return **之后**——loading→ready 重渲染时 hooks 数量增多，触发 React #310 白屏。移到 early-return 之前的 state 区。渲染 E2E 的 React mock 同步加 **#310 守卫**：同一组件跨渲染 hooks 数量增多立即抛错（并在 0.3.69 类改动合入前即拦截）。
+
 ## 0.3.70 — 2026-11-11
 
 - **项目全局掌控：启动 / 停止 / 交接**（用户需求）：新命令 `project.runState`（Human-only，账本留痕）——**停止**：PMO tick 与事件唤醒双门停止一切派发（正在执行的子任务自然完成，私信仍可）；**启动**：空项目显式启动解除 P1a 等待门（Human 点启动即指令）或停止的项目继续开工（下一 tick ≤60s 生效）。新命令 `project.handoff`：按时序生成**交接文档**（Human 指令时序 + 任务全量状态/证据/QA + Thread 摘要 + 接手提示）写入工作目录 `docs/HANDOFF-<时间戳>.md`，账本留痕路径。项目头新增「项目运行 · 开/停止中」与「生成交接文档」按钮（chatGate/archive 旁）。bootstrap 下发 runState。
