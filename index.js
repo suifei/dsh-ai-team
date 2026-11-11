@@ -52,7 +52,7 @@ export const name = 'ai-team';
 // 实际使用的服务（含可选服务：缺失时 serviceOf 回退 ctx.get 并返回 undefined）。
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'];
 
-const VERSION = '0.4.22';
+const VERSION = '0.4.23';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -379,6 +379,29 @@ export function apply(ctx, config = {}) {
 				}
 				if (decision.action !== 'retry') return next();
 				return { kind: 'retry' };
+			})
+			: () => {};
+		// 诊断：记录成员 agent 可见的工具名与 preset。DSH 以「scope carrier +
+		// agent」两个参数 emit（文档：both with the agent's scope carrier），
+		// 因此回调需兼容两种形状，取真正带 ctx 的那个。
+		const offAgentCreated = typeof ctx.on === 'function'
+			? ctx.on('agent/created', (first, second) => {
+				try {
+					const agent = second?.ctx !== undefined ? second : (first?.ctx !== undefined ? first : (second ?? first));
+					if (agent?.ctx?.tools === undefined) return;
+					const runtime = runtimeForAgent(agent?.id);
+					if (runtime === null) return; // 只关注成员会话
+					const names = (agent.ctx.tools.definitions?.() ?? []).map((definition) => definition.name);
+					diag.append({
+						ev: 'agent.created.probe.fail',
+						agentId: agent?.id ?? null,
+						toolCount: names.length,
+						hasTeam: names.includes('team'),
+						names: names.slice(0, 40),
+					});
+				} catch (error) {
+					diag.append({ ev: 'agent.created.probe.fail', error: error?.message ?? String(error) });
+				}
 			})
 			: () => {};
 		const offSessionEvent = typeof ctx.on === 'function'
@@ -1946,6 +1969,7 @@ export function apply(ctx, config = {}) {
 			try { disposeSkillOpt(); } catch { /* already disposed */ }
 			offRequestError();
 			offSessionEvent();
+			offAgentCreated();
 			disposeTool();
 			dispose();
 			for (const runtime of booted?.runtimes?.values() ?? []) {
