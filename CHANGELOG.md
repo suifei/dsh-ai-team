@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.78 - 2026-11-12
+
+- **【关键】成员会话对 Human 只读的根因修复**：宿主 hasApiSessionSubagentOwner 除 origin=subagent 外，对「header 带 parentSession 且 parent 拥有该 agent」的会话同样判定为 subagent-owned 并拒绝 Human 输入。插件 direct 模式创建成员会话时恰好设置了 meta.parentSession，导致所有成员会话被拒。现移除该 header 字段（驱动改用 agents.resume 的 parentAgent，不依赖 header）——新激活/重置后的成员会话可在 DSH 主界面直接输入。
+- 已存在成员需执行一次「重置会话」（reseat）使新 header 生效。
+
+
 ## 0.3.77 - 2026-11-12
 
 - **Human 对话入口直达**：主对话流成员消息头新增「私信」按钮（此前需点名字→资料面板→私信三步）；私信直达该成员会话写入通道。
