@@ -3844,7 +3844,7 @@ window.__ModuleLoader__.load({
 										selected,
 										follows: followingOf,
 										highlight: streamHighlight === item.id,
-										onOpenProfile,
+										onOpenProfile: openProfile,
 										onOpen: openTask,
 										onToggleFollow: toggleFollow,
 									}))

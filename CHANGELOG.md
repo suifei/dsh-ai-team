@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.62 — 2026-11-11
+
+- **【致命】工作台渲染崩溃修复**：主对话流 `StreamMessage` 调用处的 `onOpenProfile` 简写属性引用了 Workbench 作用域中不存在的标识符（正确目标是 `openProfile` 函数），首次渲染即抛 `ReferenceError: onOpenProfile is not defined` 使整个工作台白屏。改为显式 `onOpenProfile: openProfile`（与 MemberView 调用点一致）。`node --check` 对简写属性语法不报错，静态检查存在盲区；
+- **新增无头渲染 E2E**（[test/client.render.test.js](test/client.render.test.js)）：行为级 React mock（hooks 游标模拟调用顺序、createElement 即时求值函数组件、class 组件走 render()、mount-effect 去重）驱动完整工作台树求值（loading → bootstrap 数据 → 消息流/任务卡/团队脉搏），断言全程无引用错误；红绿闭环验证：重新引入本 bug 时测试精确复现 `ReferenceError: onOpenProfile is not defined`。此类渲染期裸引用错误今后在提交前即被拦截。
+
 ## 0.3.61 — 2026-11-11
 
 - 修复验收死锁放大器：`pending_acceptance` 的 review 催办分支 `continue` 会跳过 60 分钟升级，QA 每 10 分钟被叫、Thread 裁定的执行手永不唤醒；现在验收滞留 ≥60 分钟同样触发 escalate（配合 085085d 同时唤醒 Project owner）。
