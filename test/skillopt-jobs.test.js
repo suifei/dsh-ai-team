@@ -66,7 +66,8 @@ test('jobs: judging waits for every judge, then finishes', () => {
 test('jobs: settled detection is tolerant of the activation shapes', () => {
 	assert.equal(isChildSettled({ status: 'running', events: [{ type: 'subagent/end' }] }), true);
 	assert.equal(isChildSettled({ status: 'idle', events: [] }), true);
-	assert.equal(isChildSettled({ status: null, events: [] }), true, 'released agent counts as settled');
+	assert.equal(isChildSettled({ status: null, events: [] }), false, 'unknown state with no events must keep waiting (TTL handles losses)');
+	assert.equal(isChildSettled({ status: null, events: [{ type: 'assistant/message' }] }), true, 'visible events mean the child has produced output');
 	assert.equal(isChildSettled({ status: 'running', events: [] }), false);
 	assert.equal(isJobExpired({ createdAt: 0 }, 1000, 5000), false);
 	assert.equal(isJobExpired({ createdAt: 0 }, 6000, 5000), true);

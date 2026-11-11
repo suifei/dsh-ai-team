@@ -48,7 +48,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell'];
 
-const VERSION = '0.4.1';
+const VERSION = '0.4.4';
 const HUMAN_ID = 'mem_human';
 
 const SKILLOPT_BACKENDS = ['mock', 'claude', 'codex', 'copilot', 'cursor', 'pi', 'opencode', 'handoff', 'azure_openai'];
@@ -570,14 +570,17 @@ export function apply(ctx, config = {}) {
 			// 两阶段异步优化 job 收割：与任务派发无关，放在停止门之前——
 			// Human 启动的 job 必须在任意运行态下收敛（生成/评审/落盘）。
 			try {
-				const parentInfo = await ensureParent();
 				await reconcileJobs({
 					ctx,
-					projectDir: project.workspacePath || projectRuntime.dir,
+					// job 归属项目数据目录（与 skillopt_optimize 写入处一致）：
+					// 与工作区/激活项目无关，保证任意 tick 都能找到待收割 job。
+					projectDir: projectRuntime.dir,
 					deps: {
 						now: () => Date.now(),
 						provider: (ctx.get('subagents')?.list?.() ?? [])[0],
-						parent: parentInfo?.agent,
+						// parent 惰性解析：仅启动 judge 子代理时需要；generating 阶段
+						// 不依赖 agents 服务，避免 tick 阶段服务不可用时整块失败。
+						ensureParent: () => ensureParent(),
 						votes: config.skilloptJudgeVotes ?? 3,
 						startChild: async (label, spec) => {
 							const child = await subagents.startActivation({ ...spec, label });
@@ -586,8 +589,8 @@ export function apply(ctx, config = {}) {
 						readText: (file) => readFileSync(file, 'utf8'),
 						writeText: (file, next) => writeFileSync(file, next, 'utf8'),
 						score: (value) => scoreSkillRubric(value, { measured: false }),
-						appendResult: makeResultAppender({ projectDir: project.workspacePath || projectRuntime.dir }),
-						vcs: await makeVcs({ shell: lazyShellService(ctx), projectDir: project.workspacePath || projectRuntime.dir }),
+						appendResult: makeResultAppender({ projectDir: projectRuntime.dir }),
+						vcs: await makeVcs({ shell: lazyShellService(ctx), projectDir: projectRuntime.dir }),
 						diag: (row) => diag.append(row),
 					},
 				});
@@ -933,13 +936,15 @@ export function apply(ctx, config = {}) {
 							diag,
 						});
 						const jobId = 'job_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+						// job 归属项目数据目录（tick 收割处相同），与调用者的路径参数解耦。
+						const jobRoot = currentRuntime()?.dir ?? project;
 						const child = await generator.start({
 							skillPath,
 							before: text0,
 							dimension,
 							round: 1,
 						});
-						writeJob(project, {
+						writeJob(jobRoot, {
 							id: jobId,
 							state: 'generating',
 							project,
