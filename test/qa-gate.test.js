@@ -22,7 +22,7 @@ test('qaRequired routes the reviewer to QA and rejects non-QA acceptance', async
 	await service.dispatch({ type: 'member.add', actor: human, projectId: PROJECT_ID, payload: { id: 'w1', name: '工人', role: 'Dev' } });
 	await service.dispatch({ type: 'member.add', actor: human, projectId: PROJECT_ID, payload: { id: 'q1', name: '关关', role: 'QA 质量' } });
 	await service.dispatch({ type: 'member.add', actor: human, projectId: PROJECT_ID, payload: { id: 'n1', name: '路人', role: 'Reviewer' } });
-	await service.dispatch({ type: 'project.create', actor: human, projectId: PROJECT_ID, payload: { name: 'P', goal: 'g', ownerId: 'w1' } });
+	await service.dispatch({ type: 'project.create', actor: human, projectId: PROJECT_ID, payload: { workspacePath: process.cwd(), name: 'P', goal: 'g', ownerId: 'w1' } });
 
 	const created = await service.dispatch({
 		type: 'task.create', actor: human, projectId: PROJECT_ID,

@@ -19,7 +19,7 @@ test('the team tool reads, claims, submits, threads and accepts through real Tea
 		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'a2', name: '林岚', kind: 'agent' } });
 		await service.dispatch({ type: 'member.bind', actor: human, payload: { memberId: 'a1', sessionId: 's1' } });
 		await service.dispatch({ type: 'member.bind', actor: human, payload: { memberId: 'a2', sessionId: 's2' } });
-		await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'P', ownerId: 'a1' } });
+		await service.dispatch({ type: 'project.create', actor: human, payload: { workspacePath: process.cwd(), name: 'P', ownerId: 'a1' } });
 		const created = await service.dispatch({
 			type: 'task.create', actor: human, projectId: 'prj_test',
 			payload: { title: 'T', resultDefinition: 'done', ownerId: 'a1' },

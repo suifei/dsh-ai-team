@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -25,7 +25,7 @@ test('member profile, self-evolution, talent pool and takeover are append-only',
 	await service.dispatch({ type: 'member.add', actor: human, projectId: PROJECT_ID, payload: { id: 'h1', name: '你', kind: 'human', role: 'Human' } });
 	await service.dispatch({ type: 'member.add', actor: human, projectId: PROJECT_ID, payload: { id: 'a1', name: '沈舟', role: 'Lead' } });
 	await service.dispatch({ type: 'member.add', actor: human, projectId: PROJECT_ID, payload: { id: 'a2', name: '林岚', role: 'Reviewer' } });
-	await service.dispatch({ type: 'project.create', actor: human, projectId: PROJECT_ID, payload: { name: 'P', goal: 'g', ownerId: 'a1' } });
+	await service.dispatch({ type: 'project.create', actor: human, projectId: PROJECT_ID, payload: { workspacePath: process.cwd(), name: 'P', goal: 'g', ownerId: 'a1' } });
 
 	const updated = await service.dispatch({
 		type: 'member.profile.update',

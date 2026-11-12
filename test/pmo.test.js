@@ -27,7 +27,7 @@ test('PMO auto-answers a structured decision and records mem_pmo in the Thread',
 		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'h1', name: 'Human', kind: 'human' } });
 		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'a1', name: 'Lead', kind: 'agent' } });
 		await service.dispatch({ type: 'member.bind', actor: human, payload: { memberId: 'a1', sessionId: 's1' } });
-		await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'PMO', ownerId: 'a1' } });
+		await service.dispatch({ type: 'project.create', actor: human, payload: { workspacePath: process.cwd(), name: 'PMO', ownerId: 'a1' } });
 		assert.equal(service.state.projects.prj_pmo.pmoAuto, true);
 		const created = await service.dispatch({
 			type: 'task.create', actor: human, projectId: 'prj_pmo',

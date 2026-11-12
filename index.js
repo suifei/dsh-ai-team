@@ -1,4 +1,4 @@
-/**
+﻿/**
  * dsh-ai-team — Host half.
  *
  * M1: one default Project backed by the plugin-owned append-only ledger.
@@ -15,6 +15,7 @@ import { existsSync, readFileSync, renameSync, statSync, writeFileSync } from 'n
 import z from '@deepseek-ai/schemastery';
 import { ProjectRuntime } from './lib/host/project-runtime.js';
 import { ProjectRegistry } from './lib/host/project-registry.js';
+import { resolveDefaultWorkspace } from './lib/host/default-workspace.js';
 import { migrateLegacyNamespace, resolveProfile } from './lib/ledger/namespace.js';
 import { ids } from './lib/domain/ids.js';
 import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-runtime.js';
@@ -183,23 +184,13 @@ async function boot(diag, config = {}) {
 	if (dataDir !== legacyDir && resolvedProfile().source === 'argv-path') {
 		migrateLegacyNamespace({ fromDir: legacyDir, toDir: dataDir, diag });
 	}
-	// 默认工作目录：配置项 → 宿主 cwd → 用户主目录。cwd 不能是插件数据目录
-	// （否则又退化成「成员在账本目录里干活」），系统目录也不当作团队工作目录。
-	const resolveDefaultWorkspace = () => {
-		const configured = typeof config?.defaultWorkspace === 'string' ? config.defaultWorkspace.trim() : '';
-		const systemish = (value) => /^[a-z]:[\\/](windows|program files|program files \(x86\))([\\/]|$)/i.test(value);
-		for (const candidate of [configured, process.cwd(), homedir()]) {
-			if (typeof candidate !== 'string' || candidate === '') continue;
-			try {
-				if (statSync(candidate).isDirectory() !== true) continue;
-			} catch { continue }
-			if (candidate === dataDir || candidate.startsWith(dataDir + sep)) continue;
-			if (candidate !== configured && systemish(candidate)) continue;
-			return candidate;
-		}
-		return '';
-	};
-	const defaultWorkspace = resolveDefaultWorkspace();
+	// 默认工作目录：规则与优先级见 lib/host/default-workspace.js（有独立测试）。
+	const defaultWorkspace = resolveDefaultWorkspace({
+		configured: typeof config?.defaultWorkspace === 'string' ? config.defaultWorkspace : '',
+		cwd: process.cwd(),
+		home: homedir(),
+		dataDir,
+	});
 	const registry = ProjectRegistry.load(dataDir, { defaultWorkspacePath: defaultWorkspace });
 	const runtimes = new Map();
 	for (const project of registry.list()) {
@@ -213,28 +204,15 @@ async function boot(diag, config = {}) {
 		});
 		runtimes.set(project.id, runtime);
 	}
-	// 升级路径：旧版本初装时给过一个**没有工作目录**的默认项目。对仍然空白的项目
-	// 补上默认目录（有任务/有对话的项目不动——那可能是用户特意留空的）。
-	if (defaultWorkspace !== '') {
-		for (const runtime of runtimes.values()) {
-			const project = runtime.service.state.projects?.[runtime.id];
-			if (project === undefined) continue;
-			if (typeof project.workspacePath === 'string' && project.workspacePath.trim() !== '') continue;
-			const tasks = Object.values(runtime.service.state.tasks ?? {}).filter((task) => task.tombstone !== true);
-			const threads = Object.keys(runtime.service.state.threads ?? {});
-			if (tasks.length > 0 || threads.length > 0) continue;
-			try {
-				await runtime.service.dispatch({
-					type: 'project.workspace.update',
-					payload: { workspacePath: defaultWorkspace },
-					actor: { kind: 'human', memberId: runtime.service.humanId() ?? 'mem_human' },
-					projectId: runtime.id,
-				});
-				diag?.append({ ev: 'project.workspace.backfilled', projectId: runtime.id, workspacePath: defaultWorkspace });
-			} catch (error) {
-				diag?.append({ ev: 'project.workspace.backfill.fail', projectId: runtime.id, message: error?.message ?? String(error) });
-			}
-		}
+
+	// 索引补同步：账本里已有工作目录、但 registry 还是空的老数据（`project.activate`
+	// 会用 registry 的值去开新 runtime）。只补空值，不覆盖已有设置。
+	for (const runtime of runtimes.values()) {
+		const ledgerPath = runtime.service.state.projects?.[runtime.id]?.workspacePath;
+		const indexEntry = registry.list().find((project) => project.id === runtime.id);
+		if (typeof ledgerPath !== 'string' || ledgerPath.trim() === '') continue;
+		if (indexEntry !== undefined && typeof indexEntry.workspacePath === 'string' && indexEntry.workspacePath.trim() !== '') continue;
+		try { registry.setWorkspace(runtime.id, ledgerPath.trim()); } catch { /* best-effort */ }
 	}
 	const activeProjectId = registry.activeProjectId;
 	const runtime = runtimes.get(activeProjectId) ?? runtimes.values().next().value;
@@ -2037,6 +2015,8 @@ export function apply(ctx, config = {}) {
 							// 新建项目对话框的默认「工作目录」：初装默认项目也用它，避免
 							// 建出一个没有工作目录的项目（成员只能在插件数据目录里跑）。
 							defaultWorkspace: booted.defaultWorkspace ?? '',
+							// 首次使用：当前项目还没有工作目录时，界面必须先让用户设定目录。
+							setupRequired: (bootstrap.project?.workspacePath ?? '') === '',
 							inbox,
 							inboxUnread: inbox.filter((item) => item.state === 'unread').length,
 							projects: booted.registry.list()
@@ -2199,6 +2179,11 @@ export function apply(ctx, config = {}) {
 							const goal = typeof body.payload?.goal === 'string' ? body.payload.goal.trim() : '';
 							const workspacePath = typeof body.payload?.workspacePath === 'string' ? body.payload.workspacePath.trim() : '';
 							if (name === '') return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'project name is required' } }, 400);
+							// 每个项目都必须指定工作目录：先在这里挡，别把一行没有目录的
+							// registry 记录写进去（service 也会再校验一次）。
+							if (workspacePath === '') {
+								return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: '工作目录是必填项：请选择一个已存在的目录' } }, 400);
+							}
 							// 工作目录可空（稍后设置）：讨论与建卡不受限；成员激活在
 							// activateMember 处 fail-closed，绝不落到宿主默认目录执行。
 							// 但给了就必须真实存在：非法路径若先写进 registry，boot 会在

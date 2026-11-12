@@ -2705,6 +2705,13 @@ window.__ModuleLoader__.load({
 			const applyData = (next) => {
 				dataRef.current = next;
 				setData(next);
+				// 首次使用：默认项目没有工作目录时，插件还不完整可用——直接把「工作
+				// 目录」编辑器打开，并把宿主建议的目录填进去，用户确认后才继续。
+				if (next?.setupRequired === true && next?.project?.workspacePath === '') {
+					setWorkspaceDraft(next.defaultWorkspace ?? '');
+					setWorkspaceError('');
+					setWorkspaceOpen(true);
+				}
 			};
 
 			React.useEffect(() => {

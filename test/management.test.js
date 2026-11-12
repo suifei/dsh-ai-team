@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Management-flow tests (docs/11): a project can be created with NO workspace
  * (lightweight entry), member activation on it fails closed with
  * E_WORKSPACE_REQUIRED, and the global people pool aggregates members across
@@ -61,25 +61,34 @@ test('workspace-less projects, activation gate and the global people pool', asyn
 			return { status: response.status, body: await response.json().catch(() => null) };
 		};
 
-		// 初装默认项目现在**带**默认工作目录（取自宿主 cwd），否则成员只能在插件
-		// 数据目录里跑、workspace attach 会被拒。UI 的「新建项目」默认值同源。
-		const before = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
-		assert.notEqual(before.project.workspacePath ?? '', '', 'default project must get a workspace');
-		assert.equal(existsSync(before.project.workspacePath), true);
-		assert.equal(before.defaultWorkspace, before.project.workspacePath);
-		const discussion = await post('/ai-team/api/projects/prj_main/commands', { type: 'stream.post', payload: { body: '有目录也能聊' } });
-		assert.equal(discussion.status, 200);
+		// 新建项目必须指定一个真实存在的目录（服务端强制）。
+		const workspaceDir = await mkdtemp(join(tmpdir(), 'ai-team-mgmt-ws-'));
 
-		// 空目录项目仍可创建（轻入口）；在没有目录的项目里激活必须 fail-closed。
-		const created = await post('/ai-team/api/projects/prj_main/commands', {
-			type: 'project.create',
-			payload: { name: '轻项目', goal: '稍后设目录' },
-		});
-		assert.equal(created.status, 200, JSON.stringify(created.body));
-		assert.equal((created.body.project.workspacePath ?? ''), '');
-		const blocked = await post(`/ai-team/api/projects/${created.body.project.id}/commands`, { type: 'member.activate', payload: { memberId: 'mem_lead' } });
+		// 首次安装：默认项目**不带**工作目录，界面进入「必须先设目录」状态；
+		// 宿主只给一个建议值（配置 → 宿主 cwd → 主目录），不替用户落盘。
+		const before = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
+		assert.ok(before.project, 'bootstrap must return a project: ' + JSON.stringify(before).slice(0, 400));
+		assert.equal(before.project.workspacePath ?? '', '', 'a fresh project must start without a workspace');
+		assert.equal(before.setupRequired, true);
+		assert.equal(typeof before.defaultWorkspace, 'string');
+		const discussion = await post('/ai-team/api/projects/prj_main/commands', { type: 'stream.post', payload: { body: '还没目录也能聊' } });
+		assert.equal(discussion.status, 200);
+		const blocked = await post('/ai-team/api/projects/prj_main/commands', { type: 'member.activate', payload: { memberId: 'mem_lead' } });
 		assert.equal(blocked.status, 409);
 		assert.equal(blocked.body.error.code, 'E_WORKSPACE_REQUIRED');
+
+		// 新建项目必须指定工作目录（不能建出用不了的项目）。
+		const noWorkspace = await post('/ai-team/api/projects/prj_main/commands', {
+			type: 'project.create',
+			payload: { name: '无目录项目', goal: '应当被拒' },
+		});
+		assert.equal(noWorkspace.status, 400, JSON.stringify(noWorkspace.body));
+		const withWorkspace = await post('/ai-team/api/projects/prj_main/commands', {
+			type: 'project.create',
+			payload: { name: '有目录项目', goal: 'ok', workspacePath: workspaceDir },
+		});
+		assert.equal(withWorkspace.status, 200, JSON.stringify(withWorkspace.body));
+		assert.equal(withWorkspace.body.project.workspacePath, workspaceDir);
 
 		// 人员池：同名成员跨项目聚合成一行。
 		const people = await (await fetch(`${base}/ai-team/api/people`)).json();
@@ -87,17 +96,17 @@ test('workspace-less projects, activation gate and the global people pool', asyn
 		assert.ok(Array.isArray(people.people) && people.people.length > 0);
 		const lead = people.people.find((person) => person.name === '墨渊');
 		assert.ok(lead, 'default Lead appears in the pool');
-		assert.deepEqual(lead.projects.map((row) => row.projectId).sort(), ['prj_main'].concat([created.body.project.id]).sort());
+		assert.deepEqual(lead.projects.map((row) => row.projectId).sort(), ['prj_main'].concat([withWorkspace.body.project.id]).sort());
 		assert.ok(lead.projects.every((row) => row.activeTasks === 0));
 
-		// 打开轻项目后成员名册照常播种（各自项目各自会话的数据基础）。
+		// 打开新项目后成员名册照常播种（各自项目各自会话的数据基础）。
 		const activate = await post('/ai-team/api/projects/prj_main/commands', {
 			type: 'project.activate',
-			payload: { projectId: created.body.project.id },
+			payload: { projectId: withWorkspace.body.project.id },
 		});
 		assert.equal(activate.status, 200);
-		const bootLite = await (await fetch(`${base}/ai-team/api/bootstrap?project=${created.body.project.id}`)).json();
-		assert.equal(bootLite.project.name, '轻项目');
+		const bootLite = await (await fetch(`${base}/ai-team/api/bootstrap?project=${withWorkspace.body.project.id}`)).json();
+		assert.equal(bootLite.project.name, '有目录项目');
 		assert.equal(bootLite.agents.length > 0, true, 'default roster seeded for the new project');
 	} finally {
 		server?.close();

@@ -16,14 +16,17 @@ import { loadSkillContext } from '../lib/runtime/skill-loader.js';
 
 const human = { kind: 'human', memberId: 'mem_human' };
 
-async function makeService(t, workspacePath = '') {
+async function makeService(t, workspacePath = undefined) {
 	const root = mkdtempSync(join(tmpdir(), 'aiteam-batch-'));
 	t.after(() => rmSync(root, { recursive: true, force: true }));
+	// 项目必须带工作目录（服务端强制）；默认给一个真实临时目录。
+	const projectWorkspace = workspacePath === undefined ? join(root, 'ws') : workspacePath;
+	if (projectWorkspace !== '') mkdirSync(projectWorkspace, { recursive: true });
 	const ledger = openLedger({ dir: join(root, 'ledger'), projectId: 'prj_b', fsync: false });
 	const service = new TeamService({ ledger });
 	t.after(() => ledger.close?.());
 	await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'mem_human', name: 'Human', kind: 'human' } });
-	await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'B', ownerId: 'mem_human', workspacePath } });
+	await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'B', ownerId: 'mem_human', workspacePath: projectWorkspace } });
 	return { service, root };
 }
 

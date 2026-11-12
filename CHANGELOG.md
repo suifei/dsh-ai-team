@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.50 - 2026-11-12
+
+**首次使用必须先设定目录；新建项目必须指定目录**
+
+按用户裁定重构默认工作目录的产品行为（0.4.49 那版是「替用户猜一个目录」，不对）：
+
+- **不再自动分配目录**。初装默认项目**不带**工作目录；`bootstrap` 返回
+  `setupRequired: true` 与 `defaultWorkspace`（建议值），客户端首次进入时**自动打开
+  工作目录编辑器并预填建议值**——用户确认后才算可用。
+- **建议值的来源**：插件配置 `defaultWorkspace` → 宿主 cwd → 用户主目录；排除插件
+  数据目录与系统目录（桌面启动器的 cwd 可能是程序目录）。逻辑抽到
+  `lib/host/default-workspace.js` 并配了独立测试。
+- **新建项目必须指定工作目录**：`project.create` 在路由层与服务层都拒绝空目录
+  （路由先挡，避免把一行没有目录的 registry 记录写进去）。内部播种（`payload.seed`）
+  是唯一例外——它先建出「待设定」的默认项目，否则 boot 会被自己的校验挡住。
+- **registry 与账本同步**：新增 `ProjectRegistry.setWorkspace`；boot 时把「账本已有
+  目录、索引为空」的老数据补同步（`project.activate` 用索引值开新 runtime）。
+- 测试：`node --test` **252 通过 / 1 跳过**（新增 `default-workspace` 4 例；重写
+  management 用例为「首次使用 → 无目录 → 激活 fail-closed → 新建必须带目录」；
+  其余用例的 `project.create` 补齐真实目录）。
+
 ## 0.4.49 - 2026-11-12
 
 **默认项目必须有工作目录 + R-18 事件历史接线**

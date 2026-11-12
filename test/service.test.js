@@ -18,7 +18,7 @@ test('TeamService blocks duplicate tasks and a second claim while QA is pending'
 		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'h1', name: 'Human', kind: 'human' } });
 		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'a1', name: '执行', kind: 'agent' } });
 		await service.dispatch({ type: 'member.bind', actor: human, payload: { memberId: 'a1', sessionId: 's1' } });
-		await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'Guard', ownerId: 'a1' } });
+		await service.dispatch({ type: 'project.create', actor: human, payload: { workspacePath: process.cwd(), name: 'Guard', ownerId: 'a1' } });
 		const first = await service.dispatch({
 			type: 'task.create', actor: human, projectId: 'prj_guard',
 			payload: { title: 'T1', resultDefinition: 'done', ownerId: 'a1', assigneeId: 'a1' },
@@ -81,7 +81,7 @@ test('TeamService drives a real ledger from project setup to accepted task and t
 		await service.dispatch({
 			type: 'project.create',
 			actor: human,
-			payload: { name: 'Main-Dev', goal: '把回归清干净', ownerId: 'a1' },
+			payload: { name: 'Main-Dev', goal: '把回归清干净', ownerId: 'a1', workspacePath: process.cwd() },
 		});
 		await service.bindHostSession('session-host');
 		assert.equal(service.state.hostSessionId, 'session-host');
@@ -261,9 +261,9 @@ test('command validation rejects duplicate ids, forged assignees, missing worksp
 			service.dispatch({ type: 'project.create', actor: human, payload: { name: 'V3', ownerId: 'a1', workspacePath: 'Z:/definitely-not-here-audit' } }),
 			'E_INVALID_ARGUMENT',
 		);
-		await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'V', ownerId: 'a1' } });
+		await service.dispatch({ type: 'project.create', actor: human, payload: { workspacePath: process.cwd(), name: 'V', ownerId: 'a1' } });
 		// 同一账本的 projectId 固定，再 create 必须冲突而不是覆盖原项目
-		await rejects(service.dispatch({ type: 'project.create', actor: human, payload: { name: 'V2', ownerId: 'a1' } }), 'E_CONFLICT');
+		await rejects(service.dispatch({ type: 'project.create', actor: human, payload: { workspacePath: process.cwd(), name: 'V2', ownerId: 'a1' } }), 'E_CONFLICT');
 
 		const task = await service.dispatch({
 			type: 'task.create', actor: human, projectId: 'prj_val',
@@ -306,7 +306,7 @@ test('member.config.update cannot widen its own allow-list', async () => {
 	try {
 		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'h1', name: 'Human', kind: 'human' } });
 		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'a1', name: '执行', kind: 'agent' } });
-		await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'P', ownerId: 'a1' } });
+		await service.dispatch({ type: 'project.create', actor: human, payload: { workspacePath: process.cwd(), name: 'P', ownerId: 'a1' } });
 		await assert.rejects(
 			() => service.dispatch({ type: 'member.config.update', actor: human, projectId: 'prj_pol', payload: { memberId: 'a1', patch: { model: 'm2' } } }),
 			(error) => error.code === 'E_CONFIG_POLICY',
@@ -332,7 +332,7 @@ test('bootstrap rejects an unknown project and every decision question must be a
 	try {
 		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'h1', name: 'Human', kind: 'human' } });
 		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'a1', name: '执行', kind: 'agent' } });
-		await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'B', ownerId: 'a1' } });
+		await service.dispatch({ type: 'project.create', actor: human, payload: { workspacePath: process.cwd(), name: 'B', ownerId: 'a1' } });
 
 		// 与 board/quadrants 同口径：未知 projectId 必须报错而不是返回空壳
 		assert.throws(() => service.bootstrap('nope'), (error) => error.code === 'E_NOT_FOUND');
@@ -375,7 +375,7 @@ test('bootstrap stream entries carry the author name the client renders', async 
 	const service = new TeamService({ ledger });
 	try {
 		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'h1', name: 'Human', kind: 'human' } });
-		await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'S', ownerId: 'h1' } });
+		await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'S', ownerId: 'h1', workspacePath: root } });
 		await service.dispatch({ type: 'stream.post', actor: human, projectId: 'prj_stream', payload: { body: '你好' } });
 		const boot = service.bootstrap('prj_stream');
 		const last = boot.stream[boot.stream.length - 1];

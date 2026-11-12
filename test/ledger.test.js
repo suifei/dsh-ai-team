@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -984,7 +984,7 @@ test('fold 可直接重放 host service/domain 写入的快照事件', async (t)
 	await service.dispatch({
 		type: 'project.create',
 		actor: human,
-		payload: { id: PROJECT_ID, name: 'P', goal: 'g', ownerId: 'h1' },
+		payload: { id: PROJECT_ID, name: 'P', goal: 'g', ownerId: 'h1', workspacePath: process.cwd() },
 	});
 	assert.equal(ledger.state.projects[PROJECT_ID].name, 'P');
 	assert.equal(ledger.state.projects[PROJECT_ID].ownerId, 'h1');

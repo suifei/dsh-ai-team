@@ -107,7 +107,7 @@ async function makeService(t, diag = null) {
 	await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'h1', name: 'Human', kind: 'human' } });
 	await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'a1', name: '执行', kind: 'agent' } });
 	await service.dispatch({ type: 'member.bind', actor: human, payload: { memberId: 'a1', sessionId: 's1' } });
-	await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'Fix', ownerId: 'a1' } });
+	await service.dispatch({ type: 'project.create', actor: human, payload: { workspacePath: process.cwd(), name: 'Fix', ownerId: 'a1' } });
 	return { root, ledger, service };
 }
 

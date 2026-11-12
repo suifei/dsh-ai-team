@@ -51,7 +51,7 @@ test('host: task.cancel with an empty reason succeeds and leaves a ledger trail'
 	t.after(() => { fs.rmSync(dir, { recursive: true, force: true }); });
 	const ledger = openLedger({ dir, projectId: PROJECT_ID });
 	const service = new TeamService({ ledger, now: () => BASE_AT });
-	await service.dispatch({ type: 'project.create', actor: human, payload: { id: PROJECT_ID, name: 'P', goal: 'g', ownerId: 'h1' } });
+	await service.dispatch({ type: 'project.create', actor: human, payload: { workspacePath: process.cwd(), id: PROJECT_ID, name: 'P', goal: 'g', ownerId: 'h1' } });
 	await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'h1', name: 'Human', kind: 'human' } });
 	const created = await service.dispatch({ type: 'task.create', actor: human, projectId: PROJECT_ID, payload: { title: '待取消', resultDefinition: 'x' } });
 
