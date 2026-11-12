@@ -1223,3 +1223,47 @@ test('当前段 fd 丢失时按磁盘最大段号续写，不会复用已存在�
 	assert.equal(writer.readAll().length, 2);
 	writer.close();
 });
+test('repair() rebuilds from disk and lifts the poison flag', async (t) => {
+	const { dir, track } = tempLedger(t);
+	const original = { fsyncSync: fs.fsyncSync.bind(fs), openSync: fs.openSync.bind(fs) };
+	let failWrite = false;
+	let failTruncate = false;
+	const faultyFs = {
+		...fs,
+		fsyncSync(fd) {
+			if (failWrite) {
+				const error = new Error('disk full');
+				error.code = 'ENOSPC';
+				throw error;
+			}
+			return original.fsyncSync(fd);
+		},
+		openSync(target, flags, ...rest) {
+			if (failTruncate && flags === 'r+') {
+				const error = new Error('EPERM: cannot truncate');
+				error.code = 'EPERM';
+				throw error;
+			}
+			return original.openSync(target, flags, ...rest);
+		},
+	};
+	const writer = track(new LedgerWriter({ dir, projectId: PROJECT_ID, fs: faultyFs, lock: false }));
+	writer.open();
+	await writer.append(draft('project/created', { name: 'P' }));
+	failWrite = true;
+	failTruncate = true;
+	await assert.rejects(writer.append(draft('project/member-added', { memberId: 'mem_a', name: 'A' })));
+	failWrite = false;
+	failTruncate = false;
+	await assert.rejects(
+		writer.append(draft('project/member-added', { memberId: 'mem_b', name: 'B' })),
+		(error) => error.code === 'E_LEDGER_POISONED',
+	);
+	// 错误信息建议「close and open again」，但生产代码没有调用点；repair 会按
+	// 磁盘真相重建 head/ids，此时应解除 poison，否则 writer 只能等重启。
+	const repaired = writer.repair();
+	assert.equal(repaired.recoveredFromPoison, true);
+	const appended = await writer.append(draft('project/member-added', { memberId: 'mem_b', name: 'B' }));
+	assert.equal(appended.type, 'project/member-added');
+	assert.equal(writer.head.seq >= 2, true);
+});

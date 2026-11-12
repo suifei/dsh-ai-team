@@ -80,3 +80,23 @@ test('writeJob lands atomically and leaves no temp file behind', (t) => {
 	// 内容必须是完整 JSON（半截文件会让下一轮 tick 判定成 conflict failed）。
 	assert.deepEqual(JSON.parse(readFileSync(join(dir, '.skillopt-sleep', 'jobs', 'job_1.json'), 'utf8')).id, 'job_1');
 });
+
+test('concurrent claims by one member cannot both land', async (t) => {
+	const { service } = await makeService(t);
+	await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'mem_a', name: '甲', kind: 'agent', role: '执行' } });
+	for (const title of ['A', 'B']) {
+		await service.dispatch({
+			type: 'task.create', actor: human, projectId: 'prj_b',
+			payload: { title, resultDefinition: 'done', ownerId: 'mem_human', assigneeId: 'mem_a' },
+		});
+	}
+	const ids = Object.keys(service.state.tasks);
+	// 并发认领两张卡：INV-05 只允许同一成员同时持有一张 in_progress 卡。
+	const results = await Promise.allSettled(ids.map((taskId) => service.dispatch({
+		type: 'task.claim', actor: { kind: 'agent', memberId: 'mem_a' }, projectId: 'prj_b', payload: { taskId },
+	})));
+	const fulfilled = results.filter((row) => row.status === 'fulfilled').length;
+	const inProgress = Object.values(service.state.tasks).filter((task) => task.status === 'in_progress').length;
+	assert.equal(fulfilled, 1, 'exactly one claim may succeed');
+	assert.equal(inProgress, 1, 'and exactly one task may be in_progress');
+});

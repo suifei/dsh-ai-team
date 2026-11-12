@@ -56,3 +56,14 @@ test('votes never exceed the number of review requests', () => {
 	assert.equal(collected.votes.length, 3);
 	assert.equal(collected.expected, 3);
 });
+
+test('a majority decides the ballot; a single vote stays inconclusive', async () => {
+	const { decideReviewVotes } = await import('../lib/skillopt/reviewer.js');
+	const vote = (better) => ({ better, aIsAfter: true });
+	// 3 票应投：1 票不足（required=2），2 票已是多数。
+	assert.equal(decideReviewVotes([vote('A')], 3).verdict, 'inconclusive');
+	assert.equal(decideReviewVotes([vote('A'), vote('A')], 3).verdict, 'keep');
+	assert.equal(decideReviewVotes([vote('B'), vote('B')], 3).verdict, 'revert');
+	// 门槛按应投数量算，不能因为「已收到 1 票」就把 required 降到 1。
+	assert.equal(decideReviewVotes([vote('A')], 3).required, 2);
+});

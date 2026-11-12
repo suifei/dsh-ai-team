@@ -15,6 +15,7 @@ import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import z from '@deepseek-ai/schemastery';
 import { ProjectRuntime } from './lib/host/project-runtime.js';
 import { ProjectRegistry } from './lib/host/project-registry.js';
+import { migrateLegacyNamespace, resolveProfileName } from './lib/ledger/namespace.js';
 import { ids } from './lib/domain/ids.js';
 import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-runtime.js';
 import { ensureHostAgent } from './lib/runtime/host-agent.js';
@@ -154,12 +155,10 @@ function dshHome() {
 }
 
 function profileName() {
-	// The web launcher does not export DSH_PROFILE; the selected profile is in
-	// the process args. Prefer it over the ambient shell env so two profiles
-	// never share a ledger namespace.
-	const index = process.argv.indexOf('--profile');
-	if (index >= 0 && typeof process.argv[index + 1] === 'string') return process.argv[index + 1];
-	return process.env.DSH_PROFILE || 'default';
+	// 桌面启动器不导出 DSH_PROFILE，而是把 profile 目录作为**位置参数**传进来
+	// （… <dsh-root> C:\Users\…\.dsh\profiles\desktop …）。解析规则抽到
+	// lib/ledger/namespace.js：`--profile x`、`--profile=x`、位置路径与 env 都要认。
+	return resolveProfileName(process.argv, process.env);
 }
 
 /**
@@ -169,6 +168,11 @@ function profileName() {
  */
 async function boot(diag) {
 	const dataDir = join(dshHome(), 'ai-team', profileName());
+	// 旧版本把 desktop profile 的数据写进了 `ai-team/default/`（profile 名只认
+	// `--profile`，而桌面启动器按位置参数传）。这里做一次性、数据驱动、可回退的
+	// 搬迁：只有旧命名空间的数据明显更多时才搬，目标原有内容改名保留、不删除。
+	const legacyDir = join(dshHome(), 'ai-team', 'default');
+	if (dataDir !== legacyDir) migrateLegacyNamespace({ fromDir: legacyDir, toDir: dataDir, diag });
 	const registry = ProjectRegistry.load(dataDir);
 	const runtimes = new Map();
 	for (const project of registry.list()) {
@@ -1226,7 +1230,10 @@ export function apply(ctx, config = {}) {
 							if (runtime === undefined) continue;
 							const collected = collectReview({ service: runtime.service, job });
 							const expected = collected.expected ?? job.reviewOrders?.length ?? 3;
-							if (collected.votes.length < expected) {
+							// 与 decideByMajority 的最少有效票契约一致：等「多数」而不是「全票」。
+							// 等全票时，评审官漏回一票就要空等 30 分钟再判 failed。
+							const minValid = Math.max(1, Math.ceil(expected / 2));
+							if (collected.votes.length < minValid || collected.decision?.verdict === 'inconclusive') {
 								// 评审通道被 reconcileJobs 明确排除，没有 TTL 兜底：评审官不回帖
 								// 时 job 会永久停在 judging、评审卡永久 active。这里补超时终态。
 								if (isJobExpired(job, Date.now(), REVIEW_JOB_TTL_MS)) {

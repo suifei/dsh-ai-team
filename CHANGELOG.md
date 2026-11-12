@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.35 - 2026-11-12
+
+**中危批次 5：命名空间、poison 恢复、多数决、并发认领**
+
+- **profile 命名空间解析**：桌面启动器按**位置参数**传 profile 目录（`… <dsh-root> …\.dsh\profiles\desktop …`），旧解析只认 `--profile <name>`，于是 desktop profile 的账本全落进 `ai-team/default/`。现在 `--profile x` / `--profile=x` / 位置路径 / `DSH_PROFILE` 都认。
+- **一次性、可回退的命名空间搬迁**：只修解析会让既有数据留在 `default/`（界面上团队凭空消失）。启动时若旧命名空间的数据明显多于目标命名空间，则把旧目录整体改名迁入，目标原有内容改名 `*.superseded-<ts>` 保留，不删除任何文件。
+- **poison 之后有恢复路径**：回滚失败会把 writer 置为 poisoned，错误信息建议「close and open it again」，但生产代码没有调用点。`repair()` 现在按磁盘真相重建后**解除 poison**（返回 `recoveredFromPoison`），不必等重启。
+- **评审改判多数决**：评审通道原本要求**全票**才判定，与 `decideByMajority` 的最少有效票契约相反——漏一票就要空等 30 分钟再判 failed。现在按「应投数量的半数（向上取整）」为门槛，`required` 也按应投数量算（此前按已收票数算，2/3 时会退化成 1 票定案）。
+- **task 命令串行化**：`claim/submit/accept/...` 等 12 个写命令此前不在 `runExclusive` 内，「读投影 → 判定 → 追加」可被并发双双通过，同一成员能同时持有两张 in_progress 卡（破坏 INV-05，且投影不会自愈）。
+- 测试：`node --test` **229/229**（新增 `namespace` 4 例、poison 恢复 1 例、多数决 1 例、并发认领 1 例；并发那条已用对照组确认「撤掉修复即失败」）。
+
 ## 0.4.34 - 2026-11-12
 
 **同人绑定：合并后显示目标名**
