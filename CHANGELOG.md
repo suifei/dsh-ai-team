@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.33 - 2026-11-12
+
+**中危批次 4：验收门禁、权限沿革、技能过滤、job 原子写**
+
+- **Human 验收也要过 QA 门禁**：`accept` 的清单校验原本只在 `reviewer !== null`（Agent）时执行，而 Human 是 UI 上唯一的验收人 —— `qaRequired` 的卡可以零勾选通过，未校验的 `checks` 还会原样写进 `task.qaChecks`。现在对所有验收人生效；没有清单却提交勾选会被拒。
+- **换 owner 会同时换权限**：`project/owner-changed` 只更新 `ownerMemberId`，`ownerId` 停在原主；`isLead` 对两者做 OR 判定，于是**前** owner 继续保留 lead 权限。现在两者一起改。
+- **技能目录按 `invocation.modelInvocable` 过滤**：`SkillSummary` 把开关放在 `invocation` 下，之前读顶层字段（恒 undefined），`disable-model-invocation` 的技能照样写进成员 prompt。
+- **job 文件原子写**：`writeJob` 从裸 `writeFileSync` 改为「写临时文件 + rename」，进程中断不再留下半截 JSON（半截文件会让下一轮 tick 把成功误判成 conflict failed）。
+- **rubric 计数不再被捕获组放大**：`String.match` 带捕获组时返回数组含分组，命中一次会被算成多次，dim3 分数系统性虚高。改为 `matchAll` 只数完整匹配。
+- 测试：`node --test` **221/221**（新增 `test/audit-medium-batch.test.js` 5 例）。
+
 ## 0.4.32 - 2026-11-12
 
 **中危批次 3：前端断流自愈、重复提交、同人绑定**
