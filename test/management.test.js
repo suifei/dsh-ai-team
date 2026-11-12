@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Management-flow tests (docs/11): a project can be created with NO workspace
  * (lightweight entry), member activation on it fails closed with
  * E_WORKSPACE_REQUIRED, and the global people pool aggregates members across
@@ -74,6 +74,11 @@ test('workspace-less projects, activation gate and the global people pool', asyn
 			return { status: response.status, body: await response.json().catch(() => null) };
 		};
 
+		// 显式请求不存在的项目必须 404：否则删掉项目后旧链接会静默显示另一个项目。
+		const missing = await fetch(`${base}/ai-team/api/bootstrap?project=prj_does_not_exist`);
+		assert.equal(missing.status, 404);
+		const missingBody = await missing.json().catch(() => null);
+		assert.equal(missingBody?.error?.code, 'NOT_FOUND');
 		// 新建项目必须指定一个真实存在的目录（服务端强制）。
 		const workspaceDir = await mkdtemp(join(tmpdir(), 'ai-team-mgmt-ws-'));
 

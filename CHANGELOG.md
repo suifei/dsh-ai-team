@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.72 - 2026-11-12
+
+**`bootstrap?project=<未知 id>` 必须 404，不能静默回退到活动项目**
+
+清理归档项目 `prj_main` 后实测发现：`GET /bootstrap?project=prj_main` 返回 200，内容是
+**另一个项目**的数据——路由把「请求的项目没找到」当成「没指定项目」处理。删掉项目后，
+指向它的旧链接/书签会悄悄显示成别的项目，用户无从察觉。
+
+- 显式传入且找不到对应 runtime 时返回 `404 NOT_FOUND`（`project <id> not found`）；
+- 不带 `project` 参数的隐式请求行为不变（用当前/第一个项目）；
+- 测试：`node --test` **273 通过 / 1 跳过**（management 用例新增 HTTP 断言：未知 id → 404
+  且 `error.code = NOT_FOUND`）。
+
 ## 0.4.71 - 2026-11-12
 
 **删掉的默认项目不再被静默复活**

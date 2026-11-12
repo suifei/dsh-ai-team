@@ -2122,6 +2122,11 @@ export function apply(ctx, config = {}) {
 						const requestedRuntime = requested === null ? null : projectRuntime(requested);
 						// 账本里真实存在的项目（registry 的 active 可能与正在服务的账本脱钩）。
 						const servedProjects = (runtime) => Object.keys(runtime?.service?.state?.projects ?? {});
+						// 显式指定了不存在的项目：必须 404，不能静默回退到活动项目——
+						// 否则删掉项目后，指向它的旧链接/书签会悄悄显示另一个项目的数据。
+						if (requested !== null && requestedRuntime === null) {
+							return send(res, { error: { code: 'NOT_FOUND', message: `project ${requested} not found` } }, 404);
+						}
 						let bootstrapRuntime = requestedRuntime ?? currentRuntime();
 						if (requested === null && servedProjects(bootstrapRuntime).length === 0 && servedProjects(booted?.runtime).length > 0) {
 							bootstrapRuntime = booted.runtime;
