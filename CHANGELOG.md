@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.54 - 2026-11-12
+
+**批 18：库模块的失败也进诊断日志**
+
+0.4.53 的事故说明了一个结构性问题：库模块（`ledger` / `project-registry` / `host-agent` / `skill-provider` / `skillopt/jobs`）拿不到 `diag` 实例，失败只能 `console.warn`——**线上不可检索**，而断言也看不见。
+
+- 新增共享失败汇：`installDiagSink()` + `reportFail(event, payload, consoleText)`（`lib/diaglog.js`）。插件 boot 时把真正的 diag 接进来，teardown 时卸载（热重载不会写旧实例）。
+- 9 处库模块的 `console.warn` 全部改走 `reportFail`，事件名一律以 `.fail` 结尾——发布默认的 `errors` 级别只保留 `.fail` 行，所以这些失败**从此会落盘**：
+  - `registry.corrupt.fail`（projects.json 损坏被改名保留）
+  - `ledger.takeover.marker.fail`、`checkpoint.save.fail`
+  - `host.unarchive.fail`、`host.model.persist.fail`
+  - `skill.dropped.fail`（frontmatter / 调用策略非法）
+  - `job.file.unreadable.fail`、`job.overwrite.refused.fail`
+- 索引层 `console.warn/error` 保持原样（19 处，每一处旁边本来就有 diag 行）。
+- 测试：`node --test` **254 通过 / 1 跳过**（新增 1 例：共享汇写入、`.fail` 命名与卸载后不再写）。
+
 ## 0.4.53 - 2026-11-12
 
 **修 0.4.52 引入的回归：PMO tick 每轮抛 ReferenceError**

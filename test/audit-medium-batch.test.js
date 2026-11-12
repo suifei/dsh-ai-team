@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -13,6 +13,7 @@ import { readJob, writeJob } from '../lib/skillopt/jobs.js';
 import { aggregatePeople } from '../lib/host/people-view.js';
 import { nextRequestAttempt } from '../lib/runtime/failure-policy.js';
 import { loadSkillContext } from '../lib/runtime/skill-loader.js';
+import { installDiagSink } from '../lib/diaglog.js';
 
 const human = { kind: 'human', memberId: 'mem_human' };
 
@@ -358,4 +359,23 @@ test('project.repair reports the accepted range and any seq gaps', async (t) => 
 	const result = await service.dispatch({ type: 'project.repair', actor: human, projectId: 'prj_b', payload: {} });
 	assert.ok(result.acceptedRange === null || typeof result.acceptedRange.to === 'number');
 	assert.deepEqual(result.seqGaps, [], 'a healthy ledger has no gaps');
+});
+
+test('library failures reach the shared diagnostic sink and are written as .fail rows', async (t) => {
+	const dir = mkdtempSync(join(tmpdir(), 'aiteam-sink-'));
+	t.after(() => rmSync(dir, { recursive: true, force: true }));
+	const rows = [];
+	const remove = installDiagSink((row) => rows.push(row));
+	t.after(() => remove());
+	const { reportFail, isErrorEvent } = await import('../lib/diaglog.js');
+	reportFail('job.overwrite.refused.fail', { jobId: 'j1', next: 'failed' }, '');
+	assert.equal(rows.length, 1);
+	assert.equal(rows[0].ev, 'job.overwrite.refused.fail');
+	assert.equal(rows[0].jobId, 'j1');
+	// 发布默认的 errors 级别只留 .fail 行：库模块的失败必须以此结尾才可见。
+	assert.equal(isErrorEvent(rows[0].ev), true);
+	// 卸载后不再写
+	remove();
+	reportFail('job.overwrite.refused.fail', {}, '');
+	assert.equal(rows.length, 1);
 });

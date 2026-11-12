@@ -51,7 +51,7 @@ import { aggregatePeople } from './lib/host/people-view.js';
 import { riskView } from './lib/host/risk-view.js';
 import { weeklyView } from './lib/host/weekly-view.js';
 import { isInformationalThreadMention } from './lib/domain/inbox.js';
-import { createDiagLogger, defaultDiagDir } from './lib/diaglog.js';
+import { createDiagLogger, defaultDiagDir, installDiagSink } from './lib/diaglog.js';
 
 export const name = 'ai-team';
 
@@ -245,6 +245,9 @@ export function apply(ctx, config = {}) {
 		maxBytes: config.diagLogMaxBytes ?? 1048576,
 		level: config.diagLevel ?? 'errors',
 	});
+	// 库模块（ledger / registry / host-agent / skill-provider / jobs）拿不到 diag，
+	// 之前只能 console.warn——线上不可检索。这里把共享失败汇接到真正的 diag。
+	const removeDiagSink = installDiagSink((row) => diag.append(row));
 	// HTTP 层失败/拒绝的统一落点（route.reject 在 errors 白名单内）。
 	const errorResponse = (res, error) => {
 		diag.append({
@@ -2388,6 +2391,7 @@ export function apply(ctx, config = {}) {
 			// composition: a racing parent-agent dispose left the previous
 			// session-controller graph half-disposed and broke plugin toggles.
 			disposed = true;
+			try { removeDiagSink(); } catch { /* sink already replaced */ }
 			const cleanup = [];
 			for (const client of sseClients) {
 				try { client.res.end(); } catch { /* socket already gone */ }
