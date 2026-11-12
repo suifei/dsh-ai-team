@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.60 - 2026-11-12
+
+**`DSH_HOME` 被搬迁时也不能把真实 profile 目录当建议工作目录**
+
+0.4.59 的干跑（隔离实例把 `DSH_HOME` 指到临时目录）里，`suggested` 又变回了
+`C:\Users\SuiFei\.dsh\profiles\desktop`：此时 `dshHome()` 指向临时目录，不再覆盖真实的
+`~/.dsh`，于是桌面 profile 目录重新成为候选。（真机不受影响——0.4.57 在真实 `DSH_HOME`
+下已返回过 `C:\Users\SuiFei`。）
+
+- 排除根改为 `[dshHome(), join(homedir(), '.dsh')]` 去重，搬迁场景与真机场景同时成立。
+- 端到端复现真机条件（`cwd` = profile 目录、`DSH_HOME` = 临时目录）：`suggested` =
+  **`C:\Users\SuiFei\works`**。
+- 测试：`node --test` **259 通过 / 1 跳过**（`default-workspace` 7 例；新增「只排除搬迁根时
+  真实 profile 目录仍会被选中」的反向断言，证明这条测试真能抓到该缺陷）。
+
 ## 0.4.59 - 2026-11-12
 
 **默认工作目录改成 `~/works` 子目录（不再用主目录根）**

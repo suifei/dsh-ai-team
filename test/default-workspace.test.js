@@ -55,8 +55,7 @@ test('the whole ~/.dsh tree is excluded (the desktop cwd is the profile dir)', (
 	);
 });
 
-test('the suggestion is always a subdirectory of home, never the home root', (t) => {
-	// 用户裁定：不能把主目录根本身当工作目录，必须是 `~/works`。
+test('the suggestion is always a subdirectory of home, never the home root', (t) => {	// 用户裁定：不能把主目录根本身当工作目录，必须是 `~/works`。
 	const root = mkdtempSync(join(tmpdir(), 'aiteam-ws4-'));
 	t.after(() => rmSync(root, { recursive: true, force: true }));
 	const home = join(root, 'SuiFei');
@@ -66,4 +65,26 @@ test('the suggestion is always a subdirectory of home, never the home root', (t)
 	assert.notEqual(out, home);
 	// 跨平台：分隔符跟随平台，不手写反斜杠。
 	assert.equal(out, home + sep + WORKSPACE_SUBDIR);
+});
+
+test('a relocated DSH_HOME still cannot make the real profile dir a suggestion', (t) => {
+	// 夹具/隔离实例会把 DSH_HOME 指到临时目录，此时 dshHome() 不再覆盖真实
+	// `~/.dsh`。调用方因此同时排除两者——否则桌面 profile 目录又会被当成建议值。
+	const root = mkdtempSync(join(tmpdir(), 'aiteam-ws5-'));
+	t.after(() => rmSync(root, { recursive: true, force: true }));
+	const home = join(root, 'home');
+	const realDsh = join(home, '.dsh');
+	const relocated = join(root, 'dsh-isolated');
+	const profile = join(realDsh, 'profiles', 'desktop');
+	for (const dir of [profile, relocated]) mkdirSync(dir, { recursive: true });
+
+	assert.equal(
+		resolveDefaultWorkspace({ cwd: profile, home, dataDir: join(relocated, 'ai-team'), excludeRoots: [relocated, realDsh] }),
+		join(home, WORKSPACE_SUBDIR),
+	);
+	// 只排除被搬迁的那个根时，真实 profile 目录仍会被选中——正是这条测试要防的。
+	assert.equal(
+		resolveDefaultWorkspace({ cwd: profile, home, dataDir: join(relocated, 'ai-team'), excludeRoots: [relocated] }),
+		profile,
+	);
 });

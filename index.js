@@ -191,7 +191,9 @@ async function boot(diag, config = {}) {
 		home: homedir(),
 		dataDir,
 		// 整个 ~/.dsh 都不能当工作目录（桌面启动器的 cwd 就是 profile 目录）。
-		excludeRoots: [dshHome()],
+		// 同时排除**真实** home 下的 `.dsh`：`DSH_HOME` 被改到别处时（测试、隔离实例），
+		// dshHome() 不再覆盖桌面 profile 目录，那条路径仍可能被当成建议值。
+		excludeRoots: [...new Set([dshHome(), join(homedir(), '.dsh')])],
 	});
 	// 兜底建议是 `~/works`：它可能还不存在，而 `project.workspace.update` 只接受
 	// 已存在的目录。用户确认的就是这个子目录，所以在这里建出来（失败则不提供建议）。
