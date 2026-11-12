@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.66 - 2026-11-12
+
+**`wake.fail` 带上 cause 链：`NOT_RESUMABLE` 的真实原因不再被吞掉**
+
+真机复盘：过去一天 118 次 `NOT_RESUMABLE` 的日志全是同一句
+`subagent "X" is unavailable`——外层错误把真实原因（persistence 读不出会话 /
+descriptor 不可续 / 血缘校验失败）挂在 `cause` 上丢掉了，等于无法定位。这轮同时核实了
+这些会话本身是健康的（多帧 zstd 解压后 87 个事件、`subagent/descriptor` 的
+`mode: "continuable"` 都在），所以问题在外层读取路径，不在会话内容。
+
+- 新增 `lib/runtime/error-chain.js` 的 `describeCauseChain()`（最多 4 层、防循环、
+  非 Error cause 也能渲染），`wake.fail` 行新增 `cause` 字段。
+- 顺带核实并归档了两条「发现但非缺陷」：
+  - `dispatch.fail` 全是 `thread.post E_STALE_REPLY`（乐观并发守卫按设计拒绝，提示可直接行动）；
+  - `workspace.attach.fail` 在成员会话重建后归零（重启后仅存 1 条，属修复前的旧会话）。
+- 测试：`node --test` **269 通过 / 1 跳过**（新增 `error-chain` 3 例：带 code 的链、
+  深度上限、循环与非法 cause）。
+
 ## 0.4.65 - 2026-11-12
 
 **修：重建出来的会话仍落在插件数据目录（host 会话 cwd 是 11-09 的旧值）**

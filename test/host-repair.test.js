@@ -71,3 +71,4 @@ test('the success row survives the shipped errors level', async () => {
 	assert.equal(isErrorEvent('host.repair.ok'), true);
 	assert.equal(isErrorEvent('host.unarchive.fail'), true);
 });
+

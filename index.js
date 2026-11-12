@@ -47,6 +47,7 @@ import { installFaultAdapter } from './lib/host/fault-adapter.js';
 import { buildModelCatalog } from './lib/host/model-catalog.js';
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeTaskContext, describeWake, planWakes } from './lib/host/waker.js';
+import { describeCauseChain } from './lib/runtime/error-chain.js';
 import { aggregatePeople } from './lib/host/people-view.js';
 import { riskView } from './lib/host/risk-view.js';
 import { weeklyView } from './lib/host/weekly-view.js';
@@ -733,6 +734,10 @@ export function apply(ctx, config = {}) {
 						reason: plan.reason,
 						code: error?.code ?? null,
 						message: error?.message ?? String(error),
+						// 外层错误只写「subagent X is unavailable」，真实原因在 cause 里
+						// （persistence 读不出会话 / descriptor 不可续 / 血缘校验失败）。
+						// 不把它带出来，每次只能看到同一句无从下手的提示。
+						cause: describeCauseChain(error),
 					});
 					console.warn('[ai-team] wake failed:', plan.memberId, error?.code ?? error?.message ?? error);
 					// 一次性迁移自愈：旧形态成员会话（历史上由 agents.create 创建、
