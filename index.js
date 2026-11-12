@@ -1362,8 +1362,9 @@ export function apply(ctx, config = {}) {
 					const jobRoots = [...new Set([...runtimeRoots, ...(explicit !== null ? [explicit] : [])])];
 						for (const jobRoot of jobRoots) {
 							if (typeof jobRoot !== 'string' || jobRoot === '') continue;
+							let reconciledHere = true;
 							try {
-								const reconciledHere = await reconcileWithLock(jobRoot, {
+								reconciledHere = await reconcileWithLock(jobRoot, {
 									ctx,
 									projectDir: jobRoot,
 									deps: {
@@ -1410,6 +1411,21 @@ export function apply(ctx, config = {}) {
 								diag.append({ ev: 'skillopt.review.card.close.fail', taskId, message: error?.message ?? String(error) });
 							}
 						};
+						// failed 终态成行（与 job-runner.recordFail 同 10 列制式；257-#60②）。
+						const appendFailResult = async (jobDir, job, reason) => {
+							await makeResultAppender({ projectDir: jobDir })([
+								new Date().toISOString().slice(0, 19),
+								'-',
+								job.skillName ?? '-',
+								'-',
+								'-',
+								'failed',
+								job.dimension ?? '-',
+								String(reason).replace(/[\t\r\n]+/g, ' '),
+								'paired',
+								typeof job.candidate === 'string' ? sha12(job.candidate) : '-',
+							].join('\t'));
+						};
 						for (const job of jobs) {
 							if (job.state !== 'judging' || typeof job.reviewTaskId !== 'string') continue;
 							// job.project 是绝对路径；命名空间迁移后它会指向旧目录，精确比较会让
@@ -1429,12 +1445,14 @@ export function apply(ctx, config = {}) {
 								// 评审通道被 reconcileJobs 明确排除，没有 TTL 兜底：评审官不回帖
 								// 时 job 会永久停在 judging、评审卡永久 active。这里补超时终态。
 								if (isJobExpired(job, Date.now(), REVIEW_JOB_TTL_MS)) {
+									const timeoutReason = `review timed out after ${Math.round(REVIEW_JOB_TTL_MS / 60000)}min (${collected.votes.length}/${expected} votes)`;
 									writeJob(job.project, {
 										...job,
 										state: 'failed',
-										error: `review timed out after ${Math.round(REVIEW_JOB_TTL_MS / 60000)}min (${collected.votes.length}/${expected} votes)`,
+										error: timeoutReason,
 										updatedAt: Date.now(),
 									});
+									await appendFailResult(job.project, job, timeoutReason);
 									// 超时也要收口：否则这张卡永久 pending，PMO 会一直唤醒评审官。
 									await closeReviewCard(runtime, job.reviewTaskId, 'blind review timed out');
 									diag.append({ ev: 'skillopt.job.timeout', jobId: job.id, got: collected.votes.length, expected });
@@ -1456,7 +1474,9 @@ export function apply(ctx, config = {}) {
 							const candidateSha = typeof job.candidate === 'string' ? sha12(job.candidate) : null;
 							const alreadyApplied = liveSha !== null && candidateSha !== null && liveSha === candidateSha;
 							if (!alreadyApplied && liveText !== null && typeof job.before === 'string' && liveSha !== sha12(job.before)) {
-								writeJob(jobDir, { ...job, state: 'failed', error: 'live SKILL.md changed during review (conflict)', updatedAt: Date.now() });
+								const conflictReason = 'live SKILL.md changed during review (conflict)';
+								writeJob(jobDir, { ...job, state: 'failed', error: conflictReason, updatedAt: Date.now() });
+								await appendFailResult(jobDir, job, conflictReason);
 								await closeReviewCard(runtime, job.reviewTaskId, 'blind review aborted: live file changed');
 								diag.append({ ev: 'skillopt.job.conflict', jobId: job.id, skillPath: job.skillPath });
 								continue;

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.73 - 2026-11-12
+
+**skillopt_jobs 每执必炸的块级作用域缺陷，与 failed 终态不写 results.tsv 两案同修**
+
+`skillopt_jobs` 工具自 `reconcileWithLock` 收割块起每执抛 `ReferenceError: reconciledHere is not defined`：
+`const` 声明在 `try` 块内、块外判定引用（同文件 pmoTick 支既有正形是 `let` 前置，此处偏离）。
+工具在收口环前中断，评审通道 job 的超时/收票分支从未执行——job 永挂 `judging`。
+
+- `index.js`：收割循环改 `let reconciledHere = true` 前置（沿 :889 自家先例），in-flight 跳行判据恢复可达；
+- failed 终态成行：`job-runner.js` 两条 fail 支与 `index.js` 评审通道 timeout/conflict 两支均补 `results.tsv` 行
+  （10 列同制式，status=failed，note=原因，无候选时 proposal_sha=-）——此前只有 keep/revert 落行，
+  盘件 failed 与 tsv 行数对不平（257-#60② 器点：表头+1 行 vs 盘件 3 枚）；
+- 测试：`node --test` **273 通过 / 1 跳过**（与 0.4.72 同数，零回归）。
+
 ## 0.4.72 - 2026-11-12
 
 **`bootstrap?project=<未知 id>` 必须 404，不能静默回退到活动项目**
