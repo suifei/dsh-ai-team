@@ -33,3 +33,16 @@ test('survives cycles, missing causes and non-error payloads', () => {
 	// 非 Error 的 cause（SDK 里出现过字符串/对象）也要能渲染
 	assert.equal(describeCauseChain({ message: 'x', cause: { message: 'plain' } }), 'plain');
 });
+
+test('a busy write handle is classified separately from other wake failures', () => {
+	// 实机根因：写句柄未释放 → persistence 拒绝读租约 → 冷恢复必然失败。
+	// 归类为 wake.session-busy（非 .fail，不刷屏），重建路径不变。
+	const inner = Object.assign(new Error('session "x" is already owned by an active write handle'), { code: 'SESSION_PERSISTENCE_OWNED' });
+	const outer = Object.assign(new Error('subagent "x" is unavailable'), { code: 'NOT_RESUMABLE', cause: inner });
+	const chain = describeCauseChain(outer);
+	const busy = typeof chain === 'string' && /active write handle/i.test(chain);
+	assert.equal(busy, true);
+	// 其它原因不得被误判为句柄占用
+	const other = Object.assign(new Error('subagent "y" is unavailable'), { code: 'NOT_RESUMABLE', cause: new Error('no supported continuation state') });
+	assert.equal(/active write handle/i.test(String(describeCauseChain(other))), false);
+});

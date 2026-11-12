@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.69 - 2026-11-12
+
+**`NOT_RESUMABLE` 根因确诊：成员会话的写句柄从未释放**
+
+用 0.4.66 的 cause 字段抓到了真话：
+
+```json
+{"ev":"wake.fail","code":"NOT_RESUMABLE",
+ "message":"subagent \"330442f7-…\" is unavailable",
+ "cause":"session \"330442f7-…\" is already owned by an active write handle"}
+```
+
+链路：成员回合结束 → `sessions.get(childId)` 取不到会话 → 走冷恢复 → persistence 发现该会话**仍被一个活跃写句柄占用**，拒绝发放读租约 → 外层折叠成 `subagent "X" is unavailable` → 插件重建。
+
+这是 Harness 侧的**句柄泄漏**（会话已从 sessions 服务移除，但 persistence 的写租约没释放），插件无法直接修；但我们能停止把它当成未知故障：
+
+- 该原因归类为 `wake.session-busy`（不带 `.fail`，发布默认级别不再刷屏），重建路径与上下文注入不变；
+- 其它原因仍记 `wake.fail`，并保留 `code` / `cause`；
+- 诊断探针结论：`persistence.stat` 本身正常（无 `persistence.stat.fail`、无 `service.missing.fail`），进一步确认问题在**写租约占用**而非读取能力。
+- 测试：`node --test` **270 通过 / 1 跳过**（新增 1 例：句柄占用被识别、其它原因不被误判）。
+
 ## 0.4.68 - 2026-11-12
 
 **决定性探针：boot 后真实 `persistence.stat()` 一次，暴露原始错误码**
