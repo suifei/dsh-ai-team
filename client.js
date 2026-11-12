@@ -85,6 +85,7 @@ window.__ModuleLoader__.load({
 			fromDiscussion: '由讨论升格',
 			loading: '加载中…',
 			streamDown: '实时更新已中断，界面可能滞后；正在自动重连…',
+			streamUp: '实时更新已恢复。',
 			loadFailedTitle: '工作台不可达',
 			loadFailedBody: 'bootstrap 接口（/ai-team）无法访问；请确认插件已启用后重试。',
 			spike: 'AI Team',
@@ -497,6 +498,7 @@ window.__ModuleLoader__.load({
 			loadFailedTitle: 'Workbench unreachable',
 			loadFailedBody: 'The bootstrap endpoint (/ai-team) cannot be reached; confirm the plugin is enabled and retry.',
 		streamDown: 'Live updates stopped; the view may lag while the stream reconnects…',
+		streamUp: 'Live updates are back.',
 			spike: 'AI Team',
 			spikeTitle: 'Wenyuan Pavilion AI Team workbench: compile, collate, edit; direction, acceptance and ledger.',
 			navAria: 'Page navigation',
@@ -2637,6 +2639,8 @@ window.__ModuleLoader__.load({
 			const scopeRef = React.useRef(scope);
 			// SSE 断流一次性提示：只提示一次，恢复后重置。
 			const streamDownRef = React.useRef(false);
+			// 发送在途守卫：双击按钮或连按 Ctrl+Enter 会重复提交同一条消息/回复。
+			const sendingRef = React.useRef(false);
 			scopeRef.current = scope;
 			const [nBusy, setNBusy] = React.useState(false);
 			const [nError, setNError] = React.useState('');
@@ -2731,15 +2735,25 @@ window.__ModuleLoader__.load({
 				}
 				load();
 				// Event-driven refresh only; the Host sends one frame per command and
-				// no heartbeat/timer. EventSource reconnects on its own; a project is
-				// required — no magic fallback id here.
-				const source = typeof EventSource === 'function' && projectId
-					? new EventSource('/ai-team/api/projects/' + encodeURIComponent(projectId) + '/events')
-					: null;
-				if (source) {
+				// no heartbeat/timer. A project is required — no magic fallback id here.
+				// EventSource 只在**临时**失败时自动重连；一旦被判死（readyState
+				// CLOSED，例如服务端返回 4xx/5xx），它不会再试，界面会永远停在
+				// 「正在自动重连…」的假承诺上。这里自己接管重建，并在恢复后清掉提示。
+				let source = null;
+				let retryTimer = null;
+				let retryDelay = 2000;
+				const openStream = () => {
+					if (!alive || typeof EventSource !== 'function' || !projectId) return;
+					source = new EventSource('/ai-team/api/projects/' + encodeURIComponent(projectId) + '/events');
 					source.addEventListener('change', (raw) => {
 						if (!alive) return;
-						streamDownRef.current = false;
+						retryDelay = 2000;
+						if (streamDownRef.current) {
+							streamDownRef.current = false;
+							// 恢复后清掉断流提示；否则「正在自动重连」会一直挂着。
+							say('');
+							pushToast(t('streamUp'));
+						}
 						try {
 							const frame = JSON.parse(raw.data);
 							pushToast(notificationText(frame?.event));
@@ -2752,19 +2766,30 @@ window.__ModuleLoader__.load({
 						load();
 					});
 					source.addEventListener('error', () => {
-						// EventSource 自己会重连，但**必须让用户看见**：旧实现只在首屏
-						// （dataRef===null）时打印，面板已有数据时断流完全静默。
 						if (!alive) return;
-						console.error(PKG + ': event stream unavailable (retrying)');
+						console.error(PKG + ': event stream unavailable');
 						if (!streamDownRef.current) {
 							streamDownRef.current = true;
 							say(t('streamDown'));
 						}
+						// CONNECTING 时浏览器自己会重试，保持原样；CLOSED 表示已放弃，
+						// 必须由我们按退避重建，否则永远不会恢复。
+						if (source !== null && source.readyState === 2) {
+							try { source.close(); } catch { /* already closed */ }
+							source = null;
+							if (retryTimer === null) {
+								const delay = retryDelay;
+								retryDelay = Math.min(retryDelay * 2, 30000);
+								retryTimer = setTimeout(() => { retryTimer = null; openStream(); }, delay);
+							}
+						}
 					});
-				}
+				};
+				openStream();
 				return () => {
 					alive = false;
 					if (controller) controller.abort();
+					if (retryTimer !== null) clearTimeout(retryTimer);
 					if (source) source.close();
 				};
 			}, [projectId]);
@@ -3657,6 +3682,15 @@ window.__ModuleLoader__.load({
 			async function send() {
 				const text = draft.trim();
 				if (!text) return;
+				if (sendingRef.current) return;
+				sendingRef.current = true;
+				try {
+					await sendOnce(text);
+				} finally {
+					sendingRef.current = false;
+				}
+			}
+			async function sendOnce(text) {
 				// 目录门槛只拦"要动手"的任务：讨论与建卡无需工作目录（11-管理视角
 				// §3）；激活/认领由 Host fail-closed，并把用户引导到目录设置。
 				if (!project?.workspacePath && mode === 'task') {
@@ -3699,6 +3733,9 @@ window.__ModuleLoader__.load({
 			async function sendReply() {
 				const text = reply.trim();
 				if (!text || !selectedTask) return;
+				// 与发送共用同一个在途守卫：连按 Ctrl+Enter 会写出两条相同回复。
+				if (sendingRef.current) return;
+				sendingRef.current = true;
 				try {
 					const result = await runCommand('thread.post', {
 						taskId: selectedTask.id,
@@ -3712,6 +3749,8 @@ window.__ModuleLoader__.load({
 					await reloadData();
 				} catch (error) {
 					sayRight(tf(t, 'replyFailed', { message: error?.message ?? String(error) }));
+				} finally {
+					sendingRef.current = false;
 				}
 			}
 			function openConvert() {

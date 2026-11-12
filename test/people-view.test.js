@@ -68,3 +68,37 @@ test('people pool tolerates empty ledgers and talent-pool members', () => {
 	assert.equal(people[0].activeTasks, 0);
 	assert.deepEqual(aggregatePeople([], []), []);
 });
+
+test('a name-to-name alias actually merges the two rows', () => {
+	const registry = [{ id: 'p1', name: 'P1' }];
+	const runtimes = [{
+		id: 'p1',
+		service: { state: {
+			projects: { p1: { id: 'p1', workspacePath: '' } },
+			members: {
+				a: { id: 'm1', name: '白砚', kind: 'agent', status: 'idle' },
+				b: { id: 'm2', name: '白砚(旧)', kind: 'agent', status: 'idle' },
+			},
+			tasks: {},
+		} },
+	}];
+	const merged = aggregatePeople(registry, runtimes, { aliases: { '白砚(旧)': 'name:白砚' } });
+	assert.equal(merged.length, 1, 'two names bound together must collapse into one row');
+	assert.equal(merged[0].name, '白砚');
+});
+
+test('a bare name alias from older data files is normalised, not dropped', () => {
+	const registry = [{ id: 'p1', name: 'P1' }];
+	const runtimes = [{
+		id: 'p1',
+		service: { state: {
+			projects: { p1: { id: 'p1', workspacePath: '' } },
+			members: {
+				a: { id: 'm1', name: '白砚', kind: 'agent', status: 'idle' },
+				b: { id: 'm2', name: '旧名', kind: 'agent', status: 'idle' },
+			},
+			tasks: {},
+		} },
+	}];
+	assert.equal(aggregatePeople(registry, runtimes, { aliases: { 旧名: '白砚' } }).length, 1);
+});

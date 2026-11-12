@@ -1723,7 +1723,11 @@ export function apply(ctx, config = {}) {
 						return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'name and personId are required' } }, 400);
 					}
 					const aliases = readAliases() ?? {};
-					aliases[memberName] = personId;
+					// 归一到视图层的桶键：接受 `person:<id>`、`name:<名字>` 或裸名字。
+					// 归一后才能与 aggregatePeople 的桶键对齐（裸名字曾让两行永不合并，
+					// 而界面还提示「已绑定」）。
+					const normalized = personId.startsWith('person:') || personId.startsWith('name:') ? personId : `name:${personId}`;
+					aliases[memberName] = normalized;
 					writeFileSync(aliasesPath, JSON.stringify(aliases, null, 2) + '\n', 'utf8');
 					diag?.append({ ev: 'people.alias', name: memberName, personId });
 					return send(res, { ok: true, aliases });
