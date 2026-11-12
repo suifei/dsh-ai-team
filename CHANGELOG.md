@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.59 - 2026-11-12
+
+**默认工作目录改成 `~/works` 子目录（不再用主目录根）**
+
+0.4.57 把建议值修成主目录 `C:\Users\SuiFei`——用户裁定这也不行：**不能把主目录根当工作目录，必须是它下面的子目录**（`~/works`）。跨平台由调用方的 `homedir()` 决定（Windows 是 `USERPROFILE`，Linux/macOS 是 `~`），本模块只做 `join`，不自己判断平台。
+
+- 候选顺序：配置项 → 显式 cwd（须存在且不在 `~/.dsh`、非系统目录）→ **`join(homedir(), 'works')`**。
+- `~/works` 可能尚不存在，而 `project.workspace.update` 只接受已存在的目录：boot 解析出建议值后**创建它**（失败则不给建议，不阻断启动）。
+- 真机实测：`cwd=…\.dsh\profiles\desktop` → 建议 `C:\Users\SuiFei\works`，不等于主目录；创建成功。
+- 测试：`node --test` **258 通过 / 1 跳过**（`default-workspace` 6 例，新增「永远是 home 的子目录、绝非 home 根」与「home 落在 ~/.dsh 内时不给建议」）。
+
 ## 0.4.58 - 2026-11-12
 
 **让「归档修复跑没跑」可判定：`host.repair.ok` 进 errors 白名单**

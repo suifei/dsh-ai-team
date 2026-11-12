@@ -11,7 +11,7 @@
 import { homedir } from 'node:os';
 import { join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import z from '@deepseek-ai/schemastery';
 import { ProjectRuntime } from './lib/host/project-runtime.js';
 import { ProjectRegistry } from './lib/host/project-registry.js';
@@ -185,7 +185,7 @@ async function boot(diag, config = {}) {
 		migrateLegacyNamespace({ fromDir: legacyDir, toDir: dataDir, diag });
 	}
 	// 默认工作目录：规则与优先级见 lib/host/default-workspace.js（有独立测试）。
-	const defaultWorkspace = resolveDefaultWorkspace({
+	let defaultWorkspace = resolveDefaultWorkspace({
 		configured: typeof config?.defaultWorkspace === 'string' ? config.defaultWorkspace : '',
 		cwd: process.cwd(),
 		home: homedir(),
@@ -193,6 +193,11 @@ async function boot(diag, config = {}) {
 		// 整个 ~/.dsh 都不能当工作目录（桌面启动器的 cwd 就是 profile 目录）。
 		excludeRoots: [dshHome()],
 	});
+	// 兜底建议是 `~/works`：它可能还不存在，而 `project.workspace.update` 只接受
+	// 已存在的目录。用户确认的就是这个子目录，所以在这里建出来（失败则不提供建议）。
+	if (defaultWorkspace !== '' && !existsSync(defaultWorkspace)) {
+		try { mkdirSync(defaultWorkspace, { recursive: true }); } catch { defaultWorkspace = ''; }
+	}
 	const registry = ProjectRegistry.load(dataDir, { defaultWorkspacePath: defaultWorkspace });
 	const runtimes = new Map();
 	for (const project of registry.list()) {
