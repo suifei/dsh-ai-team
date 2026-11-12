@@ -567,8 +567,12 @@ export function apply(ctx, config = {}) {
 			if (plans.length === 0) return;
 			// Window eviction: a key older than this horizon can no longer dedupe
 			// a relevant event, so drop it instead of growing the Map forever.
+			// 只淘汰**本项目**的键：`head` 是当前项目的账本水位，拿它去比较别的项目的
+			// seq，会把水位较低的项目里刚产生的键全部删掉（那些键还没发挥去重作用）。
 			const head = projectRuntime?.ledger?.head?.seq ?? 0;
+			const projectSuffix = `:${projectRuntime.id}`;
 			for (const [key, seq] of wakeKeys) {
+				if (!key.endsWith(projectSuffix)) continue;
 				if (Number.isSafeInteger(seq) && head - seq > 500) wakeKeys.delete(key);
 			}
 			const subagents = serviceOf(ctx, 'subagents');

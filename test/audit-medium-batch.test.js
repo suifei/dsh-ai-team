@@ -294,3 +294,26 @@ test('recoverCheckpoint can write the checkpoint it just replayed', async (t) =>
 	assert.equal(out.state.lastSeq, out.lastSeq);
 	assert.equal(out.saved !== null, true);
 });
+
+test('a junction inside the workspace cannot smuggle an outside report file', async (t) => {
+	const root = mkdtempSync(join(tmpdir(), 'aiteam-link-'));
+	t.after(() => rmSync(root, { recursive: true, force: true }));
+	const outside = join(root, 'outside');
+	const workspace = join(root, 'ws');
+	mkdirSync(outside, { recursive: true });
+	mkdirSync(workspace, { recursive: true });
+	writeFileSync(join(outside, 'report.md'), ['## 6. 决策', '| # | 问题 | 建议 | 阻塞点 |', '|---|---|---|---|', '| 1 | 选 A 还是 B？ | A | 无 |'].join('\n'), 'utf8');
+	try { symlinkSync(outside, join(workspace, 'link'), 'junction'); } catch { t.skip('junction not permitted'); return; }
+
+	const { service } = await makeService(t, workspace);
+	await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'mem_a', name: '甲', kind: 'agent', role: '执行' } });
+	await service.dispatch({ type: 'task.create', actor: human, projectId: 'prj_b', payload: { title: 'T', resultDefinition: 'd' } });
+	const taskId = Object.keys(service.state.tasks)[0];
+	await service.dispatch({
+		type: 'thread.post', actor: { kind: 'agent', memberId: 'mem_a' }, projectId: 'prj_b',
+		payload: { taskId, baseSeq: 0, body: `报告在 ${join(workspace, 'link', 'report.md')}，请 Human 决定。` },
+	});
+	// 词法上「在工作区内」，realpath 却在外面：必须拒绝，否则任意路径都能读。
+	const created = await service.backfillHumanMentions(workspace);
+	assert.equal(created, 0);
+});
