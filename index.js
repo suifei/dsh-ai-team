@@ -15,7 +15,7 @@ import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import z from '@deepseek-ai/schemastery';
 import { ProjectRuntime } from './lib/host/project-runtime.js';
 import { ProjectRegistry } from './lib/host/project-registry.js';
-import { migrateLegacyNamespace, resolveProfileName } from './lib/ledger/namespace.js';
+import { migrateLegacyNamespace, resolveProfile } from './lib/ledger/namespace.js';
 import { ids } from './lib/domain/ids.js';
 import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-runtime.js';
 import { ensureHostAgent } from './lib/runtime/host-agent.js';
@@ -154,11 +154,15 @@ function dshHome() {
 	return process.env.DSH_HOME || join(homedir(), '.dsh');
 }
 
+function resolvedProfile() {
+	return resolveProfile(process.argv, process.env);
+}
+
 function profileName() {
 	// 桌面启动器不导出 DSH_PROFILE，而是把 profile 目录作为**位置参数**传进来
 	// （… <dsh-root> C:\Users\…\.dsh\profiles\desktop …）。解析规则抽到
 	// lib/ledger/namespace.js：`--profile x`、`--profile=x`、位置路径与 env 都要认。
-	return resolveProfileName(process.argv, process.env);
+	return resolvedProfile().name;
 }
 
 /**
@@ -172,7 +176,11 @@ async function boot(diag) {
 	// `--profile`，而桌面启动器按位置参数传）。这里做一次性、数据驱动、可回退的
 	// 搬迁：只有旧命名空间的数据明显更多时才搬，目标原有内容改名保留、不删除。
 	const legacyDir = join(dshHome(), 'ai-team', 'default');
-	if (dataDir !== legacyDir) migrateLegacyNamespace({ fromDir: legacyDir, toDir: dataDir, diag });
+	// 只在**桌面启动器**（profile 以位置参数传入）时搬迁：那个坑正是它造成的。
+	// 从 --profile ai-team 起一个 CLI 不该把 GUI 的团队偷走。
+	if (dataDir !== legacyDir && resolvedProfile().source === 'argv-path') {
+		migrateLegacyNamespace({ fromDir: legacyDir, toDir: dataDir, diag });
+	}
 	const registry = ProjectRegistry.load(dataDir);
 	const runtimes = new Map();
 	for (const project of registry.list()) {
@@ -1247,7 +1255,13 @@ export function apply(ctx, config = {}) {
 						};
 						for (const job of jobs) {
 							if (job.state !== 'judging' || typeof job.reviewTaskId !== 'string') continue;
-							const runtime = [...(booted?.runtimes?.values?.() ?? [])].find((entry) => entry.dir === job.project);
+							// job.project 是绝对路径；命名空间迁移后它会指向旧目录，精确比较会让
+							// 这些 judging job 永久跳过（既收不到票也不再超时）。目录相同优先，
+							// 否则按项目 id（目录名）匹配。
+							const allRuntimes = [...(booted?.runtimes?.values?.() ?? [])];
+							const dirName = (value) => String(value ?? '').split(/[\\\\/]/).filter(Boolean).pop() ?? '';
+							const runtime = allRuntimes.find((entry) => entry.dir === job.project)
+								?? allRuntimes.find((entry) => entry.id === dirName(job.project));
 							if (runtime === undefined) continue;
 							const collected = collectReview({ service: runtime.service, job });
 							const expected = collected.expected ?? job.reviewOrders?.length ?? 3;

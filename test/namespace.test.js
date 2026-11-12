@@ -1,9 +1,9 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { dirBytes, migrateLegacyNamespace, resolveProfileName } from '../lib/ledger/namespace.js';
+import { dirBytes, migrateLegacyNamespace, resolveProfile, resolveProfileName } from '../lib/ledger/namespace.js';
 
 test('profile name is read from every shape the launchers use', () => {
 	assert.equal(resolveProfileName(['node', 'dsh', '--profile', 'ai-team'], {}), 'ai-team');
@@ -61,3 +61,30 @@ test('nothing happens when there is no legacy namespace at all', (t) => {
 function readdirPreserved(root) {
 	return readdirSync(root).filter((name) => name.startsWith('desktop.superseded-'));
 }
+
+test('only a positional profile path may trigger the legacy migration', () => {
+	assert.deepEqual(resolveProfile(['node', 'x', '--profile', 'ai-team'], {}), { name: 'ai-team', source: 'flag' });
+	assert.deepEqual(resolveProfile(['node', 'C:/x/.dsh/profiles/desktop'], {}), { name: 'desktop', source: 'argv-path' });
+	assert.deepEqual(resolveProfile(['node'], { DSH_PROFILE: 'web' }), { name: 'web', source: 'env' });
+	assert.deepEqual(resolveProfile(['node'], {}), { name: 'default', source: 'default' });
+});
+
+test('a failed migration restores the target instead of leaving it renamed away', (t) => {
+	const root = mkdtempSync(join(tmpdir(), 'aiteam-ns5-'));
+	t.after(() => rmSync(root, { recursive: true, force: true }));
+	const legacy = makeDir(root, 'default', { 'projects.json': '{"projects":[]}', 'projects/p1/l': 'z'.repeat(400) });
+	const target = makeDir(root, 'desktop', { 'projects.json': '{"projects":[]}', 'keep.txt': 'keep' });
+	// 让第二步 rename（源 → 目标）失败
+	const outcome = migrateLegacyNamespace({
+		fromDir: legacy,
+		toDir: target,
+		rename: (from, to) => {
+			if (String(from) === String(legacy)) { const error = new Error('EBUSY'); error.code = 'EBUSY'; throw error; }
+			return renameSync(from, to);
+		},
+	});
+	assert.equal(outcome, 'kept');
+	// 目标必须还原（否则下一次 boot 会拿空目录重建 registry）
+	assert.equal(existsSync(join(target, 'keep.txt')), true);
+	assert.equal(existsSync(legacy), true);
+});

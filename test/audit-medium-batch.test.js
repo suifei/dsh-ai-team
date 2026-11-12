@@ -8,6 +8,7 @@ import { TeamService } from '../lib/host/service.js';
 import { formatSkillCatalog } from '../lib/runtime/skill-catalog.js';
 import { scoreSkillRubric } from '../lib/skillopt/rubric.js';
 import { readJob, writeJob } from '../lib/skillopt/jobs.js';
+import { aggregatePeople } from '../lib/host/people-view.js';
 import { nextRequestAttempt } from '../lib/runtime/failure-policy.js';
 import { loadSkillContext } from '../lib/runtime/skill-loader.js';
 
@@ -190,4 +191,23 @@ test('a member failure still escalates when that member has its own pending deci
 	// 同名字段曾让这条升级被自己的决策项吞掉
 	assert.notEqual(result?.inboxItem ?? null, null, 'fatal failure must still produce an escalation item');
 	assert.equal(result.inboxItem.ref.kind, 'member_failure');
+});
+
+test('a malformed alias value cannot crash the people view', () => {
+	const registry = [{ id: 'p1', name: 'P1' }];
+	const runtimes = [{ id: 'p1', service: { state: { projects: { p1: {} }, members: { a: { id: 'm1', name: '甲', kind: 'agent', status: 'idle' } }, tasks: {} } } }];
+	assert.equal(aggregatePeople(registry, runtimes, { aliases: { 甲: 5 } }).length, 1);
+	assert.equal(aggregatePeople(registry, runtimes, { aliases: { 甲: true } }).length, 1);
+});
+
+test('an explicit unknown ownerId is rejected, and prototype keys do not count as Tasks', async (t) => {
+	const { service } = await makeService(t);
+	await assert.rejects(
+		() => service.dispatch({ type: 'task.create', actor: human, projectId: 'prj_b', payload: { title: 'T', resultDefinition: 'd', ownerId: 'ghost' } }),
+		/not a Team member/,
+	);
+	await assert.rejects(
+		() => service.dispatch({ type: 'task.create', actor: human, projectId: 'prj_b', payload: { title: 'T2', resultDefinition: 'd', blockedBy: ['constructor'] } }),
+		/blockedBy/,
+	);
 });

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.39 - 2026-11-12
+
+**第三轮（对抗性复审）回归修复**
+
+三路独立复审对 `b64b4ae..HEAD` 提出 19 条，其中 10 条已修：
+
+- **投影版本必须递增**：我改了折叠语义（接管不再写 claimHistory、换 owner 同步 ownerId）却没升 `FOLD_STATE_VERSION`，旧 checkpoint 会被零尾放采信——升级后「前 owner 仍通过 isLead」「接管继任者仍被排除在验收候选外」永久保留。现为 **v3**，旧 checkpoint 作废重折。
+- **repair 只修了段文件**：门面 `repair()` 返回 writer 结果却不重折 state/events，`state.lastSeq` 停在修复前水位，下一次 append 后中间事件永不进投影、零尾放把缺口固化。现在从磁盘重读并 `fold()` 重建，同时落一次 checkpoint。
+- **迁移门禁**：此前只按「目标数据更少」判断，若从 `--profile ai-team` 启动一个 CLI，会把 desktop 的 `ai-team/default` 整体搬进该 profile。现在**只允许** `argv-path` 来源（桌面启动器）触发迁移；`resolveProfile` 同时返回来源。
+- **迁移回滚**：第二步 rename 失败时目标已被挪走，原实现返回 `kept` 但目标消失，下次 boot 会用空目录重建 registry。现在失败会还原目标。
+- **作者契约**：`bootstrap` 的 `stream[].author` 上一版发的是字符串，而客户端读 `item.author.kind/.name`——作者仍显示「—」。现在发 `{ id, kind, name }`。
+- **PMO 自动作答进锁**：`autoAnswerDecision` 读 head → 分配 seq → append，与 `thread.post` 并发时同 seq 会被 fold 静默丢弃，Human 的明确决策可能被自动决策替换。
+- **建卡校验不再误伤**：只校验**显式传入**的 `ownerId`；默认 owner（退役的 Project owner）不再把工作台建卡入口整个封死。
+- **依赖校验**：`blockedBy` 用 `Object.hasOwn`（原型链键不再算「存在」）。
+- **决策终态**补上 `done`。
+- **别名值容错**：`people-aliases.json` 里非字符串值不再让 `/api/people` 500。
+- **迁移后的 judging job**：`job.project` 是绝对路径，迁移后精确比较失败会让这些 job 永久跳过；现在按项目 id 兜底匹配。
+- 测试：`node --test` **239/239**（新增 4 例：来源门禁、迁移回滚、别名容错、显式 owner 校验）。
+
 ## 0.4.38 - 2026-11-12
 
 **中危批次 8：技能根、决策串行化、失败升级去重**

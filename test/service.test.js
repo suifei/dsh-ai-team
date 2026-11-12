@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -381,7 +381,7 @@ test('bootstrap stream entries carry the author name the client renders', async 
 		const last = boot.stream[boot.stream.length - 1];
 		assert.equal(last.body, '你好');
 		// 客户端读 item.author；账本只有 authorId，投影必须补齐，否则作者恒为「—」。
-		assert.equal(last.author, 'Human');
+		// 客户端读的是对象契约：{ kind, name }\n		assert.equal(last.author.name, 'Human');\n		assert.equal(last.author.kind, 'human');
 	} finally {
 		ledger.close?.();
 		await rm(root, { recursive: true, force: true });
