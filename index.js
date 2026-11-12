@@ -1,4 +1,4 @@
-﻿/**
+/**
  * dsh-ai-team — Host half.
  *
  * M1: one default Project backed by the plugin-owned append-only ledger.
@@ -262,6 +262,9 @@ export function apply(ctx, config = {}) {
 
 		let booted = null;
 		let bootError = null;
+		// 卸载闸门：teardown 之后仍在飞的异步链（boot 续体、ensureParent、归档修复重试）
+		// 不能继续写状态，否则会把句柄塞进已清空的表里、或在清理之后重建定时器。
+		let disposed = false;
 		const projectRuntime = (projectId) => booted?.runtimes?.get(projectId) ?? null;
 		const runtimeForAgent = (sessionId) => {
 			if (sessionId === undefined || sessionId === null) return null;
@@ -371,11 +374,13 @@ export function apply(ctx, config = {}) {
 					// 再用一个短重试窗口（2s × 30）兜住就绪时间，不必等 60s 的 tick。
 					void (async () => {
 						for (let attempt = 0; attempt < 30; attempt += 1) {
+							if (disposed) return;
 							await repairArchivedHosts();
-							if (hostRepaired) return;
+							if (hostRepaired || disposed) return;
 							await new Promise((resolve) => { const timer = setTimeout(resolve, 2000); timer.unref?.(); });
 						}
 					})();
+					if (disposed) return;
 					if (pmoTimer === null) {
 						pmoTimer = setInterval(() => {
 							for (const runtime of booted?.runtimes?.values() ?? []) {
@@ -1492,6 +1497,12 @@ export function apply(ctx, config = {}) {
 					cwd: hostCwd(),
 					resumeSessionId: existingHost,
 				}).then(async (value) => {
+					// 卸载后才完成的父代理：句柄不能留在进程里，也不能写账本。
+					if (disposed) {
+						try { await value.dispose?.(); } catch { /* already gone */ }
+						diag.append({ ev: 'host.created.after-dispose', sessionId: value.sessionId ?? null });
+						return value;
+					}
 					// Host 会话必须落账：它决定冷恢复与 sendMessage 的 parent，也决定归档
 					// 修复 sweep 能不能看见根会话。除了「首次创建」，从 roots() 里选中
 					// 既有会话、以及父级发生变化（换成了另一条根会话）时同样要重绑——
@@ -1609,6 +1620,12 @@ export function apply(ctx, config = {}) {
 				} catch (error) {
 					try { await result.activation.dispose?.(); } catch { /* already gone */ }
 					throw error;
+				}
+				// 卸载后才完成的激活：直接释放，不登记（否则句柄留在已清空的表里）。
+				if (disposed) {
+					try { await result.activation.dispose?.(); } catch { /* already gone */ }
+					diag.append({ ev: 'member.activated.after-dispose', memberId: member.id, sessionId: result.childId });
+					return { error: { code: 'E_RUNTIME', message: 'plugin is shutting down' }, status: 503 };
 				}
 				activations.set(result.childId, result.activation);
 				await attachMemberWorkspace(projectRuntime, result.childId);
@@ -2351,6 +2368,7 @@ export function apply(ctx, config = {}) {
 			// Teardown must fully settle before the loader activates the next
 			// composition: a racing parent-agent dispose left the previous
 			// session-controller graph half-disposed and broke plugin toggles.
+			disposed = true;
 			const cleanup = [];
 			for (const client of sseClients) {
 				try { client.res.end(); } catch { /* socket already gone */ }
