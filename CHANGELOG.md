@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.42 - 2026-11-12
+
+**批 11：checkpoint 恢复可用、激活单飞、PMO 门禁取实时快照**
+
+- **`recoverCheckpoint({save:true})` 此前必抛**：恢复会把投影重放到 head，但写入时用的还是 state 里的旧水位，新校验直接判 `E_CHECKPOINT_STATE_MISMATCH`——这条恢复分支等于从未可用（也没有测试覆盖，探针实测确认）。现在重放后把 `lastSeq/lastHash` 对齐到 head，返回的 state 与水位一致。
+- **激活单飞真正生效**：`prompt: await wakePrompt(...)` 写在 `activateMember(...)` 的实参里，await 先让出执行权、单飞表尚未登记，并发的两个唤醒计划会各自启动一次激活（两个子会话）。改为同步占位后再在内部 await。
+- **PMO 门禁用实时快照**：`pmoAuto`/`archived`/`runState` 三个门读的是 `await reconcileJobs` **之前**的 project 快照；收割耗时期间 Human 停用 PMO 或停止项目，本次 tick 仍会继续写账本。现在 await 之后重新取。
+- 测试：`node --test` **244/244**（新增 1 例：`recoverCheckpoint` 能写出它刚重放的检查点）。
+
 ## 0.4.41 - 2026-11-12
 
 **批 10：收割幂等、句柄回收、别名原子写、自动作答边界**

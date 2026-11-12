@@ -607,9 +607,12 @@ export function apply(ctx, config = {}) {
 						const activationKey = `${projectRuntime.id}:${member.id}`;
 						let activation = activationTasks.get(activationKey);
 						if (activation === undefined) {
-							activation = activateMember({
+							// 占位必须在**同步**段完成：此前 `prompt: await wakePrompt(...)` 写在
+							// 调用里，await 先让出执行权、单飞表还没登记，并发的两个计划会各自
+							// 启动一次激活（两个子会话）。
+							activation = (async () => activateMember({
 								payload: { memberId: member.id, prompt: await wakePrompt(plan, member) },
-							}, projectRuntime);
+							}, projectRuntime))();
 							activationTasks.set(activationKey, activation);
 							activation.finally(() => activationTasks.delete(activationKey)).catch(() => {});
 						}
@@ -736,7 +739,6 @@ export function apply(ctx, config = {}) {
 			// （60s 后）再试一次；修好即置位，之后每个 tick 直接返回。
 			await repairArchivedHosts();
 			const state = projectRuntime.service.state;
-			const project = state.projects?.[projectRuntime.id];
 			// job 收割先于 pmoAuto 门：Human 启动的优化 job 与 PMO 派发无关，
 			// PMO 自动关闭时也必须收敛（否则 job 永远停在 generating）。
 			// 两阶段异步优化 job 收割：与任务派发无关，放在停止门之前——
@@ -771,6 +773,9 @@ export function apply(ctx, config = {}) {
 			} catch (error) {
 				diag.append({ ev: 'skillopt.job.tick.fail', message: error?.message ?? String(error) });
 			}
+			// 门禁必须在 await 之后重新取：reconcileJobs 可能耗时数秒，期间 Human
+			// 可能已经停用 PMO / 归档 / 停止项目，用 await 之前的快照会继续写账本。
+			const project = projectRuntime.service.state.projects?.[projectRuntime.id];
 			if (project === undefined || project.pmoAuto === false || project.status === 'archived') return;
 			// P6 停止门：stopped 项目停止一切派发（补派/心跳/升级/continue 全停），
 			// 正在执行的回合自然完成；唤醒事件 hook 同样检查（见 wakeFromResult）。

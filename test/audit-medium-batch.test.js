@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openLedger } from '../lib/ledger/writer.js';
+import { LedgerWriter, openLedger } from '../lib/ledger/writer.js';
+import { recoverCheckpoint } from '../lib/ledger/checkpoint.js';
+import { applyEvent, initialState } from '../lib/ledger/fold.js';
 import { TeamService } from '../lib/host/service.js';
 import { formatSkillCatalog } from '../lib/runtime/skill-catalog.js';
 import { scoreSkillRubric } from '../lib/skillopt/rubric.js';
@@ -277,4 +279,18 @@ test('PMO auto-answer skips a decision item that has no structured questions', a
 	const answered = await service.autoAnswerDecisions('prj_b');
 	assert.deepEqual(answered, []);
 	assert.equal(service.state.inbox[items[0].id].state, 'unread', 'the escalation must stay for Human');
+});
+
+test('recoverCheckpoint can write the checkpoint it just replayed', async (t) => {
+	const dir = mkdtempSync(join(tmpdir(), 'aiteam-ckpt-'));
+	t.after(() => rmSync(dir, { recursive: true, force: true }));
+	const writer = new LedgerWriter({ dir, projectId: 'prj_c', fsync: false, lock: false });
+	t.after(() => writer.close());
+	writer.open();
+	await writer.append({ type: 'project/created', payload: { name: 'P' }, actor: { kind: 'human', memberId: 'h' }, projectId: 'prj_c' });
+	await writer.append({ type: 'member/added', payload: { id: 'm1', name: 'A', kind: 'agent' }, actor: { kind: 'human', memberId: 'h' }, projectId: 'prj_c' });
+	// save:true 分支此前会因 state.lastSeq 与水位不一致抛 E_CHECKPOINT_STATE_MISMATCH。
+	const out = recoverCheckpoint({ dir, writer, stateVersion: 3, initialState: initialState(), apply: applyEvent, save: true });
+	assert.equal(out.state.lastSeq, out.lastSeq);
+	assert.equal(out.saved !== null, true);
 });
