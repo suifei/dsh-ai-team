@@ -1,6 +1,6 @@
 ﻿import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openLedger } from '../lib/ledger/writer.js';
@@ -9,6 +9,7 @@ import { formatSkillCatalog } from '../lib/runtime/skill-catalog.js';
 import { scoreSkillRubric } from '../lib/skillopt/rubric.js';
 import { readJob, writeJob } from '../lib/skillopt/jobs.js';
 import { nextRequestAttempt } from '../lib/runtime/failure-policy.js';
+import { loadSkillContext } from '../lib/runtime/skill-loader.js';
 
 const human = { kind: 'human', memberId: 'mem_human' };
 
@@ -160,4 +161,33 @@ test('request attempts are counted per request window, not per member lifetime',
 	assert.equal(nextRequestAttempt(store, 's1', t0 + 11 * 60_000), 1);
 	// 不同会话互不影响
 	assert.equal(nextRequestAttempt(store, 's2', t0 + 3000), 1);
+});
+
+test('member skills are found across several skill roots', async (t) => {
+	const root = mkdtempSync(join(tmpdir(), 'aiteam-skillroots-'));
+	t.after(() => rmSync(root, { recursive: true, force: true }));
+	const projectDsh = join(root, 'project', '.dsh');
+	const userDsh = join(root, 'userdsh');
+	const dataDir = join(root, 'data');
+	mkdirSync(join(projectDsh, 'skills', 'proj-skill'), { recursive: true });
+	writeFileSync(join(projectDsh, 'skills', 'proj-skill', 'SKILL.md'), '---\nname: proj-skill\ndescription: 项目技能。\n---\n正文', 'utf8');
+	mkdirSync(join(userDsh, 'skills'), { recursive: true });
+	writeFileSync(join(userDsh, 'skills', 'user-skill.md'), '用户技能正文', 'utf8');
+	const text = await loadSkillContext({ skills: ['proj-skill', 'user-skill'] }, [projectDsh, userDsh, dataDir]);
+	assert.match(text, /proj-skill/);
+	assert.match(text, /用户技能正文/);
+});
+
+test('a member failure still escalates when that member has its own pending decision', async (t) => {
+	const { service } = await makeService(t);
+	await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'mem_a', name: '甲', kind: 'agent', role: '执行' } });
+	// 甲自己提了一个决策（ref.memberId 是“申请人”）
+	await service.dispatch({
+		type: 'decision.request', actor: { kind: 'agent', memberId: 'mem_a' }, projectId: 'prj_b',
+		payload: { title: '甲的问题', questions: [{ text: '选哪个？', options: ['A', 'B'] }] },
+	});
+	const result = await service.recordMemberFailure('mem_a', { category: 'auth', message: 'bad key' }, 'prj_b');
+	// 同名字段曾让这条升级被自己的决策项吞掉
+	assert.notEqual(result?.inboxItem ?? null, null, 'fatal failure must still produce an escalation item');
+	assert.equal(result.inboxItem.ref.kind, 'member_failure');
 });

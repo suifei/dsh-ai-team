@@ -1521,7 +1521,7 @@ export function apply(ctx, config = {}) {
 				const result = await runtime.activate(activationMember, {
 					prompt: `${memberIdentity(activationMember)}\n\n${typeof body.payload?.prompt === 'string'
 						? body.payload.prompt
-						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: effectiveDir })}${await loadSkillContext(activationMember, projectRuntime.dir)}`,
+						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: effectiveDir })}${await loadSkillContext(activationMember, [join(effectiveDir, '.dsh'), dshHome(), projectRuntime.dir])}`,
 				});
 				let bound;
 				try {

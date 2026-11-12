@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.38 - 2026-11-12
+
+**中危批次 8：技能根、决策串行化、失败升级去重**
+
+- **成员技能不再静默缺席**：`loadSkillContext` 只在一个根下找 `skills/`，而调用方传的是**项目账本目录**，它下面永远没有 `skills/`。现在支持多根：工作区 `.dsh/skills`、用户 `~/.dsh/skills`、插件数据目录依次查找。
+- **决策命令串行化**：`decision.request` / `decision.answer` 与 task 命令一样纳入 `runExclusive`——`answerDecision` 之前仍在锁外「读 headSeq → 分配 seq → append」，并发时同 seq 会被 fold 去重静默丢弃，双方都返回成功。
+- **失败升级不再被自己的决策吞掉**：升级项的去重键用的是 `ref.memberId`，而 `requestDecision` 里同名字段的语义是「申请人」——成员只要有一条自己提的未决决策，ta 的致命失败就再也不会生成升级项。现在升级项带 `ref.kind = 'member_failure'` + `ref.failedMemberId`，按自己的字段去重（旧数据也做了兼容判定）。
+- 测试：`node --test` **235/235**（新增 2 例）。
+
 ## 0.4.37 - 2026-11-12
 
 **中危批次 7：评审卡收口、job 终态、幽灵成员、重试预算**
