@@ -1349,7 +1349,11 @@ export function apply(ctx, config = {}) {
 							diag.append({ ev: 'skillopt.job.done', jobId: job.id, verdict: collected.decision.verdict, better: collected.decision.better, worse: collected.decision.worse, kept, source: 'reviewer-card' });
 						}
 						if (jobs.length === 0) return '[skillopt jobs] none';
-						return ['[skillopt jobs]', ...jobs.map((job) => `  ${job.id} ${job.state} ${job.dimension ?? '-'}${job.decision ? ` verdict=${job.decision.verdict} (${job.decision.better}-${job.decision.worse})` : ''}${job.error ? ` error=${job.error}` : ''}`)].join('\n');
+						// 重新读一遍再打印：本次调用刚把某些 job 判成 keep/revert/done，
+						// 用调用前的快照会显示成 judging 且没有 verdict，用户看到的与实际相反。
+						const after = roots.flatMap((jobRoot) => listJobs(jobRoot));
+						const view = after.length > 0 ? after : jobs;
+						return ['[skillopt jobs]', ...view.map((job) => `  ${job.id} ${job.state} ${job.dimension ?? '-'}${job.decision ? ` verdict=${job.decision.verdict} (${job.decision.better}-${job.decision.worse})` : ''}${job.error ? ` error=${job.error}` : ''}`)].join('\n');
 					},
 				});
 				// 先保存 applySkillOpt 的真实 disposer：直接把 disposeSkillOpt 指向
@@ -1592,12 +1596,20 @@ export function apply(ctx, config = {}) {
 					debug: result.debug ?? null,
 				};
 			} catch (error) {
-				try {
-					await projectRuntime.service.failMember(
-						{ actor: { kind: 'human', memberId: HUMAN_ID }, projectId: projectRuntime.id },
-						{ memberId: member.id, reason: `${error.code ?? 'E_RUNTIME'}: ${error.message ?? error}` },
-					);
-				} catch { /* member may already be gone */ }
+				// 并发场景：激活进行中成员被退役，bind 会以 retired 拒绝。这里若无条件
+				// failMember，会把 retired 覆写成 failed——退役是终态，之后 member.bind
+				// 还能把成员复活。所以只对仍在册的成员记失败。
+				const currentStatus = projectRuntime.service.state.members?.[member.id]?.status;
+				if (currentStatus !== 'retired') {
+					try {
+						await projectRuntime.service.failMember(
+							{ actor: { kind: 'human', memberId: HUMAN_ID }, projectId: projectRuntime.id },
+							{ memberId: member.id, reason: `${error.code ?? 'E_RUNTIME'}: ${error.message ?? error}` },
+						);
+					} catch { /* member may already be gone */ }
+				} else {
+					diag.append({ ev: 'member.activate.aborted', memberId: member.id, projectId: projectRuntime.id, reason: 'member retired during activation' });
+				}
 				return { error: { code: error.code ?? 'E_RUNTIME', message: error.message ?? String(error) }, status: 409 };
 			}
 		};

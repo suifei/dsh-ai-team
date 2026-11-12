@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.45 - 2026-11-12
+
+**批 13：退役与激活并发、job 列表回读**
+
+- **退役不会被激活失败覆写**：激活进行中成员被退役时，`bindMemberSession` 会以 retired 拒绝；catch 里无条件 `failMember` 会把 retired 改写成 failed，而退役是终态（之后 `member.bind` 还能把成员复活）。现在只对仍在册的成员记失败，退役场景只留一条 `member.activate.aborted` 诊断。
+- **`skillopt_jobs` 不再打印调用前的快照**：本次调用刚判成 keep/revert/done 的 job，输出里仍显示 `judging` 且没有 verdict——与实际相反。打印前重新读一遍。
+- 测试：`node --test` **244 通过 / 1 跳过**（跳过项是目录 junction 用例，本机沙箱不允许创建，已用 `t.skip` 标注）。
+
 ## 0.4.44 - 2026-11-12
 
 **批 12：报告路径按 realpath 判定、唤醒去重键按项目淘汰**
