@@ -51,6 +51,7 @@ import { describeTaskContext, describeWake, planWakes } from './lib/host/waker.j
 import { describeCauseChain } from './lib/runtime/error-chain.js';
 import { classifyWakeFailure } from './lib/runtime/wake-failure.js';
 import { registerShellGuard } from './lib/runtime/shell-guard.js';
+import { createActivationBudget } from './lib/runtime/activation-budget.js';
 import { aggregatePeople } from './lib/host/people-view.js';
 import { riskView } from './lib/host/risk-view.js';
 import { weeklyView } from './lib/host/weekly-view.js';
@@ -99,6 +100,8 @@ export const Config = z.object({
 	skilloptJudgeVotes: z.number().step(1).min(3).max(9).default(3),
 	// 初装默认项目与「新建项目」对话框的默认工作目录；留空则取宿主 cwd（见 boot）。
 	defaultWorkspace: z.string().default(''),
+	// 同一成员 30 分钟内允许的自动重建次数（失败→自愈→再失败的死循环闸门）。
+	autoReseatLimitPer30Min: z.number().step(1).min(1).max(100).default(6),
 	// 成员 shell 风险守卫：'warn' 只记诊断（默认），'block' 直接拒绝，'off' 不介入。
 	// 实机事故：成员写 serve.ps1 并用隐藏窗口拉起常驻进程，触发杀软报毒。
 	shellGuard: z.union(['off', 'warn', 'block']).default('warn'),
@@ -437,6 +440,11 @@ export function apply(ctx, config = {}) {
 						for (const member of Object.values(runtime.service.state.members ?? {})) {
 							if (member.kind !== 'agent' || member.routeStale !== true) continue;
 							if (member.status === 'retired') continue;
+							const budget = activationBudget.take(member.id);
+							if (budget.allowed !== true) {
+								diag.append({ ev: 'member.route-reconcile.suppressed.fail', projectId: runtime.id, memberId: member.id, count: budget.count, limit: budget.limit });
+								continue;
+							}
 							void activateMember({
 								payload: {
 									memberId: member.id,
@@ -693,6 +701,10 @@ export function apply(ctx, config = {}) {
 		// 本次请求的连续失败计数（按成员会话、10 分钟窗口）。
 		const requestAttempts = new Map();
 		const activationTasks = new Map();
+		// 自动重建预算：见 lib/runtime/activation-budget.js（issue #1 的 7 小时循环）。
+		const activationBudget = createActivationBudget({
+			limit: Number.isSafeInteger(config?.autoReseatLimitPer30Min) ? config.autoReseatLimitPer30Min : 6,
+		});
 		const pmoLastKick = new Map();
 		const pmoLastStall = new Map();
 		const pmoLastHeartbeat = new Map();
@@ -884,6 +896,21 @@ export function apply(ctx, config = {}) {
 						hasActivateMember: typeof activateMember === 'function',
 					});
 					if (legacySession) {
+						// 自动重建必须限额：issue #1 的「7 小时 / 200+ 子代理」就是这条路径
+						// 无上限地循环。超额后不再重建，成员保持 failed 并留可见诊断。
+						const budget = activationBudget.take(plan.memberId);
+						if (budget.allowed !== true) {
+							diag.append({
+								ev: 'member.reseat.suppressed.fail',
+								projectId: projectRuntime.id,
+								memberId: plan.memberId,
+								reason: plan.reason,
+								count: budget.count,
+								limit: budget.limit,
+								windowMs: budget.windowMs,
+							});
+							return;
+						}
 						try {
 							const reseated = await activateMember({
 								payload: {
