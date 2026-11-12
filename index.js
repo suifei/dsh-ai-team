@@ -563,6 +563,20 @@ export function apply(ctx, config = {}) {
 		// PMO tick 是 fire-and-forget：慢 tick（模型/IO）会被下一分钟的定时器再入，
 		// 造成 autoAnswerDecisions/reconcileJobs 并发执行同一条账本。按 Project 去重。
 		const pmoBusy = new Set();
+		// 同一项目目录的 reconcile 互斥：PMO tick 与 skillopt_jobs 工具会同时收割同一批
+		// job，两边都在「读 job 状态 → 写回」，并发时后到的一次判断会覆盖前一次的结果。
+		const reconcileBusy = new Set();
+		const reconcileWithLock = async (projectDir, options) => {
+			const key = typeof projectDir === 'string' ? projectDir : '';
+			if (key !== '' && reconcileBusy.has(key)) return false;
+			if (key !== '') reconcileBusy.add(key);
+			try {
+				await reconcileJobs(options);
+				return true;
+			} finally {
+				if (key !== '') reconcileBusy.delete(key);
+			}
+		};
 		// 本次请求的连续失败计数（按成员会话、10 分钟窗口）。
 		const requestAttempts = new Map();
 		const activationTasks = new Map();
@@ -776,7 +790,7 @@ export function apply(ctx, config = {}) {
 			// 两阶段异步优化 job 收割：与任务派发无关，放在停止门之前——
 			// Human 启动的 job 必须在任意运行态下收敛（生成/评审/落盘）。
 			try {
-				await reconcileJobs({
+				const reconciled = await reconcileWithLock(projectRuntime.dir, {
 					ctx,
 					// job 归属项目数据目录（与 skillopt_optimize 写入处一致）：
 					// 与工作区/激活项目无关，保证任意 tick 都能找到待收割 job。
@@ -805,6 +819,7 @@ export function apply(ctx, config = {}) {
 			} catch (error) {
 				diag.append({ ev: 'skillopt.job.tick.fail', message: error?.message ?? String(error) });
 			}
+			if (reconciled === false) diag.append({ ev: 'skillopt.reconcile.skip', projectId: projectRuntime.id, reason: 'in-flight' });
 			// 门禁必须在 await 之后重新取：reconcileJobs 可能耗时数秒，期间 Human
 			// 可能已经停用 PMO / 归档 / 停止项目，用 await 之前的快照会继续写账本。
 			const project = projectRuntime.service.state.projects?.[projectRuntime.id];
@@ -1250,7 +1265,7 @@ export function apply(ctx, config = {}) {
 						for (const jobRoot of jobRoots) {
 							if (typeof jobRoot !== 'string' || jobRoot === '') continue;
 							try {
-								await reconcileJobs({
+								const reconciledHere = await reconcileWithLock(jobRoot, {
 									ctx,
 									projectDir: jobRoot,
 									deps: {
@@ -1272,6 +1287,9 @@ export function apply(ctx, config = {}) {
 								});
 							} catch (error) {
 								diag.append({ ev: 'skillopt.jobs.step.fail', message: error?.message ?? String(error), jobRoot });
+							}
+							if (reconciledHere === false) {
+								diag.append({ ev: 'skillopt.reconcile.skip', projectId: jobRoot, reason: 'in-flight' });
 							}
 						}
 						const roots = jobRoots.length > 0 ? jobRoots : [process.cwd()];

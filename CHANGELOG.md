@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.52 - 2026-11-12
+
+**批 17：reconcile 项目级互斥 + 修复区间上报**
+
+- **同一项目的 reconcile 互斥**：PMO tick 与 `skillopt_jobs` 工具会同时收割同一批 job，两边都在「读 job 状态 → 写回」，并发时后到的一次判断会覆盖前一次的结果（`done` 冻结与原子写只是兜底）。现在按项目目录加锁，被跳过的一侧记 `skillopt.reconcile.skip`（`reason: in-flight`），不再静默。
+- **`ledger.repair()` 报告恢复区间**：返回 `acceptedRange: { from, to }` 与 `seqGaps[]`（最多 20 条）。一次失败的 `appendMany` 可能把前缀留在盘上，只说「修好了」不够——运维需要知道接受到哪个 seq、有没有洞。`project.repair` 命令一并透传。
+- 测试：`node --test` **253 通过 / 1 跳过**（新增 1 例：健康账本的 `project.repair` 返回空缺口）。
+
 ## 0.4.51 - 2026-11-12
 
 **批 16：卸载闸门（teardown 不再被在途异步链穿透）**

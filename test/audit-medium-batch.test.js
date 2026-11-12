@@ -352,3 +352,10 @@ test('startReview hands the card id to the caller before sending the requests', 
 	// normalizeVoteCount 会把 1 抬到 3：票数至少 3（奇数）
 	assert.equal(started.orders.length, 3);
 });
+
+test('project.repair reports the accepted range and any seq gaps', async (t) => {
+	const { service } = await makeService(t);
+	const result = await service.dispatch({ type: 'project.repair', actor: human, projectId: 'prj_b', payload: {} });
+	assert.ok(result.acceptedRange === null || typeof result.acceptedRange.to === 'number');
+	assert.deepEqual(result.seqGaps, [], 'a healthy ledger has no gaps');
+});
