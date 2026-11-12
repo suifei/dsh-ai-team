@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.61 - 2026-11-12
+
+**诊断目录跟随 `DSH_HOME` + 关闭句柄的 flush 不再报错**
+
+0.4.60 真机日志里混进了测试的痕迹（`E:/definitely-not-existing-dir-xyz`、`memberId: a1`、`boot.refused`）：`defaultDiagDir()` 用的是 `homedir()`，而插件数据目录用的是 `dshHome()`（尊重 `DSH_HOME`）。于是任何把 `DSH_HOME` 指到临时目录的隔离实例（测试、临时 profile）都会把诊断行写进**生产日志**。
+
+- `defaultDiagDir()` 改为 `join(dshHome(), 'ai-team')`：未设置 `DSH_HOME` 时行为不变（仍是 `~/.dsh/ai-team`），设置后与数据目录同源；空白值按未设置处理。
+- `flush on a closed handle` 降级为 `session.flush.skipped`（不属于错误事件）：`turn/end` 之后句柄已关闭，flush 失败属正常，记成 `.fail` 会让发布默认级别的日志看起来一直在出错。真正的 flush 失败仍记 `session.flush.fail`。
+- 测试：`node --test` **261 通过 / 1 跳过**（新增 `diaglog` 2 例：`DSH_HOME` 跟随与空白值、`session.flush.skipped` 不在错误白名单）。
+
 ## 0.4.60 - 2026-11-12
 
 **`DSH_HOME` 被搬迁时也不能把真实 profile 目录当建议工作目录**

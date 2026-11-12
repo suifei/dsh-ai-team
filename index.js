@@ -536,8 +536,15 @@ export function apply(ctx, config = {}) {
 				try {
 					await sessions?.flush?.(session);
 				} catch (error) {
-					diag.append({ ev: 'session.flush.fail', sessionId: session?.id ?? null, message: error?.message ?? String(error) });
-					console.warn('[ai-team] member session flush failed:', error?.message ?? error);
+					const message = error?.message ?? String(error);
+					// 回合结束时句柄可能已经关闭（turn/end 之后会话被回收）：这不是缺陷，
+					// 记成 `.fail` 会让发布默认的 errors 级别日志看起来一直在出错。
+					if (/closed handle/i.test(message)) {
+						diag.append({ ev: 'session.flush.skipped', sessionId: session?.id ?? null, message });
+					} else {
+						diag.append({ ev: 'session.flush.fail', sessionId: session?.id ?? null, message });
+						console.warn('[ai-team] member session flush failed:', message);
+					}
 				}
 				// 回合结局必须全部可见：`blocked` 表示回合在发出模型请求前就被拒绝
 				// （典型原因：会话或血缘祖先被归档），`error` 表示模型/工具链失败。
