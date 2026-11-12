@@ -1293,3 +1293,25 @@ test('a provider/model change marks the member route stale until the session is 
 	]));
 	assert.equal(quiet.members.mem_b.routeStale, false);
 });
+
+test('replaying a ledger that already switched models marks the route stale (no migration script)', () => {
+	// 实机序列：先按 deepseek-official 失败（attempt 1），随后 6 个成员被改成 qwen，
+	// 再失败一次（attempt 2，provider 仍是 deepseek）。重新折叠这段历史时，
+	// 「配置路由 ≠ 上次失败路由」就必须把成员标成 routeStale——老数据无需手工迁移。
+	const events = chain('prj_backfill', [
+		{ type: 'project/member-added', payload: { kind: 'agent', memberId: 'mem_lead', name: '墨渊', role: '主理人', status: 'idle' } },
+		{ type: 'member/session-bound', payload: { memberId: 'mem_lead', sessionId: 's-old', status: 'running' } },
+		{ type: 'member/llm-failed', payload: { memberId: 'mem_lead', attempt: 1, provider: 'deepseek-official', model: null, category: 'unknown', message: 'no API key', fatal: true } },
+		{ type: 'member/config-updated', payload: { memberId: 'mem_lead', config: { provider: 'qwen', model: 'Qwen3.8' }, configVersion: 1 } },
+		{ type: 'member/llm-failed', payload: { memberId: 'mem_lead', attempt: 2, provider: 'deepseek-official', model: 'Qwen3.8', category: 'unknown', message: 'no API key', fatal: true } },
+	]);
+	const state = fold(events);
+	assert.equal(state.members.mem_lead.status, 'failed');
+	assert.equal(state.members.mem_lead.routeStale, true, 'the session still runs the old route');
+
+	// 重建会话后清除；之后再改配置也不会误判（失败记录已与新路由一致）。
+	const rebuilt = fold([...events, ...chain('prj_backfill', [
+		{ type: 'member/session-bound', payload: { memberId: 'mem_lead', sessionId: 's-new', status: 'running' } },
+	]).map((event, index) => ({ ...event, seq: events.length + index + 1 }))]);
+	assert.equal(rebuilt.members.mem_lead.routeStale, false);
+});

@@ -429,6 +429,33 @@ export function apply(ctx, config = {}) {
 					// 都会在这里露出原始错误码——不再靠日志里那句
 					// 「subagent X is unavailable」猜。
 					await probePersistence(value.sessionIds);
+					// 路由过期对账：账本重新折叠时，凡是「上次失败的路由 ≠ 当前配置」的成员
+					// 都会带上 routeStale（老数据无需迁移脚本），但那条标记只有**新配置事件**
+					// 才会触发唤醒计划，失败成员又被排除在自动唤醒之外。所以 boot 后补一次
+					// 强制重建，让升级本身就把卡住的成员救回来。
+					for (const runtime of value.runtimes.values()) {
+						for (const member of Object.values(runtime.service.state.members ?? {})) {
+							if (member.kind !== 'agent' || member.routeStale !== true) continue;
+							if (member.status === 'retired') continue;
+							void activateMember({
+								payload: {
+									memberId: member.id,
+									force: true,
+									prompt: '模型/提供方已切换，会话按新路由重建。先读 tasks 与 thread 的当前状态，继续未完成的工作，不要重复已完成的事。',
+								},
+							}, runtime).then((result) => {
+								diag.append({
+									ev: result?.error === undefined ? 'member.route-reconciled' : 'member.route-reconcile.fail',
+									projectId: runtime.id,
+									memberId: member.id,
+									sessionId: result?.member?.sessionId ?? null,
+									error: result?.error ?? null,
+								});
+							}).catch((error) => {
+								diag.append({ ev: 'member.route-reconcile.fail', projectId: runtime.id, memberId: member.id, message: error?.message ?? String(error) });
+							});
+						}
+					}
 					for (const runtime of value.runtimes.values()) {
 						for (const member of Object.values(runtime.service.state.members ?? {})) {
 							if (member.kind === 'agent' && typeof member.sessionId === 'string') {
