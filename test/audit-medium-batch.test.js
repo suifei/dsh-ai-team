@@ -265,3 +265,16 @@ test('stepJob does not require vcs.backup and freezes a failed job', async (t) =
 	assert.equal(result.job.before, 'before text');
 	assert.ok(['judging', 'failed'].includes(result.job.state), 'unexpected state: ' + result.job.state);
 });
+
+test('PMO auto-answer skips a decision item that has no structured questions', async (t) => {
+	const { service } = await makeService(t);
+	await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'mem_a', name: '甲', kind: 'agent', role: '执行' } });
+	// 致命失败生成的升级项没有 questions：自动作答会把它 resolved，Human 再也看不到。
+	await service.recordMemberFailure('mem_a', { category: 'auth', message: 'bad key' }, 'prj_b');
+	const items = Object.values(service.state.inbox ?? {}).filter((item) => item.type === 'decision_required');
+	assert.equal(items.length, 1);
+	assert.equal(Array.isArray(items[0].ref?.questions), false);
+	const answered = await service.autoAnswerDecisions('prj_b');
+	assert.deepEqual(answered, []);
+	assert.equal(service.state.inbox[items[0].id].state, 'unread', 'the escalation must stay for Human');
+});

@@ -11,7 +11,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import z from '@deepseek-ai/schemastery';
 import { ProjectRuntime } from './lib/host/project-runtime.js';
 import { ProjectRegistry } from './lib/host/project-registry.js';
@@ -1292,20 +1292,30 @@ export function apply(ctx, config = {}) {
 							// 一次 revert 用陈旧快照覆盖（反之亦然）。
 							let liveText = null;
 							try { liveText = existsSync(job.skillPath) ? readFileSync(job.skillPath, 'utf8') : null; } catch { liveText = null; }
-							if (liveText !== null && typeof job.before === 'string' && sha12(liveText) !== sha12(job.before)) {
+							// live 与候选一致 = 上一次已经落过盘、只差收尾（进程在「改 live」与
+							// 「写 results/终态」之间崩溃）。这不是 conflict：按 conflict 处理会把
+							// 一次成功的 keep 在下一轮判成失败。
+							const liveSha = liveText === null ? null : sha12(liveText);
+							const candidateSha = typeof job.candidate === 'string' ? sha12(job.candidate) : null;
+							const alreadyApplied = liveSha !== null && candidateSha !== null && liveSha === candidateSha;
+							if (!alreadyApplied && liveText !== null && typeof job.before === 'string' && liveSha !== sha12(job.before)) {
 								writeJob(jobDir, { ...job, state: 'failed', error: 'live SKILL.md changed during review (conflict)', updatedAt: Date.now() });
 								await closeReviewCard(runtime, job.reviewTaskId, 'blind review aborted: live file changed');
 								diag.append({ ev: 'skillopt.job.conflict', jobId: job.id, skillPath: job.skillPath });
 								continue;
 							}
+							if (alreadyApplied) diag.append({ ev: 'skillopt.job.resume', jobId: job.id, reason: 'candidate already applied' });
 							let backupPath = null;
 							try {
 								backupPath = backupLive({ projectDir: jobDir, skillPath: job.skillPath, text: liveText ?? job.before ?? '' });
 							} catch (error) {
 								diag.append({ ev: 'skillopt.job.backup.fail', jobId: job.id, message: error?.message ?? String(error) });
 							}
+							// 先把决定落成 job 记录：进程若在「改 live」之后崩溃，下一次仍能看出
+							// 这次要收尾成什么（配合上面的 alreadyApplied 幂等判定）。
+							writeJob(jobDir, { ...job, decision: collected.decision, backup: backupPath ?? job.backup ?? null, applyingSince: Date.now() });
 							// keep → 落盘候选；revert → 恢复基线（评审卡收票后才动文件）。
-							applyLiveAtomically(job.skillPath, kept ? job.candidate : job.before);
+							if (!alreadyApplied) applyLiveAtomically(job.skillPath, kept ? job.candidate : job.before);
 							const beforeScore = scoreSkillRubric(job.before, { measured: false })?.total ?? null;
 							const afterScore = scoreSkillRubric(kept ? job.candidate : job.before, { measured: false })?.total ?? null;
 							const appender = makeResultAppender({ projectDir: jobDir });
@@ -1751,13 +1761,21 @@ export function apply(ctx, config = {}) {
 					if (memberName === '' || personId === '') {
 						return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: 'name and personId are required' } }, 400);
 					}
-					const aliases = readAliases() ?? {};
+					// 读失败/文件损坏不能当成空表：那会把用户已有的别名整文件覆盖掉。
+					const existing = readAliases();
+					if (existing === null && existsSync(aliasesPath)) {
+						return send(res, { error: { code: 'E_UNREADABLE', message: 'people-aliases.json 无法解析；请先修正或删除该文件再绑定' } }, 409);
+					}
+					const aliases = existing ?? {};
 					// 归一到视图层的桶键：接受 `person:<id>`、`name:<名字>` 或裸名字。
 					// 归一后才能与 aggregatePeople 的桶键对齐（裸名字曾让两行永不合并，
 					// 而界面还提示「已绑定」）。
 					const normalized = personId.startsWith('person:') || personId.startsWith('name:') ? personId : `name:${personId}`;
 					aliases[memberName] = normalized;
-					writeFileSync(aliasesPath, JSON.stringify(aliases, null, 2) + '\n', 'utf8');
+					// 原子写：先写临时文件再改名，半个文件会让下一次读取直接判损坏。
+					const tempPath = `${aliasesPath}.tmp`;
+					writeFileSync(tempPath, JSON.stringify(aliases, null, 2) + '\n', 'utf8');
+					renameSync(tempPath, aliasesPath);
 					diag?.append({ ev: 'people.alias', name: memberName, personId });
 					return send(res, { ok: true, aliases });
 				}
@@ -2230,6 +2248,14 @@ export function apply(ctx, config = {}) {
 										activations.delete(retiredSession);
 										try { await activation.dispose?.(); } catch { /* already gone */ }
 										diag.append({ ev: 'member.activation.disposed', memberId: retiredId, sessionId: retiredSession, reason: body.type });
+									}
+									// 冷恢复得到的 handle 也要回收：它同样常驻进程，且不会因为
+									// activation 被 dispose 而消失（两套句柄分开登记）。
+									const resumed = resumedHandles.get(retiredSession);
+									if (resumed !== undefined) {
+										resumedHandles.delete(retiredSession);
+										try { await resumed.dispose?.(); } catch { /* already gone */ }
+										diag.append({ ev: 'member.resumed-handle.disposed', memberId: retiredId, sessionId: retiredSession, reason: body.type });
 									}
 								}
 							}
