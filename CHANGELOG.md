@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.57 - 2026-11-12
+
+**修 0.4.56 真机暴露的默认目录建议错误：整个 `~/.dsh` 都排除**
+
+重启后实测 `bootstrap.defaultWorkspace` 返回 `C:\Users\SuiFei\.dsh\profiles\desktop`——桌面启动器的宿主进程 cwd 就是 profile 目录，它不等于插件数据目录（`…\.dsh\ai-team\desktop`），于是通过了 0.4.50 的排除规则，被当成「建议工作目录」。把 profile 目录当项目工作区显然是错的。
+
+- `resolveDefaultWorkspace` 新增 `excludeRoots`；`boot` 传入 `[dshHome()]`，整棵 `~/.dsh` 都不再作为建议目录。
+- 实测（本机真实路径）：`cwd=…\.dsh\profiles\desktop` → 建议退到 `C:\Users\SuiFei`；不传 `excludeRoots` 时仍返回 profile 目录（对照）。
+- 测试：`node --test` **256 通过 / 1 跳过**（新增 1 例：profile 目录被跳过、`~/.dsh` 内无可用目录时返回空、显式配置会被拒绝并继续尝试后续候选）。
+
 ## 0.4.56 - 2026-11-12
 
 **0.4.55 被 npm 暂存审查卡住，改用新版本号发布同一份代码**

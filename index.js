@@ -190,6 +190,8 @@ async function boot(diag, config = {}) {
 		cwd: process.cwd(),
 		home: homedir(),
 		dataDir,
+		// 整个 ~/.dsh 都不能当工作目录（桌面启动器的 cwd 就是 profile 目录）。
+		excludeRoots: [dshHome()],
 	});
 	const registry = ProjectRegistry.load(dataDir, { defaultWorkspacePath: defaultWorkspace });
 	const runtimes = new Map();
