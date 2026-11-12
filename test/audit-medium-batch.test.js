@@ -361,8 +361,7 @@ test('project.repair reports the accepted range and any seq gaps', async (t) => 
 	assert.deepEqual(result.seqGaps, [], 'a healthy ledger has no gaps');
 });
 
-test('library failures reach the shared diagnostic sink and are written as .fail rows', async (t) => {
-	const dir = mkdtempSync(join(tmpdir(), 'aiteam-sink-'));
+test('library failures reach the shared diagnostic sink and are written as .fail rows', async (t) => {	const dir = mkdtempSync(join(tmpdir(), 'aiteam-sink-'));
 	t.after(() => rmSync(dir, { recursive: true, force: true }));
 	const rows = [];
 	const remove = installDiagSink((row) => rows.push(row));

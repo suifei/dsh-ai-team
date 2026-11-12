@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.58 - 2026-11-12
+
+**让「归档修复跑没跑」可判定：`host.repair.ok` 进 errors 白名单**
+
+真机 0.4.57 启动后，诊断日志（发布默认 `errors` 级）里**只有**一行 `host.repair.deferred.fail`（boot 瞬间 `workspaceRegistry` 未就绪）。修复后来到底成功没有，`errors` 级看不到——成功行被级别过滤掉了，等于这个关键修复永远处于「不知是否生效」的状态。
+
+- 新增成功行 `host.repair.ok`（带 `archived` 数量与前 5 个 sessionId），并在 `isErrorEvent` 白名单里登记，**发布默认级别即落盘**。
+- 端到端验证（`.ptc/rounds/dryrun-real-ledger.mjs`，仓库源码 + 模拟 registry 就绪 + `diagLevel: errors`）：日志里只有 `host.repair.ok` 与 `skillopt.skip.fail` 两行，`deferred.fail` 消失。
+- 测试：`node --test` **257 通过 / 1 跳过**（新增 1 例：`isErrorEvent('host.repair.ok')` 为真）。
+
 ## 0.4.57 - 2026-11-12
 
 **修 0.4.56 真机暴露的默认目录建议错误：整个 `~/.dsh` 都排除**

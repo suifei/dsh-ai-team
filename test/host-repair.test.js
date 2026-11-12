@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { repairArchivedHosts } from '../lib/runtime/host-repair.js';
 
@@ -62,4 +62,12 @@ test('a failing unarchive is reported and the sweep keeps going', async () => {
 	});
 	assert.deepEqual(repaired, ['m4', 'host-5']);
 	assert.equal(diag.some((row) => row.ev === 'host.unarchive.fail' && row.sessionId === 'host-4'), true);
+});
+
+test('the success row survives the shipped errors level', async () => {
+	// 发布默认 level=errors 只保留白名单事件。若 `host.repair.ok` 不在白名单，
+	// 「归档修复到底跑没跑」永远无法从日志判定（实机只有 boot 那一行 deferred.fail）。
+	const { isErrorEvent } = await import('../lib/diaglog.js');
+	assert.equal(isErrorEvent('host.repair.ok'), true);
+	assert.equal(isErrorEvent('host.unarchive.fail'), true);
 });

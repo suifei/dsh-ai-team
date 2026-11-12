@@ -1488,6 +1488,13 @@ export function apply(ctx, config = {}) {
 					return;
 				}
 				hostRepaired = true;
+				// 成功行必须留在 errors 级别：否则「归档修复有没有跑过」永远无法判定
+				// （只有 boot 瞬间那一行 deferred.fail 可见，见 lib/diaglog.js 白名单）。
+				diag.append({
+					ev: 'host.repair.ok',
+					archived: Array.isArray(repaired) ? repaired.length : 0,
+					sessionIds: Array.isArray(repaired) ? repaired.slice(0, 5) : [],
+				});
 			} catch (error) {
 				hostRepaired = true;
 				diag.append({ ev: 'host.unarchive.sweep.fail', error: error?.message ?? String(error) });
