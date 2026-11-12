@@ -183,7 +183,7 @@ async function boot(diag, config = {}) {
 	const legacyDir = join(dshHome(), 'ai-team', 'default');
 	// 只在**桌面启动器**（profile 以位置参数传入）时搬迁：那个坑正是它造成的。
 	// 从 --profile ai-team 起一个 CLI 不该把 GUI 的团队偷走。
-	if (dataDir !== legacyDir && resolvedProfile().source === 'argv-path') {
+	if (dataDir !== legacyDir && ['argv-path', 'profiles-single'].includes(resolvedProfile().source)) {
 		migrateLegacyNamespace({ fromDir: legacyDir, toDir: dataDir, diag });
 	}
 	// 默认工作目录：规则与优先级见 lib/host/default-workspace.js（有独立测试）。

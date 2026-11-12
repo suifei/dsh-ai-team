@@ -88,3 +88,26 @@ test('a failed migration restores the target instead of leaving it renamed away'
 	assert.equal(existsSync(join(target, 'keep.txt')), true);
 	assert.equal(existsSync(legacy), true);
 });
+
+test('a launcher that only passes dsh-root still resolves the single installed profile', async (t) => {
+	// 实机事故：某些启动器只传 dsh-root，argv 里没有 profiles/<name>，于是账本写进
+	// `ai-team/default/`（那台机器的诊断目录就是 ai-team/default）。
+	const root = mkdtempSync(join(tmpdir(), 'aiteam-ns-single-'));
+	t.after(() => rmSync(root, { recursive: true, force: true }));
+	mkdirSync(join(root, 'profiles', 'desktop'), { recursive: true });
+	const env = { DSH_HOME: root };
+	assert.deepEqual(resolveProfile(['dsh', root], env), { name: 'desktop', source: 'profiles-single' });
+
+	// 有多个 profile 时绝不猜：宁可回退 default，也不把别人的团队挂错。
+	mkdirSync(join(root, 'profiles', 'web'), { recursive: true });
+	assert.deepEqual(resolveProfile(['dsh', root], env), { name: 'default', source: 'default' });
+
+	// 显式 argv / env 仍然优先于该兜底。
+	assert.deepEqual(resolveProfile(['dsh', join(root, 'profiles', 'web')], env), { name: 'web', source: 'argv-path' });
+	assert.deepEqual(resolveProfile(['dsh', root], { ...env, DSH_PROFILE: 'ai-team' }), { name: 'ai-team', source: 'env' });
+
+	// 没有 profiles 目录（全新环境）时保持 default。
+	const empty = mkdtempSync(join(tmpdir(), 'aiteam-ns-empty-'));
+	t.after(() => rmSync(empty, { recursive: true, force: true }));
+	assert.deepEqual(resolveProfile(['dsh'], { DSH_HOME: empty }), { name: 'default', source: 'default' });
+});
