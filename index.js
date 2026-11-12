@@ -258,6 +258,20 @@ export function apply(ctx, config = {}) {
 	// 库模块（ledger / registry / host-agent / skill-provider / jobs）拿不到 diag，
 	// 之前只能 console.warn——线上不可检索。这里把共享失败汇接到真正的 diag。
 	const removeDiagSink = installDiagSink((row) => diag.append(row));
+	// 启动探针：实机 `NOT_RESUMABLE` 的两种可能都指向「取不到服务」——
+	// `agents.resume` 在 `sessionPersistence` 缺失时抛 "cannot resume: session
+	// persistence is not configured"，`subagents.coldResume` 在同一个服务缺失时
+	// 直接 notFound。这里把缺失的关键服务记成 `.fail`（发布默认级别可见），
+	// 不必再靠猜。
+	try {
+		const required = ['sessions', 'sessionPersistence', 'subagents', 'agents', 'workspaceRegistry'];
+		const missing = required.filter((name) => serviceOf(ctx, name) === undefined);
+		const present = required.filter((name) => !missing.includes(name));
+		diag.append({ ev: 'service.probe', present });
+		if (missing.length > 0) diag.append({ ev: 'service.missing.fail', missing });
+	} catch (probeError) {
+		diag.append({ ev: 'service.probe.fail', message: probeError?.message ?? String(probeError) });
+	}
 	// HTTP 层失败/拒绝的统一落点（route.reject 在 errors 白名单内）。
 	const errorResponse = (res, error) => {
 		diag.append({

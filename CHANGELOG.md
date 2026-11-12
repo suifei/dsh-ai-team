@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.67 - 2026-11-12
+
+**启动探针：把「关键服务缺失」变成可判定的一行**
+
+继续追 `NOT_RESUMABLE`。已排除的假设（都有证据）：
+
+- 会话文件损坏 —— 逐帧解压 87 个事件、`subagent/descriptor` 的 `mode: "continuable"` 完好；
+- 会话未登记工作区 —— 7 个成员会话全部在 `E:\works\il2c` 的 `sessionIds` 里；
+- 后端未挂载 —— `dsh-base` 的 `cordis.patch.yml` 声明了 `session-persistence-jsonl`，宿主启动日志显示 `state: 'active'`。
+
+剩下的嫌疑集中在**运行期取不到服务**：`agents.resume` 在 `sessionPersistence` 缺失时抛
+"cannot resume: session persistence is not configured"，`subagents.coldResume` 在同一个
+服务缺失时直接 `notFound`——两者都会表现为我们看到的 `subagent "X" is unavailable`。
+
+- boot 时探针 `sessions` / `sessionPersistence` / `subagents` / `agents` / `workspaceRegistry`：
+  缺失即写 `service.missing.fail`（发布默认级别可见），齐全则写 `service.probe`（`full` 级）。
+- 与 0.4.66 的 `wake.fail.cause` 配合，下一次 `NOT_RESUMABLE` 就能同时拿到「服务地图」和
+  「真实错误码/消息」，不必再猜。
+- 测试：`node --test` **269 通过 / 1 跳过**；干跑可见 `service.probe` 与
+  `service.missing.fail` 按预期产出（假 ctx 必然缺失）。
+
 ## 0.4.66 - 2026-11-12
 
 **`wake.fail` 带上 cause 链：`NOT_RESUMABLE` 的真实原因不再被吞掉**
