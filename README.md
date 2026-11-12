@@ -64,7 +64,7 @@ dsh --profile ai-team --no-open --port 33271
 
 打开终端输出的 URL，点侧栏 **文渊阁**。
 
-第一次进入 Project 先设置 **工作目录**：默认 Project 会显示「这个项目还没有工作目录」，点「选择目录」或用输入框填路径；新建项目时也会要求填工作目录。每个 Project 独立一个目录，成员只在这个目录里执行 Task。
+第一次进入 Project 先设置 **工作目录**：工作目录编辑器会自动弹出，并预填宿主给出的建议值——配置项 `defaultWorkspace` → 当前进程目录 → **`~/works`**（Windows 为 `%USERPROFILE%\works`，Linux/macOS 为 `~/works`；不存在时自动创建）。点「选择目录」或用输入框改成任意已存在的目录即可；**新建项目必须填工作目录**（服务端强制，空目录会被 400 拒绝）。每个 Project 独立一个目录，成员只在这个目录里执行 Task。
 
 > 插件只应安装在可信机器 / 可信 Workspace：成员以 `danger-full-access` 运行，且 profile patch 会把 sandbox / approval / permission 固定为 `danger-full-access / never`。普通 `desktop`/`web` profile 不安装时保持原有 preset roster。
 
@@ -170,19 +170,25 @@ POST /ai-team/api/projects/<id>/commands
 
 ## 验证
 
-- `node --test`：**82 / 82**
-- 文档 QA：`node .ptc/tools/docs_check.mjs` → **0 problems**
+- `node --test`：**262 通过 / 1 跳过**（跳过项是目录 junction 用例，本机沙箱不允许创建）
+- 真实账本副本干跑（`.ptc/rounds/dryrun-real-ledger.mjs`，可重复运行、不写生产数据）：
+  用**已安装的 npm 产物**启动真实项目账本，核对 `health` / `bootstrap` / `/people` /
+  `project.repair`（`acceptedRange` + `seqGaps`）/ 新建项目空目录被 400 拒绝
+- 重启后验证清单：`.ptc/rounds` 与 `docs/重启后验证清单-*.md`（6 步，含命令与预期）
+- npm 产物一致性：远端 tarball 与本地安装副本逐文件 SHA256 比对
 - 真实 E2E 覆盖：
   - 两 Agent claim → Thread → 独立验收；
   - 一句话 → Lead 开卡 → QA 自动验收 → owner 自进化；
-  - 强停重启 → `startup_resume` → 继续 Task；
+  - 强停重启 → `startup_resume` → 继续 Task（`NOT_RESUMABLE` 时自动重建会话，见 `member.autoreseat`）；
   - 真实浏览器私信成员；
   - 四运行配方分别执行 `run_code` / `pwsh`；
   - 并发 Project + 跨 Project 收件箱；
   - DeepSeek + Zhipu 双订阅 SSE 分桶；
   - V-10 turn 中途权限降级后工具前修复；
   - billing 402 / ECONNRESET 三次重试与恢复；
-  - 从 npm 安装后在独立 profile 启动 health 200。
+  - 从 npm 安装后在独立 profile 启动 health 200；
+  - 归档 host 自动解归档（`host.repair.ok`，带解归档数量）；
+  - 诊断日志分级：发布默认 `errors` 只保留失败与关键成功行（`host.repair.ok` / `member.autoreseat`），且诊断目录跟随 `DSH_HOME`。
 
 证据目录（本机 `.ptc/rounds/`，不随 npm 发布）：
 
