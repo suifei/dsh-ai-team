@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { findReportPath, parseDecisionQuestions } from '../lib/host/decision-report.js';
 
 test('parses the Human decision table from a markdown report', () => {
@@ -21,9 +24,9 @@ test('parses the Human decision table from a markdown report', () => {
 	assert.equal(questions[1].text, '目标用户？');
 });
 
-test('finds the last Windows markdown path in a thread message', () => {
-	const path = findReportPath('报告：E:\\work\\report.md，旧稿 E:\\work\\old.md');
-	assert.equal(path, 'E:\\work\\old.md');
+test('falls back to the last mention when no candidate exists', () => {
+	// 都不存在时按「最终答复」约定取最后一次提到的路径。
+	assert.equal(findReportPath('报告：E:\\work\\report.md，旧稿 E:\\work\\old.md'), 'E:\\work\\old.md');
 	assert.equal(findReportPath('no path'), null);
 });
 
@@ -38,4 +41,23 @@ test('accepts a Chinese section number (六) for the decision table', () => {
 	const questions = parseDecisionQuestions(markdown);
 	assert.equal(questions.length, 1);
 	assert.match(questions[0].text, /走 A 还是 B/);
+});
+
+test('prefers a path that exists over a trailing template example', (t) => {
+	// 真实产物存在、文末模板不存在：靠存在性判别，而不是「取第一个/取最后一个」。
+	const dir = mkdtempSync(join(tmpdir(), 'aiteam-report-'));
+	t.after(() => rmSync(dir, { recursive: true, force: true }));
+	const real = join(dir, '决策报告.md');
+	writeFileSync(real, '# report\n', 'utf8');
+	const thread = [
+		`产物已写到 \`${real}\`，请查收。`,
+		'',
+		'## 附录：写法示例',
+		'- 报告路径：`E:/works/demo/template.md`',
+	].join('\n');
+	assert.equal(findReportPath(thread), real);
+});
+
+test('falls back to the last mention when no candidate exists', () => {
+	assert.equal(findReportPath('示例 D:/tmp/a.md，实际 E:/works/real.md'), 'E:/works/real.md');
 });

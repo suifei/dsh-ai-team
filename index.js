@@ -1400,9 +1400,16 @@ export function apply(ctx, config = {}) {
 					cwd: booted?.dataDir ?? process.cwd(),
 					resumeSessionId: existingHost,
 				}).then(async (value) => {
-					if (value.created === true && existingHost === undefined) {
-						for (const runtime of booted?.runtimes?.values() ?? []) {
+					// Host 会话必须落账：它决定冷恢复与 sendMessage 的 parent，也决定归档
+					// 修复 sweep 能不能看见根会话。除了「首次创建」，从 roots() 里选中
+					// 既有会话、以及父级发生变化（换成了另一条根会话）时同样要重绑——
+					// 否则之后每次 sendMessage/coldResume 都以 UNAUTHORIZED 失败且无自愈。
+					for (const runtime of booted?.runtimes?.values() ?? []) {
+						if (runtime.service.state.hostSessionId === value.sessionId) continue;
+						try {
 							await runtime.service.bindHostSession(value.sessionId, runtime.id);
+						} catch (error) {
+							diag.append({ ev: 'host.bind.fail', projectId: runtime.id, sessionId: value.sessionId, message: error?.message ?? String(error) });
 						}
 					}
 					host = value;
