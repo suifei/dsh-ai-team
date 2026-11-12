@@ -46,7 +46,7 @@ import { createMemberPermissionGuard } from './lib/host/permission-guard.js';
 import { installFaultAdapter } from './lib/host/fault-adapter.js';
 import { buildModelCatalog } from './lib/host/model-catalog.js';
 import { createTeamTool } from './lib/host/member-tools.js';
-import { describeWake, planWakes } from './lib/host/waker.js';
+import { describeTaskContext, describeWake, planWakes } from './lib/host/waker.js';
 import { aggregatePeople } from './lib/host/people-view.js';
 import { riskView } from './lib/host/risk-view.js';
 import { weeklyView } from './lib/host/weekly-view.js';
@@ -645,7 +645,7 @@ export function apply(ctx, config = {}) {
 			// A live member already carries the activation context (identity,
 			// personality, skills). A wake is only the Task delta; re-sending the
 			// whole activation prompt caused the duplicated blocks users saw.
-			const wakePrompt = async (plan) => describeWake(plan, projectRuntime.service.state);
+			const wakePrompt = async (plan, member, options = {}) => describeWake(plan, projectRuntime.service.state, options);
 			for (const plan of plans) {
 				if (wakeKeys.has(plan.key)) continue;
 				let member = projectRuntime.service.state.members?.[plan.memberId];
@@ -676,7 +676,7 @@ export function apply(ctx, config = {}) {
 							// 调用里，await 先让出执行权、单飞表还没登记，并发的两个计划会各自
 							// 启动一次激活（两个子会话）。
 							activation = (async () => activateMember({
-								payload: { memberId: member.id, prompt: await wakePrompt(plan, member) },
+								payload: { memberId: member.id, prompt: await wakePrompt(plan, member, { includeThread: true }) },
 							}, projectRuntime))();
 							activationTasks.set(activationKey, activation);
 							activation.finally(() => activationTasks.delete(activationKey)).catch(() => {});
@@ -701,7 +701,11 @@ export function apply(ctx, config = {}) {
 							cwd,
 							trackHandle: (sessionId, handle) => resumedHandles.set(sessionId, handle),
 						});
-						const delivered = await runtime.wake(member, { prompt: await wakePrompt(plan, member) });
+						const delivered = await runtime.wake(member, {
+							// 冷路径（会话不在线）才附 Thread 尾巴：成员靠它续跑，不必从零回忆；
+							// 热路径上下文已在会话里，附上去只是白烧 token。
+							prompt: await wakePrompt(plan, member, { includeThread: sessions?.get?.(member.sessionId) === undefined }),
+						});
 						messageId = delivered.messageId ?? null;
 						// A cold session cannot be renamed before wake; retry once it is live.
 						await titleMemberSession(projectRuntime, member);
@@ -769,7 +773,9 @@ export function apply(ctx, config = {}) {
 								payload: {
 									memberId: plan.memberId,
 									force: true,
-									prompt: '会话已升级为团队子智能体形态（历史会话迁移）。先读 tasks/thread 当前状态，继续推进；不要重复已完成的工作。',
+									// 重建 = 上下文清零：把当前 Task 与 Thread 尾巴直接递到手上，
+									// 不让成员靠猜测恢复现场（数据来自账本投影，不另存一份）。
+									prompt: `会话已重建（原会话不可恢复）。先读 tasks/thread 当前状态，继续推进；不要重复已完成的工作。${describeTaskContext(projectRuntime.service.state, plan.taskId, { includeThread: true })}`,
 								},
 							}, projectRuntime);
 							diag.append({

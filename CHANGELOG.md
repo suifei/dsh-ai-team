@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.64 - 2026-11-12
+
+**重建后不再从零开始：冷路径提示词带上当前 Task 与最近对话**
+
+实测发现 `NOT_RESUMABLE` **不是**重启瞬间的边界：今天 120 次 `wake.fail` 里 118 次是它，00–11 时每小时都有（`thread_reply` 64、`pmo_heartbeat` 12、`pmo_meeting` 11…）。每次失败都会重建成员会话 = 上下文清零，而唤醒提示词只有一行指令，成员只能自己去 `team` 里翻现场。
+
+- 新增 `describeTaskContext(state, taskId, { includeThread })`（`lib/host/waker.js`）：从账本投影渲染
+  「【当前 Task】#55 标题 [状态]」+「【最近对话】」最近 3 条（正文截断 120 字）。
+  **不新增任何存储**——数据本来就在 `state.tasks` / `state.threads` / `state.members` 里。
+- 冷路径才附对话尾巴：`member.sessionId` 不在线（成员首次激活、会话不可恢复）时
+  `includeThread: true`；热路径上下文已在会话里，加进去只是白烧 token。
+- 重建提示词同样复用该上下文（原文案「会话已升级…历史会话迁移」改为「会话已重建…」）。
+- 测试：`node --test` **264 通过 / 1 跳过**（新增 2 例：Task 行恒带、对话尾巴仅在冷路径；
+  长对话只保留最近 3 条且每行 ≤130 字）。
+
 ## 0.4.63 - 2026-11-12
 
 **产物收尾：README 验证段落与验证清单升版**

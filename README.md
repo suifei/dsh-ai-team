@@ -170,7 +170,7 @@ POST /ai-team/api/projects/<id>/commands
 
 ## 验证
 
-- `node --test`：**262 通过 / 1 跳过**（跳过项是目录 junction 用例，本机沙箱不允许创建）
+- `node --test`：**264 通过 / 1 跳过**（跳过项是目录 junction 用例，本机沙箱不允许创建）
 - 真实账本副本干跑（`.ptc/rounds/dryrun-real-ledger.mjs`，可重复运行、不写生产数据）：
   用**已安装的 npm 产物**启动真实项目账本，核对 `health` / `bootstrap` / `/people` /
   `project.repair`（`acceptedRange` + `seqGaps`）/ 新建项目空目录被 400 拒绝

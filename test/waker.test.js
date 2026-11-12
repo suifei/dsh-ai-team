@@ -183,8 +183,60 @@ test('wake prompt is a Task delta, not a repeated identity block', () => {
 	assert.doesNotMatch(prompt, /你是/);
 });
 
-test('no wake is planned for a member who authored a thread reply', () => {
-	const plans = planWakes(state, {
+test('the current Task line is always attached, the thread tail only on cold paths', () => {
+	// 实机背景：成员会话每次重建都会丢对话上下文，唤醒提示词里只有一句指令，
+	// 成员只能自己去 team 里翻。冷路径（重建/无会话）必须把 Task 与最近对话递到手上；
+	// 热路径上下文已在会话里，附上去只是白烧 token。
+	const withThread = {
+		...state,
+		threads: {
+			t1: {
+				taskId: 't1',
+				headSeq: 2,
+				entries: [
+					{ seq: 1, authorId: 'a1', body: '先把回归跑一遍' },
+					{ seq: 2, authorId: 'a2', body: '已复现：CLI 参数被二次解析' },
+				],
+			},
+		},
+	};
+	const hot = describeWake({ memberId: 'a1', taskId: 't1', prompt: '继续。' }, withThread);
+	assert.match(hot, /【当前 Task】#1 修回归 \[pending\]/);
+	assert.doesNotMatch(hot, /【最近对话】/, 'a live session already holds the conversation');
+
+	const cold = describeWake({ memberId: 'a1', taskId: 't1', prompt: '继续。' }, withThread, { includeThread: true });
+	assert.match(cold, /【最近对话】/);
+	assert.match(cold, /沈舟：先把回归跑一遍/);
+	assert.match(cold, /林岚：已复现/);
+
+	// 没有 taskId 时不加任何上下文（纯成员级唤醒）。
+	const memberOnly = describeWake({ memberId: 'a1', prompt: '看一下收件箱。' }, withThread, { includeThread: true });
+	assert.equal(memberOnly.endsWith('看一下收件箱。'), true);
+	assert.doesNotMatch(memberOnly, /【当前 Task】/);
+});
+
+test('the thread tail is bounded so a long conversation cannot flood the prompt', () => {
+	const long = '词'.repeat(400);
+	const flooded = {
+		...state,
+		threads: {
+			t1: {
+				taskId: 't1',
+				headSeq: 6,
+				entries: [1, 2, 3, 4, 5, 6].map((seq) => ({ seq, authorId: 'a1', body: `${seq}:${long}` })),
+			},
+		},
+	};
+	const prompt = describeWake({ memberId: 'a1', taskId: 't1', prompt: '继续。' }, flooded, { includeThread: true });
+	assert.equal(prompt.includes('1:'), false, 'only the last entries survive');
+	assert.equal(prompt.includes('4:'), true);
+	// 正文截断到 120 字（含省略号）
+	const lines = prompt.split('\n').filter((line) => line.startsWith('- '));
+	assert.equal(lines.length, 3);
+	assert.ok(lines.every((line) => line.length <= 130), `line too long: ${lines[0].length}`);
+});
+
+test('no wake is planned for a member who authored a thread reply', () => {	const plans = planWakes(state, {
 		event: { type: 'thread/posted', seq: 8, payload: { taskId: 't1', entry: { seq: 1, authorId: 'a1' } } },
 	}, { agentId: 'a1' });
 	assert.equal(plans.length, 0);
