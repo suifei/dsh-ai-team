@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.68 - 2026-11-12
+
+**决定性探针：boot 后真实 `persistence.stat()` 一次，暴露原始错误码**
+
+静态分析已经把 `NOT_RESUMABLE` 逼到最后一个可能：`sessionQuery.observeSession` 的第一道真实读取 `persistence.stat(sessionId)` 抛错，而外层把它吞成 `subagent "X" is unavailable`。已排除的：
+
+- 会话文件损坏（逐帧解压 87 事件、descriptor `mode: "continuable"`）；
+- 目录键/文件名不符合后端规则（用后端自己的 `projectKey()`/`encodeSegment()` 重算，与磁盘完全一致：`--E-works-il2c--` + `session.v4.jsonl.zstd`）；
+- 工作区未登记（7 个成员会话都在 `E:\works\il2c` 的 `sessionIds` 里）；
+- 后端未挂载（`dsh-base` 声明、宿主日志 `state: 'active'`）。
+
+- boot 完成后取账本里任一真实 session id 调 `persistence.stat()`：
+  成功写 `persistence.stat.ok`（`full` 级），失败写 **`persistence.stat.fail`**（带 `code`/`message`，发布默认级别可见）。
+- 顺带修掉自己引入的一处启动回归：探针最初引用了 `ctx.effect` 闭包里的 `booted`，在 `apply` 作用域下是 `ReferenceError`——干跑立刻报 `boot.fail: booted is not defined`，改为通过参数传入 session id。
+- 测试：`node --test` **269 通过 / 1 跳过**；干跑两条分支均验证：`PROBE_STAT=ok` → `persistence.stat.ok`，`PROBE_STAT=fail` → `persistence.stat.fail`（`.fail` 行落盘）。
+
 ## 0.4.67 - 2026-11-12
 
 **启动探针：把「关键服务缺失」变成可判定的一行**

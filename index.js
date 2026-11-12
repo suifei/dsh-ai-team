@@ -243,6 +243,12 @@ async function boot(diag, config = {}) {
 		service: runtime.service,
 		dataDir,
 		defaultWorkspace,
+		sessionIds: [...runtimes.values()]
+			.flatMap((entry) => [
+				entry.service.state.hostSessionId,
+				...Object.values(entry.service.state.members ?? {}).map((member) => member?.sessionId),
+			])
+			.filter((id) => typeof id === 'string' && id !== ''),
 	};
 }
 
@@ -272,6 +278,36 @@ export function apply(ctx, config = {}) {
 	} catch (probeError) {
 		diag.append({ ev: 'service.probe.fail', message: probeError?.message ?? String(probeError) });
 	}
+	/**
+	 * boot 之后真实读一次已知会话，把 persistence 的原始错误暴露出来。
+	 *
+	 * 实机 `NOT_RESUMABLE` 排查到最后只剩「persistence 读不出会话」这一种可能：
+	 * 会话文件健康（87 事件、descriptor continuable）、目录键与文件名均符合后端规则、
+	 * 工作区登记齐全。`persistence.stat` 是 `sessionQuery.observeSession` 的第一道
+	 * 真实读取，成功/失败都能定性。
+	 */
+	const probePersistence = async (sessionIds = []) => {
+		const persistence = serviceOf(ctx, 'sessionPersistence');
+		if (persistence === undefined || typeof persistence.stat !== 'function') return;
+		const probeId = (Array.isArray(sessionIds) ? sessionIds : []).find((id) => typeof id === 'string' && id !== '');
+		if (probeId === undefined) return;
+		try {
+			const snapshot = await persistence.stat(probeId);
+			diag.append({
+				ev: 'persistence.stat.ok',
+				sessionId: probeId,
+				revision: snapshot?.revision ?? null,
+				headerId: snapshot?.header?.id ?? null,
+			});
+		} catch (error) {
+			diag.append({
+				ev: 'persistence.stat.fail',
+				sessionId: probeId,
+				code: error?.code ?? error?.name ?? null,
+				message: error?.message ?? String(error),
+			});
+		}
+	};
 	// HTTP 层失败/拒绝的统一落点（route.reject 在 errors 白名单内）。
 	const errorResponse = (res, error) => {
 		diag.append({
@@ -377,6 +413,11 @@ export function apply(ctx, config = {}) {
 			? Promise.resolve().then(() => boot(diag, config))
 				.then(async (value) => {
 					booted = value;
+					// 决定性探针：真实读一次已知会话。冷恢复失败的两种表现
+					// （`agents.resume` 报 persistence 未配置、`coldResume` 报 notFound）
+					// 都会在这里露出原始错误码——不再靠日志里那句
+					// 「subagent X is unavailable」猜。
+					await probePersistence(value.sessionIds);
 					for (const runtime of value.runtimes.values()) {
 						for (const member of Object.values(runtime.service.state.members ?? {})) {
 							if (member.kind === 'agent' && typeof member.sessionId === 'string') {
