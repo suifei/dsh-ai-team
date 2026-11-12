@@ -211,3 +211,57 @@ test('an explicit unknown ownerId is rejected, and prototype keys do not count a
 		/blockedBy/,
 	);
 });
+
+test('a deleted Task cannot be used as a dependency', async (t) => {
+	const { service } = await makeService(t);
+	await service.dispatch({ type: 'task.create', actor: human, projectId: 'prj_b', payload: { title: 'A', resultDefinition: 'd' } });
+	const first = Object.keys(service.state.tasks)[0];
+	await service.dispatch({ type: 'task.delete', actor: human, projectId: 'prj_b', payload: { taskId: first } });
+	// 删除是 tombstone，依赖判定只认 done → 指向它会永久 blocked。
+	await assert.rejects(
+		() => service.dispatch({ type: 'task.create', actor: human, projectId: 'prj_b', payload: { title: 'B', resultDefinition: 'd', blockedBy: [first] } }),
+		/can never complete/,
+	);
+});
+
+test('project.repair is Human-only and rebuilds the projection', async (t) => {
+	const { service } = await makeService(t);
+	await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'mem_a', name: '甲', kind: 'agent', role: '执行' } });
+	await assert.rejects(
+		() => service.dispatch({ type: 'project.repair', actor: { kind: 'agent', memberId: 'mem_a' }, projectId: 'prj_b', payload: {} }),
+		/only Human/,
+	);
+	const result = await service.dispatch({ type: 'project.repair', actor: human, projectId: 'prj_b', payload: {} });
+	assert.equal(typeof result.stateLastSeq, 'number');
+	assert.equal(result.stateLastSeq, service.state.lastSeq ?? result.stateLastSeq);
+});
+
+test('stepJob does not require vcs.backup and freezes a failed job', async (t) => {
+	const { stepJob } = await import('../lib/skillopt/job-runner.js');
+	const dir = mkdtempSync(join(tmpdir(), 'aiteam-runner-'));
+	t.after(() => rmSync(dir, { recursive: true, force: true }));
+	const skillPath = join(dir, 'SKILL.md');
+	writeFileSync(skillPath, 'before text', 'utf8');
+	const job = {
+		id: 'job_r1', state: 'generating', skillPath, skillName: 'demo',
+		createdAt: Date.now(), outputStart: 0, generatorChildId: 'gen',
+	};
+	// git 适配器没有 backup：无脑调用会 TypeError，job 卡到 TTL。
+	const deps = {
+		now: () => Date.now(),
+		readText: (file) => (file === skillPath ? 'before text' : ''),
+		writeText: () => {},
+		vcs: { kind: 'git' },
+		diag: () => {},
+		votes: 1,
+		ensureParent: null,
+		startChild: async () => ({ childId: 'judge_1' }),
+	};
+	// stepJob 通过 ctx.get(服务名) 观察子代理：这里给一个只会返回生成器会话的假 ctx。
+	const child = { status: 'idle', snapshotEvents: () => [{ type: 'assistant/message', data: { message: { content: [{ type: 'text', text: 'after text' }] } } }] };
+	const ctx = { get: (name) => (name === 'sessions' ? { get: (id) => (id === 'gen' ? child : undefined) } : undefined) };
+	const result = await stepJob({ ctx, job, projectDir: dir, deps });
+	assert.equal(result.job.backup ?? null, null, 'a vcs without backup() must not throw');
+	assert.equal(result.job.before, 'before text');
+	assert.ok(['judging', 'failed'].includes(result.job.state), 'unexpected state: ' + result.job.state);
+});

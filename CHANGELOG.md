@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.40 - 2026-11-12
+
+**批 9：依赖可达性、账本修复入口、job 状态机、投票解析统一**
+
+- **依赖不能指向已删的卡**：删除是 tombstone，而依赖判定只认 `status === 'done'`——指向一张已删除/已取消的卡会让新卡**永久** blocked 且无修复命令。`task.create` 现在拒绝这类 `blockedBy`。
+- **`project.repair` 命令**：`ledger.repair()` 此前没有任何生产调用点，poison 之后只能重启。新增 Human 专用命令，返回 `repair`/`repairs`/`events`/`stateLastSeq` 并记 `ledger.repaired` 诊断。
+- **job 状态机三处**：① `deps.vcs.backup` 不是每个适配器都有（git 就没有），无脑调用会 TypeError 让 job 卡到 TTL；② `plan.next` 是在 switch 之前算的，回写会把刚判死的 job 复活成 `judging`，下一轮再拿一个未应用的候选写假记录；③ `rollback` 无条件把陈旧的 `before` 写回 live，会覆盖评审期间的人工修改——现在先校验 live 仍是候选文本。
+- **投票解析统一**：评审通道原本用自己的「第一个 `{` 到第一个 `}`」正则，会把模板回显计成票、也会在正文含 `}` 时整票丢弃。现在复用 judge 的平衡扫描解析器，并让它保留 `orderId`。
+- 测试：`node --test` **242/242**（新增 4 例）。
+
 ## 0.4.39 - 2026-11-12
 
 **第三轮（对抗性复审）回归修复**
