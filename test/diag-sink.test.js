@@ -14,7 +14,13 @@ import { apply } from '../index.js';
 
 test('a corrupt projects.json lands in the diagnostic log as registry.corrupt.fail', async (t) => {
 	const root = await mkdtemp(join(tmpdir(), 'ai-team-diag-'));
-	t.after(() => rm(root, { recursive: true, force: true }));
+	// 诊断 logger 的写入是串行排队、可能在用例结束后仍在落盘：删除临时目录要允许
+	// 重试，否则会以 ENOTEMPTY 失败（这是夹具清理，不是产品行为）。
+	t.after(async () => {
+		for (let attempt = 0; attempt < 5; attempt += 1) {
+			try { await rm(root, { recursive: true, force: true }); return; } catch { await new Promise((resolve) => setTimeout(resolve, 50)); }
+		}
+	});
 	const previousHome = process.env.DSH_HOME;
 	const previousProfile = process.env.DSH_PROFILE;
 	process.env.DSH_HOME = root;

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.65 - 2026-11-12
+
+**修：重建出来的会话仍落在插件数据目录（host 会话 cwd 是 11-09 的旧值）**
+
+解压真机会话日志后发现：最近 3 小时 34 个新会话里 **30 个 `cwd = C:\Users\SuiFei\.dsh\ai-team\default`**（插件数据目录），且它们都是同一条 host 会话的子会话——那条 host 建于 **2026-11-09**，记录的 cwd 就是旧数据目录。0.4.43 修的是「新建 host 时用项目工作区」，但**持久化的 host 每次 boot 都是 resume，cwd 沿用旧值**，于是成员子会话全部继承它；这正是 `workspace.attach.fail` 每天上百次的来源。
+
+- `ensureHostAgent`：resume 之后核对 `session.header.cwd` 与期望的项目工作区；不一致就 **dispose 旧句柄并新建 host**（路径比较忽略大小写与末尾分隔符）。
+- 失败行 `host.resume.cwd-mismatch.fail` 进诊断（带 `expectedCwd` / `actualCwd`），下次 boot 可直接确认是否再次发生。
+- 副作用与自愈路径：新 host 的会话 id 变化后，既有成员的下一次唤醒会 `NOT_RESUMABLE` → `member.autoreseat` 重建到新 host 之下（这是既有机制，不需要额外代码）。
+- 顺带修掉 `diag-sink` 用例的清理竞态（诊断 logger 仍在落盘时 `rm` 报 ENOTEMPTY，改为重试）。
+- 测试：`node --test` **266 通过 / 1 跳过**（新增 2 例：旧 cwd 的 host 会被替换并释放、匹配 cwd 仍走 resume 且大小写/尾斜杠不影响判定）。
+
 ## 0.4.64 - 2026-11-12
 
 **重建后不再从零开始：冷路径提示词带上当前 Task 与最近对话**
