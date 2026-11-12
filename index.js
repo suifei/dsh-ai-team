@@ -16,6 +16,7 @@ import z from '@deepseek-ai/schemastery';
 import { ProjectRuntime } from './lib/host/project-runtime.js';
 import { ProjectRegistry } from './lib/host/project-registry.js';
 import { resolveDefaultWorkspace } from './lib/host/default-workspace.js';
+import { hostPlatform, workspaceExample } from './lib/host/workspace-path.js';
 import { migrateLegacyNamespace, resolveProfile } from './lib/ledger/namespace.js';
 import { ids } from './lib/domain/ids.js';
 import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-runtime.js';
@@ -49,6 +50,7 @@ import { createTeamTool } from './lib/host/member-tools.js';
 import { describeTaskContext, describeWake, planWakes } from './lib/host/waker.js';
 import { describeCauseChain } from './lib/runtime/error-chain.js';
 import { classifyWakeFailure } from './lib/runtime/wake-failure.js';
+import { registerShellGuard } from './lib/runtime/shell-guard.js';
 import { aggregatePeople } from './lib/host/people-view.js';
 import { riskView } from './lib/host/risk-view.js';
 import { weeklyView } from './lib/host/weekly-view.js';
@@ -97,6 +99,9 @@ export const Config = z.object({
 	skilloptJudgeVotes: z.number().step(1).min(3).max(9).default(3),
 	// 初装默认项目与「新建项目」对话框的默认工作目录；留空则取宿主 cwd（见 boot）。
 	defaultWorkspace: z.string().default(''),
+	// 成员 shell 风险守卫：'warn' 只记诊断（默认），'block' 直接拒绝，'off' 不介入。
+	// 实机事故：成员写 serve.ps1 并用隐藏窗口拉起常驻进程，触发杀软报毒。
+	shellGuard: z.union(['off', 'warn', 'block']).default('warn'),
 });
 
 /**
@@ -1577,6 +1582,29 @@ export function apply(ctx, config = {}) {
 			diag.append({ ev: 'team.tool.fail', message: error?.message ?? String(error) });
 			console.warn('[ai-team] team tool registration failed:', error?.message ?? error);
 		}
+		// 成员 shell 风险守卫：实机事故是「成员写 serve.ps1 + Start-Process -WindowStyle
+		// Hidden」被杀软报毒。默认只记录（warn），配置 shellGuard='block' 才拒绝。
+		let disposeShellGuard = () => {};
+		try {
+			const memberSessions = () => {
+				const ids = new Set();
+				for (const runtime of booted?.runtimes?.values() ?? []) {
+					for (const member of Object.values(runtime.service.state.members ?? {})) {
+						if (typeof member?.sessionId === 'string' && member.sessionId !== '') ids.add(member.sessionId);
+					}
+				}
+				return ids;
+			};
+			disposeShellGuard = registerShellGuard({
+				tools: tools ?? serviceOf(ctx, 'tools'),
+				memberSessions,
+				diag,
+				mode: config.shellGuard ?? 'warn',
+			});
+			diag.append({ ev: 'shell.guard', mode: config.shellGuard ?? 'warn' });
+		} catch (error) {
+			diag.append({ ev: 'shell.guard.fail', message: error?.message ?? String(error) });
+		}
 
 		// 历史归档修复：成员是 host 的子会话，`archived-session-gate` 会沿 subagent
 		// 血缘上溯，父会话被归档即拒绝整条血缘 —— 回合以 {kind:'blocked'} 结束且不发
@@ -2192,6 +2220,10 @@ export function apply(ctx, config = {}) {
 							// 新建项目对话框的默认「工作目录」：初装默认项目也用它，避免
 							// 建出一个没有工作目录的项目（成员只能在插件数据目录里跑）。
 							defaultWorkspace: booted.defaultWorkspace ?? '',
+							// 目录输入框的示例必须跟宿主平台一致：WSL/Linux 要 /mnt/... 形式，
+							// 给 Windows 的 D:/... 在 POSIX 上只是带反斜杠的文件名。
+							platform: hostPlatform(),
+							workspaceExample: workspaceExample(),
 							// 首次使用：当前项目还没有工作目录时，界面必须先让用户设定目录。
 							setupRequired: (bootstrap.project?.workspacePath ?? '') === '',
 							inbox,
@@ -2530,6 +2562,7 @@ export function apply(ctx, config = {}) {
 			// session-controller graph half-disposed and broke plugin toggles.
 			disposed = true;
 			try { removeDiagSink(); } catch { /* sink already replaced */ }
+			try { disposeShellGuard(); } catch { /* already disposed */ }
 			const cleanup = [];
 			for (const client of sseClients) {
 				try { client.res.end(); } catch { /* socket already gone */ }

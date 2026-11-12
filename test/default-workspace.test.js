@@ -88,3 +88,26 @@ test('a relocated DSH_HOME still cannot make the real profile dir a suggestion',
 		profile,
 	);
 });
+
+test('a UNC cwd from the launcher is not suggested as the workspace', (t) => {
+	// 实机：桌面端从 WSL 目录里启动，cwd 是 `\\wsl.localhost\Ubuntu-26.04\home\suifei`，
+	// 被当成「建议工作目录」；它既不是项目目录，成员工具在 UNC 上读写也不稳。
+	const root = mkdtempSync(join(tmpdir(), 'aiteam-ws-unc-'));
+	t.after(() => rmSync(root, { recursive: true, force: true }));
+	const home = join(root, 'home');
+	mkdirSync(home, { recursive: true });
+	const unc = '\\\\wsl.localhost\\Ubuntu-26.04\\home\\suifei';
+	// exists 注入用来模拟「UNC 目录确实可访问」（沙箱里无法真的建 UNC）。
+	assert.equal(
+		resolveDefaultWorkspace({ cwd: unc, home, dataDir: join(root, 'd'), exists: () => true }),
+		join(home, WORKSPACE_SUBDIR),
+		'an existing UNC cwd is skipped in favour of ~/works',
+	);
+	// 显式配置不受 UNC 规则限制：用户自己指定就照用。
+	assert.equal(
+		resolveDefaultWorkspace({ configured: unc, cwd: home, home, dataDir: join(root, 'd'), exists: () => true }),
+		unc,
+	);
+	// 普通 cwd 仍然优先于 ~/works。
+	assert.equal(resolveDefaultWorkspace({ cwd: home, home, dataDir: join(root, 'd'), exists: () => true }), home);
+});
