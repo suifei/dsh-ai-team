@@ -102,3 +102,24 @@ test('a bare name alias from older data files is normalised, not dropped', () =>
 	}];
 	assert.equal(aggregatePeople(registry, runtimes, { aliases: { 旧名: '白砚' } }).length, 1);
 });
+
+test('the merged row is named after the alias target, not the first member seen', () => {
+	// 关键：被绑定的名字在遍历顺序里排在前。旧实现用「第一个成员的名字」建行，
+	// 于是「旧名 → 白砚」合出来的一行会显示成「旧名」。
+	const registry = [{ id: 'p1', name: 'P1' }];
+	const runtimes = [{
+		id: 'p1',
+		service: { state: {
+			projects: { p1: { id: 'p1', workspacePath: '' } },
+			members: {
+				a: { id: 'm1', name: '旧名', kind: 'agent', status: 'idle' },
+				b: { id: 'm2', name: '白砚', kind: 'agent', status: 'idle' },
+			},
+			tasks: {},
+		} },
+	}];
+	const rows = aggregatePeople(registry, runtimes, { aliases: { 旧名: 'name:白砚' } });
+	assert.equal(rows.length, 1);
+	assert.equal(rows[0].name, '白砚');
+	assert.equal(rows[0].projects[0].memberIds.length, 2);
+});
