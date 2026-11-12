@@ -20,7 +20,7 @@ import { ids } from './lib/domain/ids.js';
 import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-runtime.js';
 import { ensureHostAgent } from './lib/runtime/host-agent.js';
 import { repairArchivedHosts as repairHostSessions } from './lib/runtime/host-repair.js';
-import { classifyLlmFailure, retryDecision } from './lib/runtime/failure-policy.js';
+import { classifyLlmFailure, nextRequestAttempt, retryDecision } from './lib/runtime/failure-policy.js';
 import { memberIdentity } from './lib/domain/member-profile.js';
 import { loadSkillContext } from './lib/runtime/skill-loader.js';
 import { formatSkillCatalog } from './lib/runtime/skill-catalog.js';
@@ -410,7 +410,10 @@ export function apply(ctx, config = {}) {
 				// fallback（换路），此前一律 next() 让它们的 fallback 永远不可达。
 				const fallbackCapable = failure.action === 'fallback' || failure.action === 'compact_or_fallback';
 				if (!failure.retryable && !fallbackCapable) return next();
-				const decision = retryDecision(failure, member.config ?? {}, recorded.member.attempts ?? 1);
+				// 用「本次请求」的连续失败数，而不是成员生命周期的 attempts：后者会让换路索引
+				// 被跳过、重试预算被历史失败提前耗尽。
+				const attempt = nextRequestAttempt(requestAttempts, member.sessionId);
+				const decision = retryDecision(failure, member.config ?? {}, attempt);
 				if (decision.action === 'fallback' && decision.patch !== undefined) {
 					try {
 						await failureRuntime.service.applySystemFallback(member.id, decision.patch, 'llm-fallback', failureRuntime.id);
@@ -524,6 +527,8 @@ export function apply(ctx, config = {}) {
 		// PMO tick 是 fire-and-forget：慢 tick（模型/IO）会被下一分钟的定时器再入，
 		// 造成 autoAnswerDecisions/reconcileJobs 并发执行同一条账本。按 Project 去重。
 		const pmoBusy = new Set();
+		// 本次请求的连续失败计数（按成员会话、10 分钟窗口）。
+		const requestAttempts = new Map();
 		const activationTasks = new Map();
 		const pmoLastKick = new Map();
 		const pmoLastStall = new Map();
@@ -1224,6 +1229,22 @@ export function apply(ctx, config = {}) {
 						const jobs = roots.flatMap((jobRoot) => listJobs(jobRoot));
 						// judging 状态的 job：从评审卡收票（账本通道），不走子代理 reconcile。
 						const actor = { kind: 'human', memberId: HUMAN_ID };
+						// 评审卡收口：成功、超时、冲突三条终态都要关。否则卡保持 pending 进入
+						// PMO 的 active 集合，被 heartbeat/stall/escalate 反复唤醒评审官。
+						const closeReviewCard = async (runtime, taskId, reason) => {
+							try {
+								const card = runtime.service.state.tasks?.[taskId];
+								if (card === undefined || card.status === 'done' || card.status === 'cancelled' || card.tombstone === true) return;
+								await runtime.service.dispatch({
+									type: 'task.cancel',
+									payload: { taskId, expectedRevision: card.revision, reason },
+									actor,
+									projectId: runtime.id,
+								});
+							} catch (error) {
+								diag.append({ ev: 'skillopt.review.card.close.fail', taskId, message: error?.message ?? String(error) });
+							}
+						};
 						for (const job of jobs) {
 							if (job.state !== 'judging' || typeof job.reviewTaskId !== 'string') continue;
 							const runtime = [...(booted?.runtimes?.values?.() ?? [])].find((entry) => entry.dir === job.project);
@@ -1243,6 +1264,8 @@ export function apply(ctx, config = {}) {
 										error: `review timed out after ${Math.round(REVIEW_JOB_TTL_MS / 60000)}min (${collected.votes.length}/${expected} votes)`,
 										updatedAt: Date.now(),
 									});
+									// 超时也要收口：否则这张卡永久 pending，PMO 会一直唤醒评审官。
+									await closeReviewCard(runtime, job.reviewTaskId, 'blind review timed out');
 									diag.append({ ev: 'skillopt.job.timeout', jobId: job.id, got: collected.votes.length, expected });
 									continue;
 								}
@@ -1257,6 +1280,7 @@ export function apply(ctx, config = {}) {
 							try { liveText = existsSync(job.skillPath) ? readFileSync(job.skillPath, 'utf8') : null; } catch { liveText = null; }
 							if (liveText !== null && typeof job.before === 'string' && sha12(liveText) !== sha12(job.before)) {
 								writeJob(jobDir, { ...job, state: 'failed', error: 'live SKILL.md changed during review (conflict)', updatedAt: Date.now() });
+								await closeReviewCard(runtime, job.reviewTaskId, 'blind review aborted: live file changed');
 								diag.append({ ev: 'skillopt.job.conflict', jobId: job.id, skillPath: job.skillPath });
 								continue;
 							}
@@ -1286,23 +1310,7 @@ export function apply(ctx, config = {}) {
 							writeJob(jobDir, { ...job, state: 'done', decision: collected.decision, backup: backupPath ?? job.backup ?? null, updatedAt: Date.now() });
 							// 评审卡必须收口：否则它保持 pending 进入 PMO 的 active 集合，
 							// 会被 heartbeat/stall/escalate 反复唤醒评审官（每 job 永久留一张卡）。
-							try {
-								const card = runtime.service.state.tasks?.[job.reviewTaskId];
-								if (card !== undefined && card.status !== 'done' && card.status !== 'cancelled' && card.tombstone !== true) {
-									await runtime.service.dispatch({
-										type: 'task.cancel',
-										payload: {
-											taskId: job.reviewTaskId,
-											expectedRevision: card.revision,
-											reason: `blind review collected: ${collected.decision.verdict}`,
-										},
-										actor,
-										projectId: runtime.id,
-									});
-								}
-							} catch (error) {
-								diag.append({ ev: 'skillopt.review.card.close.fail', jobId: job.id, taskId: job.reviewTaskId, message: error?.message ?? String(error) });
-							}
+							await closeReviewCard(runtime, job.reviewTaskId, `blind review collected: ${collected.decision.verdict}`);
 							diag.append({ ev: 'skillopt.job.done', jobId: job.id, verdict: collected.decision.verdict, better: collected.decision.better, worse: collected.decision.worse, kept, source: 'reviewer-card' });
 						}
 						if (jobs.length === 0) return '[skillopt jobs] none';

@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -8,6 +8,7 @@ import { TeamService } from '../lib/host/service.js';
 import { formatSkillCatalog } from '../lib/runtime/skill-catalog.js';
 import { scoreSkillRubric } from '../lib/skillopt/rubric.js';
 import { readJob, writeJob } from '../lib/skillopt/jobs.js';
+import { nextRequestAttempt } from '../lib/runtime/failure-policy.js';
 
 const human = { kind: 'human', memberId: 'mem_human' };
 
@@ -135,4 +136,28 @@ test('a retired member can be neither failed nor re-failed by a late LLM error',
 	// 迟到的 LLM 失败：忽略即可，不能把 retired 覆写成 failed（否则 member.bind 能复活）。
 	await service.recordMemberFailure('mem_a', { category: 'auth', message: 'late' }, 'prj_b');
 	assert.equal(service.state.members.mem_a.status, 'retired');
+});
+
+test('a done job is never overwritten by a later failure', (t) => {
+	const dir = mkdtempSync(join(tmpdir(), 'aiteam-jobs2-'));
+	t.after(() => rmSync(dir, { recursive: true, force: true }));
+	writeJob(dir, { id: 'job_d', state: 'judging', createdAt: 1 });
+	writeJob(dir, { id: 'job_d', state: 'done', createdAt: 1, decision: { verdict: 'keep' } });
+	// 并发收票时后到的判断可能想把 done 覆写成 failed：必须拒绝。
+	writeJob(dir, { id: 'job_d', state: 'failed', createdAt: 1, error: 'late' });
+	const job = readJob(dir, 'job_d');
+	assert.equal(job.state, 'done');
+	assert.equal(job.decision.verdict, 'keep');
+});
+
+test('request attempts are counted per request window, not per member lifetime', () => {
+	const store = new Map();
+	const t0 = 1_000_000;
+	assert.equal(nextRequestAttempt(store, 's1', t0), 1);
+	assert.equal(nextRequestAttempt(store, 's1', t0 + 1000), 2);
+	assert.equal(nextRequestAttempt(store, 's1', t0 + 2000), 3);
+	// 窗口过期 → 新请求，预算重置（否则成员历史失败会把预算提前耗尽）
+	assert.equal(nextRequestAttempt(store, 's1', t0 + 11 * 60_000), 1);
+	// 不同会话互不影响
+	assert.equal(nextRequestAttempt(store, 's2', t0 + 3000), 1);
 });

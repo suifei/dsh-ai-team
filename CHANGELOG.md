@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.37 - 2026-11-12
+
+**中危批次 7：评审卡收口、job 终态、幽灵成员、重试预算**
+
+- **评审卡三条终态都收口**：成功路径原本会关掉评审卡，超时与 conflict 两条失败路径不会——卡永久 pending 进入 PMO 的 active 集合，被 heartbeat/stall/escalate 反复唤醒评审官。现在收口逻辑抽成一个 `closeReviewCard`，三条路径共用。
+- **done 不可被回退**：并发收票/收割时，后到的一次判断可能把已 done 的 job 覆写成 failed（之后 TTL 与统计都按错误状态走）。`writeJob` 现在拒绝用非 done 状态覆盖 done。
+- **幽灵成员与幽灵依赖**：`task.create` 之前不校验 `ownerId` / `assigneeId` / `blockedBy`，不存在的 id 会直接写进投影且没有修复命令——卡永久挂在不存在的人名下，或被一个不存在的依赖永久 blocked。现在统一走 `requireMemberRef`（与 `taskCommand` 共用同一实现）。
+- **重试预算按请求算**：`retryDecision` 的 `attempt` 原来传的是 `member.attempts`（成员**生命周期**失败计数），换路索引被跳过、预算被历史失败提前耗尽。改为按会话 + 10 分钟窗口的连续失败计数。
+- 测试：`node --test` **233/233**（新增 3 例）。
+
 ## 0.4.36 - 2026-11-12
 
 **中危批次 6：PMO tick 崩溃、重复决策、接管不污染验收资格、退役终态**
