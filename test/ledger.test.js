@@ -1267,3 +1267,29 @@ test('repair() rebuilds from disk and lifts the poison flag', async (t) => {
 	assert.equal(appended.type, 'project/member-added');
 	assert.equal(writer.head.seq >= 2, true);
 });
+
+test('a provider/model change marks the member route stale until the session is rebuilt', () => {
+	// 实机事故：成员改到 qwen 后仍按 deepseek-official 调用（缺 key），且改完不会重建。
+	// 路由变更 → routeStale；新会话绑定 → 清除，避免每次唤醒都重建。
+	const events = chain('prj_route', [
+		{ type: 'project/member-added', payload: { kind: 'agent', memberId: 'mem_a', name: 'A', role: '执行', status: 'idle' } },
+		{ type: 'member/session-bound', payload: { memberId: 'mem_a', sessionId: 's1', status: 'running' } },
+		{ type: 'member/config-updated', payload: { memberId: 'mem_a', config: { provider: 'qwen', model: 'Q4' }, configVersion: 1, routeChanged: true } },
+	]);
+	const stale = fold(events);
+	assert.equal(stale.members.mem_a.routeStale, true);
+	assert.equal(stale.members.mem_a.config.provider, 'qwen');
+
+	const rebuilt = fold([...events, ...chain('prj_route', [
+		{ type: 'member/session-bound', payload: { memberId: 'mem_a', sessionId: 's2', status: 'running' } },
+	]).map((event, index) => ({ ...event, seq: events.length + index + 1 }))]);
+	assert.equal(rebuilt.members.mem_a.routeStale, false);
+	assert.equal(rebuilt.members.mem_a.sessionId, 's2');
+
+	// 非路由变更不置标记（只改预算/预设等），避免无谓重建。
+	const quiet = fold(chain('prj_route2', [
+		{ type: 'project/member-added', payload: { kind: 'agent', memberId: 'mem_b', name: 'B', role: '执行', status: 'idle' } },
+		{ type: 'member/config-updated', payload: { memberId: 'mem_b', config: { provider: 'qwen', model: 'Q4' }, routeChanged: false } },
+	]));
+	assert.equal(quiet.members.mem_b.routeStale, false);
+});

@@ -267,3 +267,31 @@ test('an inbox item wakes its member using the flat ledger payload', () => {
 	assert.deepEqual(plans.map((item) => [item.memberId, item.taskId, item.reason]), [['a2', 't1', 'inbox']]);
 	assert.equal(plans[0].key, 'inbox:inb_1:a2:');
 });
+
+test('a route change wakes the member and rebuilds the session, even when it failed', () => {
+	// 实机事故：成员 provider/model 改到 qwen 后仍在用 deepseek-official（缺 key），
+	// 而且失败成员不会被自动唤醒，于是「改完模型」永远不生效。
+	const failed = {
+		...state,
+		members: { ...state.members, a1: { ...state.members.a1, status: 'failed' } },
+	};
+	const plans = planWakes(failed, {
+		event: { type: 'member/config-updated', seq: 30, payload: { memberId: 'a1', routeChanged: true } },
+	}, {});
+	assert.equal(plans.length, 1);
+	assert.equal(plans[0].memberId, 'a1');
+	assert.equal(plans[0].reason, 'route_changed');
+	assert.match(plans[0].prompt, /模型\/提供方已切换/);
+
+	// 非路由变更（例如只改编排预算）不唤醒：避免每次改配置都重建会话。
+	const quiet = planWakes(failed, {
+		event: { type: 'member/config-updated', seq: 31, payload: { memberId: 'a1', routeChanged: false } },
+	}, {});
+	assert.equal(quiet.length, 0);
+
+	// 退役成员不因配置变更被复活。
+	const retired = { ...state, members: { ...state.members, a1: { ...state.members.a1, status: 'retired' } } };
+	assert.equal(planWakes(retired, {
+		event: { type: 'member/config-updated', seq: 32, payload: { memberId: 'a1', routeChanged: true } },
+	}, {}).length, 0);
+});

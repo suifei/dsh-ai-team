@@ -730,7 +730,15 @@ export function apply(ctx, config = {}) {
 					// activate them first; otherwise the first Human message is
 					// silently dropped in a fresh Project.
 					let messageId = null;
-					if (member.sessionId === undefined || member.sessionId === null) {
+					// 路由过期（成员 provider/model 改过）：已存活会话的 provider 是创建时
+					// 固定的，直接唤醒只会继续用旧路由——实机表现就是「模型换成 Qwen，
+					// provider 还是 deepseek-official，一直报缺 DEEPSEEK_API_KEY」。
+					// 重建一次会话，让新配置真正生效；上下文由 wakePrompt 带上。
+					const routeStale = member.routeStale === true;
+					if (routeStale) {
+						diag?.append({ ev: 'wake.route-stale', projectId: projectRuntime.id, memberId: plan.memberId, reason: plan.reason });
+					}
+					if (member.sessionId === undefined || member.sessionId === null || routeStale) {
 						const activationKey = `${projectRuntime.id}:${member.id}`;
 						let activation = activationTasks.get(activationKey);
 						if (activation === undefined) {
@@ -738,7 +746,11 @@ export function apply(ctx, config = {}) {
 							// 调用里，await 先让出执行权、单飞表还没登记，并发的两个计划会各自
 							// 启动一次激活（两个子会话）。
 							activation = (async () => activateMember({
-								payload: { memberId: member.id, prompt: await wakePrompt(plan, member, { includeThread: true }) },
+								payload: {
+									memberId: member.id,
+									...(routeStale ? { force: true } : {}),
+									prompt: await wakePrompt(plan, member, { includeThread: true }),
+								},
 							}, projectRuntime))();
 							activationTasks.set(activationKey, activation);
 							activation.finally(() => activationTasks.delete(activationKey)).catch(() => {});
