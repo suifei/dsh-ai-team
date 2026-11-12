@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.62 - 2026-11-12
+
+**成员会话自愈（`member.autoreseat`）进 errors 白名单**
+
+0.4.61 真机启动后日志里有 2 条 `wake.fail`（`NOT_RESUMABLE`，`mem_lead` 的 `pmo_escalate` 与 `mem_coder` 的 `pmo_stall`）和对应探针，但**自愈有没有成功**看不到——`member.autoreseat` 只在 `full` 级别落盘。
+
+查证：`mem_lead` 的会话已从失败时的 `0089e9dd…` 换成 `ba86c955…`，说明自愈确实重建了会话；但这个「救回来了」的证据在发布默认级别不可见，只能靠比对 id 反推。
+
+- `isErrorEvent` 白名单加入 `member.autoreseat`。
+- 测试：`node --test` **262 通过 / 1 跳过**（`diaglog` 3 例，新增断言：自愈行保留、普通进度行仍被过滤，防止 `errors` 级别退化成 `full`）。
+
 ## 0.4.61 - 2026-11-12
 
 **诊断目录跟随 `DSH_HOME` + 关闭句柄的 flush 不再报错**
