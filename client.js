@@ -2228,7 +2228,7 @@ window.__ModuleLoader__.load({
 						h('div', { className: 'at-kvbody' }, task.updatedAt ? fmtDateTime(task.updatedAt) : '—'))));
 		}
 
-		function ThreadPanel({ t, task, thread, project, following, onToggleFollow, onClose, onChat, converting, convert, reply, onReplyChange, onReplySend, replyBase, onContinue, note, onDismissNote, acceptChecked, onAcceptChecked, qaChecks, onQaCheck, onAccept, onChanges, actions, panelRef, replyRef, taskEventsData }) {
+		function ThreadPanel({ t, task, thread, project, following, onToggleFollow, onClose, onChat, converting, convert, reply, onReplyChange, onReplySend, replyBase, onContinue, note, onDismissNote, acceptChecked, onAcceptChecked, qaChecks, onQaCheck, onAccept, onChanges, actions, panelRef, replyRef, taskEventsData, onLoadEvents }) {
 			const headSeq = thread?.headSeq ?? thread?.entries?.length ?? 0;
 			const stale = replyBase !== null && replyBase !== undefined && headSeq > replyBase;
 			const entries = Array.isArray(thread?.entries) ? thread.entries : [];
@@ -2276,7 +2276,17 @@ window.__ModuleLoader__.load({
 								type: 'button',
 								onClick: action.onClick,
 							}, action.label)))) : null),
+						// R-18：按需拉取这条任务的账本事件（端点原本无人调用）。独立于
+						// actions——没有可用 action 的任务同样要有这条可追溯入口。
+						onLoadEvents ? h('div', { className: 'at-actionrow at-eventsopen' },
+							h('button', {
+								className: 'at-btn at-btn-quiet',
+								type: 'button',
+								onClick: () => onLoadEvents(task.id),
+							}, t('eventHistoryTitle'))) : null,
 						// R-18 可追溯入口：这条任务的账本事件时间序。
+						// `openTaskEvents` 此前只有定义、没有任何调用点，端点从未被请求过；
+						// 这里补一个显式按钮（按需加载，避免每次选中都拉全量事件）。
 						taskEventsData && taskEventsData.taskId === task.id ? h('details', { className: 'at-events' },
 							h('summary', { className: 'at-actiontitle' }, t('eventHistoryTitle') + ' · ' + taskEventsData.events.length),
 							h('div', { className: 'at-peopleprojects' }, taskEventsData.events.map((event) => h('div', { key: event.seq, className: 'at-peopleproject' },
@@ -2843,6 +2853,9 @@ window.__ModuleLoader__.load({
 				setCTitle('');
 				setCDod('');
 				setRightNote('');
+				// 换任务时清掉上一个任务的事件历史，避免张冠李戴（R-18）。放在既有
+				// effect 里而不是新增一个：hook 顺序变化会让 headless 渲染夹具错位。
+				setTaskEventsData(null);
 			}, [selected]);
 
 			React.useEffect(() => {
@@ -3219,7 +3232,9 @@ window.__ModuleLoader__.load({
 			function openNewProject() {
 				setNName('');
 				setNGoal('');
-				setNWorkspace('');
+				// 默认工作目录由宿主给出（与初装默认项目同源）：留空会让新项目没有
+				// 工作目录，成员只能在插件数据目录里跑，workspace attach 也会被拒。
+				setNWorkspace(data?.defaultWorkspace ?? '');
 				setNError('');
 				setNewOpen(true);
 			}
@@ -3967,7 +3982,7 @@ window.__ModuleLoader__.load({
 					h('div', { className: 'at-streaminner' },
 						// 失败必须可见：不能把「拉取失败」渲染成「没有待验收」。
 						pendingError !== '' ? h('div', { className: 'at-peoplefail', role: 'status' }, tf(t, 'loadFailedBody') + (pendingError ? '（' + pendingError + '）' : '')) : null,
-						// R-09 待验收跨项目队列。
+			// R-09 待验收跨项目队列。
 						pendingRows !== null && pendingRows.length > 0
 							? h('details', { className: 'at-people', open: true },
 								h('summary', { className: 'at-peoplesum' },
@@ -4247,6 +4262,7 @@ window.__ModuleLoader__.load({
 						panelRef: rightRef,
 						replyRef,
 						taskEventsData,
+						onLoadEvents: openTaskEvents,
 					}) : null,
 					addOpen ? h(ModalBack, { onClose: () => setAddOpen(false) },
 						h('form', {

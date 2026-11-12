@@ -9,7 +9,7 @@
  * ledger/domain service is the only writer and the Host never fakes work.
  */
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import z from '@deepseek-ai/schemastery';
@@ -92,6 +92,8 @@ export const Config = z.object({
 	skilloptTimeoutMs: z.number().step(1).min(10_000).max(600_000).default(120_000),
 	// Darwin paired judge：独立子代理票数，奇数 ≥3（接近平局可升 5）。
 	skilloptJudgeVotes: z.number().step(1).min(3).max(9).default(3),
+	// 初装默认项目与「新建项目」对话框的默认工作目录；留空则取宿主 cwd（见 boot）。
+	defaultWorkspace: z.string().default(''),
 });
 
 /**
@@ -170,7 +172,7 @@ function profileName() {
  * A torn tail is repaired by the writer; the repair is recorded as a system
  * event so the append-only history explains the gap.
  */
-async function boot(diag) {
+async function boot(diag, config = {}) {
 	const dataDir = join(dshHome(), 'ai-team', profileName());
 	// 旧版本把 desktop profile 的数据写进了 `ai-team/default/`（profile 名只认
 	// `--profile`，而桌面启动器按位置参数传）。这里做一次性、数据驱动、可回退的
@@ -181,7 +183,24 @@ async function boot(diag) {
 	if (dataDir !== legacyDir && resolvedProfile().source === 'argv-path') {
 		migrateLegacyNamespace({ fromDir: legacyDir, toDir: dataDir, diag });
 	}
-	const registry = ProjectRegistry.load(dataDir);
+	// 默认工作目录：配置项 → 宿主 cwd → 用户主目录。cwd 不能是插件数据目录
+	// （否则又退化成「成员在账本目录里干活」），系统目录也不当作团队工作目录。
+	const resolveDefaultWorkspace = () => {
+		const configured = typeof config?.defaultWorkspace === 'string' ? config.defaultWorkspace.trim() : '';
+		const systemish = (value) => /^[a-z]:[\\/](windows|program files|program files \(x86\))([\\/]|$)/i.test(value);
+		for (const candidate of [configured, process.cwd(), homedir()]) {
+			if (typeof candidate !== 'string' || candidate === '') continue;
+			try {
+				if (statSync(candidate).isDirectory() !== true) continue;
+			} catch { continue }
+			if (candidate === dataDir || candidate.startsWith(dataDir + sep)) continue;
+			if (candidate !== configured && systemish(candidate)) continue;
+			return candidate;
+		}
+		return '';
+	};
+	const defaultWorkspace = resolveDefaultWorkspace();
+	const registry = ProjectRegistry.load(dataDir, { defaultWorkspacePath: defaultWorkspace });
 	const runtimes = new Map();
 	for (const project of registry.list()) {
 		const runtime = await ProjectRuntime.open({
@@ -193,6 +212,29 @@ async function boot(diag) {
 			diag,
 		});
 		runtimes.set(project.id, runtime);
+	}
+	// 升级路径：旧版本初装时给过一个**没有工作目录**的默认项目。对仍然空白的项目
+	// 补上默认目录（有任务/有对话的项目不动——那可能是用户特意留空的）。
+	if (defaultWorkspace !== '') {
+		for (const runtime of runtimes.values()) {
+			const project = runtime.service.state.projects?.[runtime.id];
+			if (project === undefined) continue;
+			if (typeof project.workspacePath === 'string' && project.workspacePath.trim() !== '') continue;
+			const tasks = Object.values(runtime.service.state.tasks ?? {}).filter((task) => task.tombstone !== true);
+			const threads = Object.keys(runtime.service.state.threads ?? {});
+			if (tasks.length > 0 || threads.length > 0) continue;
+			try {
+				await runtime.service.dispatch({
+					type: 'project.workspace.update',
+					payload: { workspacePath: defaultWorkspace },
+					actor: { kind: 'human', memberId: runtime.service.humanId() ?? 'mem_human' },
+					projectId: runtime.id,
+				});
+				diag?.append({ ev: 'project.workspace.backfilled', projectId: runtime.id, workspacePath: defaultWorkspace });
+			} catch (error) {
+				diag?.append({ ev: 'project.workspace.backfill.fail', projectId: runtime.id, message: error?.message ?? String(error) });
+			}
+		}
 	}
 	const activeProjectId = registry.activeProjectId;
 	const runtime = runtimes.get(activeProjectId) ?? runtimes.values().next().value;
@@ -212,6 +254,7 @@ async function boot(diag) {
 		ledger: runtime.ledger,
 		service: runtime.service,
 		dataDir,
+		defaultWorkspace,
 	};
 }
 
@@ -323,7 +366,7 @@ export function apply(ctx, config = {}) {
 			sandboxPolicy: serviceOf(ctx, 'sandboxPolicy'),
 		});
 		const ready = access.ok
-			? Promise.resolve().then(() => boot(diag))
+			? Promise.resolve().then(() => boot(diag, config))
 				.then(async (value) => {
 					booted = value;
 					for (const runtime of value.runtimes.values()) {
@@ -1991,6 +2034,9 @@ export function apply(ctx, config = {}) {
 						inbox.sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0));
 						return send(res, {
 							...bootstrap,
+							// 新建项目对话框的默认「工作目录」：初装默认项目也用它，避免
+							// 建出一个没有工作目录的项目（成员只能在插件数据目录里跑）。
+							defaultWorkspace: booted.defaultWorkspace ?? '',
 							inbox,
 							inboxUnread: inbox.filter((item) => item.state === 'unread').length,
 							projects: booted.registry.list()

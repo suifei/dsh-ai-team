@@ -61,3 +61,20 @@ test('right-hand notices are mirrored into the always-visible toast stream', () 
 	assert.match(body, /setRightNote\(text\)/);
 	assert.match(body, /pushToast\(/, 'sayRight must also push a toast');
 });
+
+test('the task event history endpoint has a UI entry point', () => {
+	// R-18：端点在宿主侧存在，客户端却只有一个从未被调用的 openTaskEvents，
+	// 面板因此永远不显示事件历史。这条守住「定义必须接到渲染」。
+	const idx = source.indexOf('function openTaskEvents(');
+	assert.ok(idx > 0, 'openTaskEvents must exist');
+	const calls = [];
+	let from = 0;
+	for (;;) {
+		const at = source.indexOf('openTaskEvents', from);
+		if (at < 0) break;
+		if (at !== idx) calls.push(at);
+		from = at + 1;
+	}
+	assert.ok(calls.length > 0, 'openTaskEvents must have a call site');
+	assert.match(source.slice(source.indexOf('function ThreadPanel('), source.indexOf('function ThreadPanel(') + 2000), /onLoadEvents/);
+});

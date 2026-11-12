@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Management-flow tests (docs/11): a project can be created with NO workspace
  * (lightweight entry), member activation on it fails closed with
  * E_WORKSPACE_REQUIRED, and the global people pool aggregates members across
@@ -7,6 +7,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
@@ -60,22 +61,25 @@ test('workspace-less projects, activation gate and the global people pool', asyn
 			return { status: response.status, body: await response.json().catch(() => null) };
 		};
 
-		// 默认项目无目录：讨论允许（stream.post），但激活 fail-closed。
+		// 初装默认项目现在**带**默认工作目录（取自宿主 cwd），否则成员只能在插件
+		// 数据目录里跑、workspace attach 会被拒。UI 的「新建项目」默认值同源。
 		const before = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
-		assert.equal(before.project.workspacePath ?? '', '');
-		const discussion = await post('/ai-team/api/projects/prj_main/commands', { type: 'stream.post', payload: { body: '还没目录也能聊' } });
+		assert.notEqual(before.project.workspacePath ?? '', '', 'default project must get a workspace');
+		assert.equal(existsSync(before.project.workspacePath), true);
+		assert.equal(before.defaultWorkspace, before.project.workspacePath);
+		const discussion = await post('/ai-team/api/projects/prj_main/commands', { type: 'stream.post', payload: { body: '有目录也能聊' } });
 		assert.equal(discussion.status, 200);
-		const blocked = await post('/ai-team/api/projects/prj_main/commands', { type: 'member.activate', payload: { memberId: 'mem_lead' } });
-		assert.equal(blocked.status, 409);
-		assert.equal(blocked.body.error.code, 'E_WORKSPACE_REQUIRED');
 
-		// 空目录项目可创建（轻入口）。
+		// 空目录项目仍可创建（轻入口）；在没有目录的项目里激活必须 fail-closed。
 		const created = await post('/ai-team/api/projects/prj_main/commands', {
 			type: 'project.create',
 			payload: { name: '轻项目', goal: '稍后设目录' },
 		});
 		assert.equal(created.status, 200, JSON.stringify(created.body));
 		assert.equal((created.body.project.workspacePath ?? ''), '');
+		const blocked = await post(`/ai-team/api/projects/${created.body.project.id}/commands`, { type: 'member.activate', payload: { memberId: 'mem_lead' } });
+		assert.equal(blocked.status, 409);
+		assert.equal(blocked.body.error.code, 'E_WORKSPACE_REQUIRED');
 
 		// 人员池：同名成员跨项目聚合成一行。
 		const people = await (await fetch(`${base}/ai-team/api/people`)).json();
