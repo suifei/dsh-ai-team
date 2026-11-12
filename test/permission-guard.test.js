@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMemberPermissionGuard, resolveTeamPreset, TEAM_PERMISSION } from '../lib/host/permission-guard.js';
 
@@ -11,7 +11,8 @@ function customPresets() {
 			if (table[name] === undefined) throw new Error(`unknown preset: ${name}`);
 			return table[name];
 		},
-		list() { return Object.keys(table); },
+		// 真实契约：catalog() -> { options: [{ value, name }] }，没有 list()
+		catalog() { return { options: Object.keys(table).map((value) => ({ value, name: value })), defaultOptions: [], defaultPreset: 'workspace-write' }; },
 		set(session, name) {
 			if (table[name] === undefined) throw new Error(`unknown preset: ${name}`);
 			sessions.set(session, name);

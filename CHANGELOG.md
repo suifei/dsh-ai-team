@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.46 - 2026-11-12
+
+**SDK 符合性核对（用 cordis_inspect 读运行时契约）+ 修复预设名解析**
+
+用 `cordis_inspect` 直接读宿主服务签名（比文档更权威），逐个核对了插件最近改动里用到的 API：
+
+| 调用 | 契约 | 结论 |
+|---|---|---|
+| `subagents.startActivation({ provider, label, request: { cwd, agentPreset, prompt, parent, agentOptions }, signal, delivery })` | `SubagentActivationSpec` / `SubagentStartRequest` | ✅ 一致 |
+| `subagents.sendMessage(parent, sessionId, content, { signal })` | `content: ContentBlock[]` | ✅ 一致（`wake` 里已构造内容块数组） |
+| `agents.resume({ resumeSessionId, parentAgent, setup? })` | `ResumeAgentOptions` | ✅ 一致 |
+| 冷恢复后 `handle.agent.followup(message)` | loop 的 `followup(input)` → `send(input,'next-turn',true)` | ✅ 存在（且已用 `typeof` 守卫） |
+| `workspace.attachSession(sessionId)` | `Workspace` 方法 | ✅ 一致 |
+| `workspaceRegistry.resolveByPath / create` | 同名方法 | ✅ 一致 |
+| `skills.registerProvider(factory)` → disposer | 返回 disposer，无 invalidate | ✅ 一致（0.4.36 已按此收敛） |
+| **`permissionPresets.list()`** | **不存在**；目录是 `catalog()` → `{ options: [{ value, name }] }` | ❌ **0.4.30 的「预设名可配置」实际从未生效** |
+
+修复：`resolveTeamPreset` 改读 `catalog().options[].value`（`list()` 仅作兼容回退）。此前一直走回退分支，部署方把 `danger-full-access` 改名时仍然会抛错、guard 仍会拒绝成员的每次工具调用。
+
+- 测试：`node --test` **244 通过 / 1 跳过**；`permission-guard` 的夹具同步改为真实 `catalog()` 契约。
+
 ## 0.4.45 - 2026-11-12
 
 **批 13：退役与激活并发、job 列表回读**
