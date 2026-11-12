@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Management-flow tests (docs/11): a project can be created with NO workspace
  * (lightweight entry), member activation on it fails closed with
  * E_WORKSPACE_REQUIRED, and the global people pool aggregates members across
@@ -13,13 +13,26 @@ import { join } from 'node:path';
 import { createServer } from 'node:http';
 import { apply, name as pluginName, inject } from '../index.js';
 
-test('workspace-less projects, activation gate and the global people pool', async () => {
+test('workspace-less projects, activation gate and the global people pool', async (t) => {
 	const routes = [];
 	const root = await mkdtemp(join(tmpdir(), 'ai-team-mgmt-'));
 	const previousHome = process.env.DSH_HOME;
 	const previousProfile = process.env.DSH_PROFILE;
 	process.env.DSH_HOME = root;
 	process.env.DSH_PROFILE = 'mgmt';
+	// 插件的运行时错误走 console.error：断言看不见它们，但它们是真实故障
+	// （0.4.52 的 `reconciled is not defined` 就是这样溜过去的）。整段流程结束后
+	// 必须一条都没有。
+	const consoleErrors = [];
+	const realConsoleError = console.error;
+	const realConsoleWarn = console.warn;
+	const capture = (...args) => { consoleErrors.push(args.map(String).join(' ')); };
+	console.error = capture;
+	console.warn = capture;
+	t.after(() => {
+		console.error = realConsoleError;
+		console.warn = realConsoleWarn;
+	});
 	let disposeEffect = null;
 	const ctx = {
 		effect(fn) {
@@ -77,6 +90,16 @@ test('workspace-less projects, activation gate and the global people pool', asyn
 		assert.equal(blocked.status, 409);
 		assert.equal(blocked.body.error.code, 'E_WORKSPACE_REQUIRED');
 
+		// 用户设定目录后，首次使用状态必须解除（否则界面会一直卡在引导页）。
+		const setWorkspace = await post('/ai-team/api/projects/prj_main/commands', {
+			type: 'project.workspace.update',
+			payload: { workspacePath: workspaceDir },
+		});
+		assert.equal(setWorkspace.status, 200, JSON.stringify(setWorkspace.body));
+		const afterSetup = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
+		assert.equal(afterSetup.project.workspacePath, workspaceDir);
+		assert.equal(afterSetup.setupRequired, false, 'setup must clear once a workspace exists');
+
 		// 新建项目必须指定工作目录（不能建出用不了的项目）。
 		const noWorkspace = await post('/ai-team/api/projects/prj_main/commands', {
 			type: 'project.create',
@@ -108,6 +131,9 @@ test('workspace-less projects, activation gate and the global people pool', asyn
 		const bootLite = await (await fetch(`${base}/ai-team/api/bootstrap?project=${withWorkspace.body.project.id}`)).json();
 		assert.equal(bootLite.project.name, '有目录项目');
 		assert.equal(bootLite.agents.length > 0, true, 'default roster seeded for the new project');
+		// 正常流程里不允许出现插件级的运行时错误。
+		const runtimeErrors = consoleErrors.filter((line) => /\[ai-team\].*(failed|error)/i.test(line));
+		assert.deepEqual(runtimeErrors, [], 'plugin must not log runtime errors during a healthy flow');
 	} finally {
 		server?.close();
 		try { disposeEffect?.(); } catch { /* already disposed */ }

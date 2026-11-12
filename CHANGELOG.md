@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.53 - 2026-11-12
+
+**修 0.4.52 引入的回归：PMO tick 每轮抛 ReferenceError**
+
+0.4.52 的 reconcile 锁把返回值写在 `try` 块里（`const reconciled = ...`），而我加的「跳过诊断」在 `try/catch` **之外**读它——于是每个 tick 都抛 `ReferenceError: reconciled is not defined`，被 tick 外层的 `console.warn` 吞成一行日志：**PMO 派发与 job 收割整条链路当时是停的**。
+
+- 修复：`let reconciled = true;` 提到 `try` 之前。
+- **加一道守卫**：`management` 用例现在接管 `console.error` 与 `console.warn`，正常流程结束后不允许出现 `[ai-team] … failed/error`。这条守卫我做了对照组：撤掉 `let reconciled` 后用例立即失败，恢复后通过——0.4.52 那个 bug 正是「断言全绿但日志里在报错」溜过去的。
+- 测试：`node --test` **253 通过 / 1 跳过**。
+
 ## 0.4.52 - 2026-11-12
 
 **批 17：reconcile 项目级互斥 + 修复区间上报**

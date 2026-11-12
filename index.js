@@ -789,8 +789,9 @@ export function apply(ctx, config = {}) {
 			// PMO 自动关闭时也必须收敛（否则 job 永远停在 generating）。
 			// 两阶段异步优化 job 收割：与任务派发无关，放在停止门之前——
 			// Human 启动的 job 必须在任意运行态下收敛（生成/评审/落盘）。
+			let reconciled = true;
 			try {
-				const reconciled = await reconcileWithLock(projectRuntime.dir, {
+				reconciled = await reconcileWithLock(projectRuntime.dir, {
 					ctx,
 					// job 归属项目数据目录（与 skillopt_optimize 写入处一致）：
 					// 与工作区/激活项目无关，保证任意 tick 都能找到待收割 job。
