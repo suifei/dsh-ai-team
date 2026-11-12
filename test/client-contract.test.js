@@ -54,3 +54,10 @@ test('the stream-down notice is cleared once frames flow again', () => {
 	assert.match(source, /streamUp: '实时更新已恢复。'/);
 	assert.match(source, /streamUp: 'Live updates are back\.'/);
 });
+
+test('right-hand notices are mirrored into the always-visible toast stream', () => {
+	// rightNote 只在 Thread 面板打开时渲染；交接路径/归档失败等消息不能因此丢失。
+	const body = source.slice(source.indexOf('function sayRight('), source.indexOf('function sayRight(') + 600);
+	assert.match(body, /setRightNote\(text\)/);
+	assert.match(body, /pushToast\(/, 'sayRight must also push a toast');
+});

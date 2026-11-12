@@ -3063,7 +3063,12 @@ window.__ModuleLoader__.load({
 			const followingOf = (card) => (Object.prototype.hasOwnProperty.call(follows, card.id) ? follows[card.id] : Boolean(card.following));
 
 			function say(text) { setNote(text); }
-			function sayRight(text) { setRightNote(text); }
+			function sayRight(text) {
+				setRightNote(text);
+				// 右侧提示只在 Thread 面板打开时可见：交接文档路径、归档失败、批量取消
+				// 汇总这类消息在面板关闭时等于丢失。同一句话再走 toast，保证用户看得到。
+				try { pushToast(String(text ?? '')); } catch { /* toast is best effort */ }
+			}
 			function pushToast(text) {
 				if (!text) return;
 				const id = Date.now() + ':' + Math.random().toString(36).slice(2, 6);
