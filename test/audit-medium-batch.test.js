@@ -317,3 +317,35 @@ test('a junction inside the workspace cannot smuggle an outside report file', as
 	const created = await service.backfillHumanMentions(workspace);
 	assert.equal(created, 0);
 });
+
+test('startReview hands the card id to the caller before sending the requests', async (t) => {
+	const { startReview } = await import('../lib/skillopt/review-runner.js');
+	const cards = [];
+	const service = {
+		state: { members: { rev: { id: 'rev', name: '评审官', kind: 'agent', role: '评审', status: 'idle' } } },
+		async dispatch(command) {
+			if (command.type === 'task.create') {
+				return { task: { id: 'card_x' } };
+			}
+			if (command.type === 'member.message') {
+				// 关键断言：投递消息时，调用方必须已经拿到卡 id
+				assert.deepEqual(cards, ['card_x']);
+				return { ok: true };
+			}
+			return { ok: true };
+		},
+		async addMember() { return { member: { id: 'rev' } }; },
+	};
+	const job = { id: 'job_1', skillName: 'demo', skillPath: 'x/SKILL.md', before: 'a', candidate: 'b' };
+	const started = await startReview({
+		service,
+		projectRuntime: { id: 'prj_b' },
+		job,
+		actor: { kind: 'human', memberId: 'mem_human' },
+		votes: 1,
+		onCard: async (reviewTaskId) => { cards.push(reviewTaskId); },
+	});
+	assert.equal(started.reviewTaskId, 'card_x');
+	// normalizeVoteCount 会把 1 抬到 3：票数至少 3（奇数）
+	assert.equal(started.orders.length, 3);
+});

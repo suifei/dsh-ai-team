@@ -1172,14 +1172,7 @@ export function apply(ctx, config = {}) {
 						} catch (error) {
 							diag.append({ ev: 'skillopt.reviewer.refresh.fail', projectId: runtime.id, message: error?.message ?? String(error) });
 						}
-						const started = await startReview({
-							service: runtime.service,
-							projectRuntime: runtime,
-							job: { id: jobId, skillPath, skillName: skillPath.split(/[\\/]/).slice(-2, -1)[0] ?? skillPath, before: text0, candidate },
-							actor,
-							votes: config.skilloptJudgeVotes ?? 3,
-						});
-						writeJob(runtime.dir, {
+						const jobRecord = {
 							id: jobId,
 							state: 'judging',
 							project: runtime.dir,
@@ -1188,20 +1181,31 @@ export function apply(ctx, config = {}) {
 							dimension: `dim${dimension.id} ` + dimension.name,
 							before: text0,
 							candidate,
+							createdAt: Date.now(),
+						};
+						const started = await startReview({
+							service: runtime.service,
+							projectRuntime: runtime,
+							job: jobRecord,
+							actor,
+							votes: config.skilloptJudgeVotes ?? 3,
+							// 卡片一创建就把 job 落盘：进程若在投递评审请求期间崩溃，下一轮仍能
+							// 从 job 里读到卡 id，超时终态会把它收口，而不是留下孤儿卡。
+							onCard: async (reviewTaskId) => {
+								writeJob(runtime.dir, { ...jobRecord, reviewTaskId, reviewOrders: [], cardCreatedAt: Date.now() });
+							},
+						});
+						writeJob(runtime.dir, {
+							...jobRecord,
 							reviewTaskId: started.reviewTaskId,
 							reviewerId: started.reviewerId,
 							reviewOrders: started.orders,
-							createdAt: Date.now(),
 						});
 						diag.append({ ev: 'skillopt.job.started', jobId, project: runtime.dir, skillPath, dimension: `dim${dimension.id}`, reviewTaskId: started.reviewTaskId, votes: started.orders.length });
 						return [
 							`[skillopt optimize] reviewing job=${jobId} target=dim${dimension.id} ${dimension.name} baseline=${rubric.total}`,
 							`  reviewer=${REVIEWER_NAME} card=${started.reviewTaskId} votes=${started.orders.length} (blind A/B, odd majority)`,
 							'  call skillopt_jobs to collect the verdict when the reviewer answers.',
-						].join('\n');						return [
-							`[skillopt optimize] started job=${jobId} target=dim${dimension.id} ${dimension.name} baseline=${rubric.total}` ,
-							'  two-phase async: the PMO tick harvests generator -> judges -> keep/revert and appends results.tsv',
-							'  poll with skillopt_jobs',
 						].join('\n');
 					},
 				});
