@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.36 - 2026-11-12
+
+**中危批次 6：PMO tick 崩溃、重复决策、接管不污染验收资格、退役终态**
+
+- **PMO tick 不再每轮抛 TypeError**：`autoAnswerDecisions` 在 Human 缺失时返回数字 `0`，调用方按数组迭代直接 TypeError，整个 tick 被打断且每轮重复。改为返回 `[]`。
+- **重复决策被拒**：`answerDecision` 没有终态前置，对已 `resolved`/`dismissed`/`superseded` 的决策项再次提交会被接受，重复写 Thread 回复、ack 回来的还是旧答案。
+- **接管不再污染验收资格**（INV-07）：`task/taken-over` 把继任者写进 `claimHistory`，而 `isReviewCandidate` 会排除 `claimHistory` 里的人——继任者因此永久没有资格验收自己名下的卡。接管事实改由既有的 `takeoverHistory` 记录。
+- **退役是终态**：`member.fail` 与迟到的 `recordMemberFailure` 都不再接受退役成员（此前 retired 会被改写成 failed，随后 `member.bind` 能把成员复活）。
+- **删除死代码**：`installFileSkillProvider` 按「`registerProvider` 可能返回 invalidate」处理，而 SDK 契约只返回 disposer——该分支永远不可达，已按契约收敛。
+- 测试：`node --test` **231/231**（新增 3 例；另按 INV-07 更新 1 处既有断言）。
+
 ## 0.4.35 - 2026-11-12
 
 **中危批次 5：命名空间、poison 恢复、多数决、并发认领**

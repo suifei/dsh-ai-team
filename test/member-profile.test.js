@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -95,7 +95,10 @@ test('member profile, self-evolution, talent pool and takeover are append-only',
 	const latest = service.state.tasks[task.task.id];
 	assert.equal(latest.ownerId, 'a1');
 	assert.equal(latest.assigneeId, 'a1');
-	assert.deepEqual(latest.claimHistory, ['a2', 'a1']);
+	// INV-07：只有 claim 进入 claimHistory。接管过去把继任者也写进去，导致 ta 被
+	// isReviewCandidate 永久排除在这张卡的验收候选之外；接管事实由 takeoverHistory 记录。
+	assert.deepEqual(latest.claimHistory, ['a2']);
+	assert.equal(latest.assigneeId, 'a1');
 	assert.equal(latest.takeoverHistory[0].from, 'a2');
 
 	assert.ok(ledger.events.some((event) => event.type === 'member/profile-updated'));

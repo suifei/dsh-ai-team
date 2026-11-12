@@ -100,3 +100,39 @@ test('concurrent claims by one member cannot both land', async (t) => {
 	assert.equal(fulfilled, 1, 'exactly one claim may succeed');
 	assert.equal(inProgress, 1, 'and exactly one task may be in_progress');
 });
+
+test('a takeover does not enter claimHistory (INV-07)', async (t) => {
+	const { service } = await makeService(t);
+	await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'mem_a', name: '甲', kind: 'agent', role: '执行' } });
+	await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'mem_b', name: '乙', kind: 'agent', role: '执行' } });
+	await service.dispatch({
+		type: 'task.create', actor: human, projectId: 'prj_b',
+		payload: { title: 'T', resultDefinition: 'done', ownerId: 'mem_human', assigneeId: 'mem_a' },
+	});
+	const taskId = Object.keys(service.state.tasks)[0];
+	await service.dispatch({ type: 'task.claim', actor: { kind: 'agent', memberId: 'mem_a' }, projectId: 'prj_b', payload: { taskId } });
+	await service.dispatch({
+		type: 'member.takeover', actor: human, projectId: 'prj_b',
+		payload: { fromMemberId: 'mem_a', toMemberId: 'mem_b', reason: '换人' },
+	});
+	const task = service.state.tasks[taskId];
+	assert.equal(task.assigneeId, 'mem_b');
+	// 继任者若被写进 claimHistory，isReviewCandidate 会把 ta 永久排除在验收候选之外。
+	assert.deepEqual(task.claimHistory, ['mem_a'], 'only claim enters claimHistory');
+	assert.equal(task.takeoverHistory.length, 1);
+	assert.equal(task.takeoverHistory[0].to, 'mem_b');
+});
+
+test('a retired member can be neither failed nor re-failed by a late LLM error', async (t) => {
+	const { service } = await makeService(t);
+	await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'mem_a', name: '甲', kind: 'agent', role: '执行' } });
+	await service.dispatch({ type: 'member.retire', actor: human, projectId: 'prj_b', payload: { memberId: 'mem_a' } });
+	assert.equal(service.state.members.mem_a.status, 'retired');
+	await assert.rejects(
+		() => service.dispatch({ type: 'member.fail', actor: human, projectId: 'prj_b', payload: { memberId: 'mem_a', reason: 'x' } }),
+		/retired/,
+	);
+	// 迟到的 LLM 失败：忽略即可，不能把 retired 覆写成 failed（否则 member.bind 能复活）。
+	await service.recordMemberFailure('mem_a', { category: 'auth', message: 'late' }, 'prj_b');
+	assert.equal(service.state.members.mem_a.status, 'retired');
+});
