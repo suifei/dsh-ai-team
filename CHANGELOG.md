@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.43 - 2026-11-12
+
+**修复：成员会话的 cwd 落在插件数据目录（workspace attach 失败）**
+
+现象（另一台机器 0.4.39 实测）：
+
+```
+[ai-team] member session workspace attach failed: cannot attach session '04109981-…'
+  to workspace 'D:\works\jsvm': its cwd resolves to 'C:\Users\…\.dsh\ai-team\default'
+```
+
+- **根因**：Host 会话（成员的父会话）创建时 `cwd` 用的是 `booted.dataDir`（插件数据目录），成员作为子会话继承这个 cwd，于是 `workspace.attachSession` 判定「会话 cwd 不在目标工作区内」而拒绝；成员实际也一直在数据目录里干活。
+- **修复**：Host 会话的 `cwd` 改为**当前项目的工作区**（`state.projects[active].workspacePath`），没有才退回数据目录。
+- **诊断**：attach 失败的告警里补上 `projectId`，并直接给出修复动作——`team member.reseat`（cwd 不会随 attach 改变，只能重建会话）——否则用户只看到一行警告。
+- 测试：`node --test` **244/244**。
+
 ## 0.4.42 - 2026-11-12
 
 **批 11：checkpoint 恢复可用、激活单飞、PMO 门禁取实时快照**

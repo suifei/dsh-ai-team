@@ -292,8 +292,10 @@ export function apply(ctx, config = {}) {
 			try {
 				await workspace.attachSession(sessionId);
 			} catch (error) {
-				diag.append({ ev: 'workspace.attach.fail', sessionId, message: error?.message ?? String(error) });
-				console.warn('[ai-team] member session workspace attach failed:', error?.message ?? error);
+				diag.append({ ev: 'workspace.attach.fail', sessionId, projectId: projectRuntime?.id ?? null, message: error?.message ?? String(error) });
+				// cwd 不会随 attach 改变：这类失败只能靠重建会话修复，日志里直接给出动作，
+				// 否则用户只看到一行警告，成员仍旧在插件数据目录里干活。
+				console.warn('[ai-team] member session workspace attach failed:', error?.message ?? error, '— reseat the member (team member.reseat) to recreate its session in the project workspace');
 			}
 		};
 		// A restored member session has no live AgentOptions; without a recorded
@@ -1436,12 +1438,25 @@ export function apply(ctx, config = {}) {
 				const existingHost = [...(booted?.runtimes?.values() ?? [])]
 					.map((runtime) => runtime.service.state.hostSessionId)
 					.find((value) => value !== undefined && value !== null);
+				// Host 会话的 cwd 必须是**项目工作区**，不能是插件数据目录：成员会话是它的
+				// 子会话，会继承这个 cwd，于是 workspace.attachSession 报
+				// "its cwd resolves to <…>/ai-team/<profile>" 而被拒，成员实际在数据目录里干活。
+				// 取当前活动项目的 workspacePath，没有才退回数据目录。
+				const hostCwd = () => {
+					const active = booted?.runtime?.service?.state?.projects?.[booted?.activeProjectId ?? ''];
+					const fromActive = typeof active?.workspacePath === 'string' ? active.workspacePath.trim() : '';
+					if (fromActive !== '') return fromActive;
+					const fromRegistry = (booted?.registry?.list?.() ?? [])
+						.map((project) => (typeof project.workspacePath === 'string' ? project.workspacePath.trim() : ''))
+						.find((value) => value !== '');
+					return fromRegistry !== undefined && fromRegistry !== '' ? fromRegistry : (booted?.dataDir ?? process.cwd());
+				};
 				hostPromise = ensureHostAgent({
 					agents: serviceOf(ctx, 'agents'),
 					agentDefaultModel: serviceOf(ctx, 'agentDefaultModel'),
 					workspaceRegistry: serviceOf(ctx, 'workspaceRegistry'),
 					sessions: serviceOf(ctx, 'sessions'),
-					cwd: booted?.dataDir ?? process.cwd(),
+					cwd: hostCwd(),
 					resumeSessionId: existingHost,
 				}).then(async (value) => {
 					// Host 会话必须落账：它决定冷恢复与 sendMessage 的 parent，也决定归档
