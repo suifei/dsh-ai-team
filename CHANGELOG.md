@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.55 - 2026-11-12
+
+**批 19：为「库失败进诊断」补端到端验证**
+
+0.4.54 引入共享失败汇后，我只单测了汇本身（mock sink）——没有验证「插件装好 sink、一次真实的库失败会不会落盘」。这轮补上：
+
+- 新增 `test/diag-sink.test.js`：预置一个**损坏的 `projects.json`**，boot 插件（真实 HTTP 路由 + 真实 diag 目录），断言诊断 JSONL 里出现 `registry.corrupt.fail` 行，且带 `kept` 路径。
+- **对照组验证**：临时把 `installDiagSink(...)` 换成空实现，用例立即失败（等满重试后报 `registry.corrupt.fail must be persisted`）；恢复后通过。
+- 测试：`node --test` **255 通过 / 1 跳过**。
+
 ## 0.4.54 - 2026-11-12
 
 **批 18：库模块的失败也进诊断日志**
