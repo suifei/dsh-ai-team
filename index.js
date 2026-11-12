@@ -48,6 +48,7 @@ import { buildModelCatalog } from './lib/host/model-catalog.js';
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeTaskContext, describeWake, planWakes } from './lib/host/waker.js';
 import { describeCauseChain } from './lib/runtime/error-chain.js';
+import { classifyWakeFailure } from './lib/runtime/wake-failure.js';
 import { aggregatePeople } from './lib/host/people-view.js';
 import { riskView } from './lib/host/risk-view.js';
 import { weeklyView } from './lib/host/weekly-view.js';
@@ -374,6 +375,11 @@ export function apply(ctx, config = {}) {
 		};
 		const attachMemberWorkspace = async (projectRuntime, sessionId) => {
 			if (typeof sessionId !== 'string' || sessionId === '') return;
+			// 归档项目（只读视图）的成员不会再干活：给它们 attach 只会每轮 boot 产生
+			// 一对注定失败的 `workspace.attach.fail`（会话 cwd 是历史的插件数据目录）。
+			// 这类项目交给「更换目录 + 重建会话」处理，不在这里制造噪音。
+			const projectState = projectRuntime?.service?.state?.projects?.[projectRuntime?.id ?? ''];
+			if (projectState?.status === 'archived') return;
 			const workspace = await workspaceForProject(projectRuntime);
 			if (workspace === null || workspace === undefined || typeof workspace.attachSession !== 'function') return;
 			try {
@@ -787,9 +793,8 @@ export function apply(ctx, config = {}) {
 					// 于是冷恢复必然失败。这是 Harness 侧的句柄泄漏，插件只能重建。
 					// 归类成单独事件：不再让这类必然失败每天刷上百条 `wake.fail`，
 					// 但仍在 `full` 级别可见，且重建路径不变。
-					const busyHandle = typeof causeChain === 'string' && /active write handle/i.test(causeChain);
 					diag.append({
-						ev: busyHandle ? 'wake.session-busy' : 'wake.fail',
+						ev: classifyWakeFailure(causeChain),
 						projectId: projectRuntime.id,
 						memberId: plan.memberId,
 						taskId: plan.taskId ?? null,

@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.70 - 2026-11-12
+
+**唤醒失败归类抽成单一实现 + 归档项目不再刷 attach 告警**
+
+0.4.69 把「写租约被占用」写成一条独立的 `wake.session-busy`，但重建结果本来就有
+`member.autoreseat` 记录，所以那条行只用于 `full` 级诊断——设计如此，也意味着它
+不该内联在 `index.js` 里用正则判断。
+
+- 抽出 `lib/runtime/wake-failure.js` 的 `classifyWakeFailure(causeChain)`：单一实现、
+  可单测；只认 `active write handle`，其它原因（无 continuation state / 无 preset
+  投影 / 无 cause）一律仍归 `wake.fail`。
+- 归档项目的成员不再尝试 `workspace.attachSession`：`prj_main`（已归档）的 2 个历史
+  会话 cwd 指向旧插件数据目录，每次 boot 必然产生一对 `workspace.attach.fail`，
+  而归档项目不会有成员干活——这类项目交给「更换目录 + 重建会话」处理。
+- 测试：`node --test` **272 通过 / 1 跳过**（新增 `wake-failure` 2 例：busy 归类、
+  其它原因不误判，含「write handle timeout」这类相似文本的反例）。
+
 ## 0.4.69 - 2026-11-12
 
 **`NOT_RESUMABLE` 根因确诊：成员会话的写句柄从未释放**
