@@ -1,7 +1,7 @@
 ---
 name: ai-team-core
-description: 文渊阁 AI Team 核心工程纪律：单一实现、网页取证与代理、懒惰的高级程序员、最小依赖、日志埋点。
-whenToUse: 所有 Agent（PMO/主理人/执行/验收）在规划、实现、验收、排查和汇报前都应加载并遵守。
+description: 只读「审查与导航」PMO 作业规程：核实子代理是否真的做到、对照目标锚点找偏离与漏项、只给下一步，输出 STATUS: CONTINUE | DONE | NEED_HUMAN。
+whenToUse: 每一轮子代理输出之后做核实与导航时加载；需要确认交付是否达标、是否越界加功能、该不该转交 Human 决策时使用。
 ---
 
 # AI Team 核心工程纪律
