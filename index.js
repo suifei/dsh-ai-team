@@ -53,6 +53,7 @@ import { classifyWakeFailure, isMalformedTurnError } from './lib/runtime/wake-fa
 import { registerShellGuard } from './lib/runtime/shell-guard.js';
 import { createActivationBudget } from './lib/runtime/activation-budget.js';
 import { blocksActivation, probeProviderRegistration } from './lib/runtime/subagent-probe.js';
+import { isRuntimeUnavailableFailure, resolveSubagentProviderName } from './lib/runtime/subagent-provider.js';
 import { aggregatePeople } from './lib/host/people-view.js';
 import { riskView } from './lib/host/risk-view.js';
 import { weeklyView } from './lib/host/weekly-view.js';
@@ -101,6 +102,8 @@ export const Config = z.object({
 	skilloptJudgeVotes: z.number().step(1).min(3).max(9).default(3),
 	// 初装默认项目与「新建项目」对话框的默认工作目录；留空则取宿主 cwd（见 boot）。
 	defaultWorkspace: z.string().default(''),
+	// 启动成员会话用的 subagent provider 名；留空按宿主实际注册的自动解析（默认 spawn）。
+	subagentProviderName: z.string().default('spawn'),
 	// 同一成员 30 分钟内允许的自动重建次数（失败→自愈→再失败的死循环闸门）。
 	autoReseatLimitPer30Min: z.number().step(1).min(1).max(100).default(6),
 	// 成员 shell 风险守卫：'warn' 只记诊断（默认），'block' 直接拒绝，'off' 不介入。
@@ -448,7 +451,12 @@ export function apply(ctx, config = {}) {
 					// 强制重建，让升级本身就把卡住的成员救回来。
 					for (const runtime of value.runtimes.values()) {
 						for (const member of Object.values(runtime.service.state.members ?? {})) {
-							if (member.kind !== 'agent' || member.routeStale !== true) continue;
+							if (member.kind !== 'agent') continue;
+							// 两种「该重建」：路由过期（配置换了 provider/model），或上次失败是运行时/提供方
+							// 不可用（rc.2 没有 list() 时激活全挂在 E_RUNTIME_UNAVAILABLE，成员进了 failed，
+							// 而 waker 不再唤醒 failed —— 不在这里救就永远醒不过来）。
+							const runtimeUnavailable = isRuntimeUnavailableFailure(member);
+							if (member.routeStale !== true && runtimeUnavailable !== true) continue;
 							if (member.status === 'retired') continue;
 							const budget = activationBudget.take(member.id);
 							if (budget.allowed !== true) {
@@ -459,7 +467,9 @@ export function apply(ctx, config = {}) {
 								payload: {
 									memberId: member.id,
 									force: true,
-									prompt: '模型/提供方已切换，会话按新路由重建。先读 tasks 与 thread 的当前状态，继续未完成的工作，不要重复已完成的事。',
+									prompt: runtimeUnavailable && member.routeStale !== true
+										? '运行时已恢复（此前因 subagent provider 不可用而中断）。先读 tasks 与 thread 的当前状态，继续未完成的工作，不要重复已完成的事。'
+										: '模型/提供方已切换，会话按新路由重建。先读 tasks 与 thread 的当前状态，继续未完成的工作，不要重复已完成的事。',
 								},
 							}, runtime).then((result) => {
 								diag.append({
@@ -771,7 +781,7 @@ export function apply(ctx, config = {}) {
 					agentPresets: serviceOf(ctx, 'agentPresets'),
 					direct: false,
 					parent: parentInfo.agent,
-					provider: (typeof subagents?.list === 'function' ? subagents.list() : [])[0],
+					provider: resolveSubagentProviderName(subagents, config?.subagentProviderName),
 					preset: 'standard',
 					cwd,
 					trackHandle: (sessionId, handle) => resumedHandles.set(sessionId, handle),
@@ -903,7 +913,7 @@ export function apply(ctx, config = {}) {
 							agentPresets: serviceOf(ctx, 'agentPresets'),
 							direct: false,
 							parent: parentInfo.agent,
-							provider: (serviceOf(ctx, 'subagents')?.list?.() ?? [])[0],
+							provider: resolveSubagentProviderName(serviceOf(ctx, 'subagents'), config?.subagentProviderName),
 							preset: 'standard',
 							cwd,
 							trackHandle: (sessionId, handle) => resumedHandles.set(sessionId, handle),
@@ -1055,7 +1065,7 @@ export function apply(ctx, config = {}) {
 					projectDir: projectRuntime.dir,
 					deps: {
 						now: () => Date.now(),
-						provider: (serviceOf(ctx, 'subagents')?.list?.() ?? [])[0],
+						provider: resolveSubagentProviderName(serviceOf(ctx, 'subagents'), config?.subagentProviderName),
 						// parent 惰性解析：仅启动 judge 子代理时需要；generating 阶段
 						// 不依赖 agents 服务，避免 tick 阶段服务不可用时整块失败。
 						ensureParent: () => ensureParent(),
@@ -1529,7 +1539,7 @@ export function apply(ctx, config = {}) {
 									projectDir: jobRoot,
 									deps: {
 										now: () => Date.now(),
-										provider: (serviceOf(ctx, 'subagents')?.list?.() ?? [])[0],
+										provider: resolveSubagentProviderName(serviceOf(ctx, 'subagents'), config?.subagentProviderName),
 										ensureParent: () => ensureParent(),
 										votes: config.skilloptJudgeVotes ?? 3,
 										startChild: async (label, spec) => {
@@ -1927,7 +1937,7 @@ export function apply(ctx, config = {}) {
 					agentPresets: serviceOf(ctx, 'agentPresets'),
 					direct: false,
 					parent: parentInfo.agent,
-					provider: (serviceOf(ctx, 'subagents')?.list?.() ?? [])[0],
+					provider: resolveSubagentProviderName(serviceOf(ctx, 'subagents'), config?.subagentProviderName),
 					preset: 'standard',
 					cwd: effectiveDir,
 					trackHandle: (sessionId, handle) => resumedHandles.set(sessionId, handle),
@@ -2167,7 +2177,40 @@ export function apply(ctx, config = {}) {
 					return send(res, { ok: true, people });
 				}
 				// R-17 绑定：把一个名字并到某个 personId（Human 在人员池显式确认）。
-				if (req.method === 'POST' && url.pathname === '/ai-team/api/people-aliases') {
+				// 批量恢复入口：把「因运行时/提供方不可用而 failed」的成员按新运行时重建。
+				// 这类失败与任务无关，但 failed 成员被 waker 排除，不手动救就永远醒不过来
+				// （实机：rc.2 那次激活全挂，6 个成员一起变 failed）。
+				if (req.method === 'POST' && url.pathname === '/ai-team/api/members/retry') {
+					const body = await readJson(req);
+					const includeAll = body?.all === true;
+					const runtimeEntries = [...(booted?.runtimes?.values() ?? [])];
+					const revived = [];
+					const skipped = [];
+					for (const runtime of runtimeEntries) {
+						for (const member of Object.values(runtime.service.state.members ?? {})) {
+							if (member.kind !== 'agent' || member.status === 'retired') continue;
+							const eligible = includeAll ? member.status === 'failed' : isRuntimeUnavailableFailure(member);
+							if (eligible !== true) continue;
+							if (member.status === 'running') { skipped.push({ memberId: member.id, reason: 'running' }); continue; }
+							const budget = activationBudget.take(member.id);
+							if (budget.allowed !== true) {
+								skipped.push({ memberId: member.id, reason: 'budget' });
+								continue;
+							}
+							const result = await activateMember({
+								payload: {
+									memberId: member.id,
+									force: true,
+									prompt: '运行时已恢复，会话已重建。先读 tasks 与 thread 的当前状态，继续未完成的工作，不要重复已完成的事。',
+								},
+							}, runtime);
+							if (result?.error === undefined) revived.push(member.id);
+							else skipped.push({ memberId: member.id, reason: result.error.code ?? 'error' });
+						}
+					}
+					diag?.append({ ev: 'member.retry.batch', revived: revived.length, skipped: skipped.length, all: includeAll });
+					return send(res, { ok: true, revived, skipped });
+				}				if (req.method === 'POST' && url.pathname === '/ai-team/api/people-aliases') {
 					const body = await readJson(req);
 					const memberName = typeof body?.name === 'string' ? body.name.trim() : '';
 					const personId = typeof body?.personId === 'string' ? body.personId.trim() : '';
