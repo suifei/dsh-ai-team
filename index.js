@@ -1974,11 +1974,16 @@ export function apply(ctx, config = {}) {
 					prompt: `${memberIdentity(activationMember)}\n\n${typeof body.payload?.prompt === 'string'
 						? body.payload.prompt
 						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: effectiveDir })}${await loadSkillContext(activationMember, [join(effectiveDir, '.dsh'), dshHome(), projectRuntime.dir], {
-					GOAL: goalForProject(projectRuntime),
-					PROJECT: projectRuntime.service.state.projects?.[projectRuntime.id]?.name ?? '',
-					MEMBER: activationMember.name ?? '',
-					WORKSPACE: effectiveDir,
-				})}`,
+					vars: {
+						GOAL: goalForProject(projectRuntime),
+						PROJECT: projectRuntime.service.state.projects?.[projectRuntime.id]?.name ?? '',
+						MEMBER: activationMember.name ?? '',
+						WORKSPACE: effectiveDir,
+					},
+					// 按身份装配内置技能：项目主理人拿审查规程，验收拿复跑规程，其余拿执行规程。
+					ownerId: projectRuntime.service.state.projects?.[projectRuntime.id]?.ownerMemberId
+						?? projectRuntime.service.state.projects?.[projectRuntime.id]?.ownerId,
+					})}`,
 				});
 				let bound;
 				try {

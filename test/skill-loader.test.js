@@ -16,6 +16,7 @@ test('loadSkillContext reads bounded profile skills and rejects traversal names'
 	assert.match(context, /A short skill/);
 	assert.doesNotMatch(context, /escape/);
 	assert.ok(context.length < 6000);
-	assert.match(await loadSkillContext({ skills: [] }, dir), /AI Team 核心工程纪律/);
-	assert.match(await loadSkillContext({ skills: ['missing'] }, dir), /AI Team 核心工程纪律/);
+	// 没有身份的成员按「执行」装配（身份规则见 core-skill.js）。
+	assert.match(await loadSkillContext({ skills: [] }, dir), /AI Team 的执行成员/);
+	assert.match(await loadSkillContext({ skills: ['missing'] }, dir), /AI Team 的执行成员/);
 });
