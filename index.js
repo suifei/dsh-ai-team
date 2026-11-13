@@ -27,7 +27,7 @@ import { memberIdentity } from './lib/domain/member-profile.js';
 import { loadSkillContext } from './lib/runtime/skill-loader.js';
 import { formatSkillCatalog } from './lib/runtime/skill-catalog.js';
 import { isSkillExcluded } from './lib/runtime/skill-policy.js';
-import { installFileSkillProvider } from './lib/runtime/skill-provider.js';
+import { installFileSkillProvider, pickProjectForCwd } from './lib/runtime/skill-provider.js';
 import { apply as applySkillOpt } from './lib/vendor/skillopt/src/index.js';
 import { createAdoptGate, wrapToolsWithAdoptGate } from './lib/skillopt/adopt-gate.js';
 import { wrapToolsWithSkilloptAccess } from './lib/skillopt/tool-access.js';
@@ -747,6 +747,16 @@ export function apply(ctx, config = {}) {
 		// runtime.dir（账本目录）兜底，曾把成员会话 cwd 钉进插件数据目录。
 		// 技能里的 {{GOAL}}：项目目标来自账本 projects[id].goal；没填就明说，不要让成员
 		// 对着一行空白猜（这也是 {{GOAL}} 之前"原样出现"的替代品）。
+		// cwd → 项目：技能 provider 的 get() 只拿得到 cwd，用它反查所属项目，
+		// 才能把 `{{GOAL}}` 渲染成那个项目的目标。
+		const projectForCwd = (cwd) => {
+			const projects = [];
+			for (const runtime of booted?.runtimes?.values() ?? []) {
+				const project = runtime?.service?.state?.projects?.[runtime.id];
+				if (project !== undefined) projects.push(project);
+			}
+			return pickProjectForCwd(projects, cwd);
+		};
 		const goalForProject = (projectRuntime) => {
 			const goal = projectRuntime?.service?.state?.projects?.[projectRuntime?.id]?.goal;
 			const text = typeof goal === 'string' ? goal.trim() : '';
@@ -1302,6 +1312,17 @@ export function apply(ctx, config = {}) {
 				dshHome: dshHome(),
 				projectCwd: process.cwd(),
 				bundledDir: fileURLToPath(new URL('./', import.meta.url)),
+				// 成员用 `skill` 工具主动加载技能时，内容按文件原样返回——`{{GOAL}}`
+				// 若不在这里渲染，成员看到的就是字面量。cwd 由 list() 随候选带下来，
+				// 这里反查它属于哪个项目，再取该项目账本里的目标。
+				resolveVars: ({ cwd }) => {
+					const project = projectForCwd(cwd);
+					return {
+						GOAL: project?.goal || '（本项目尚未填写目标：请先在项目简报里补充）',
+						PROJECT: project?.name ?? '',
+						WORKSPACE: typeof cwd === 'string' ? cwd : '',
+					};
+				},
 			}) ?? (() => {});
 		} catch (error) {
 			diag.append({ ev: 'skill.provider.fail', message: error?.message ?? String(error) });
