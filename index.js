@@ -52,6 +52,7 @@ import { describeCauseChain } from './lib/runtime/error-chain.js';
 import { classifyWakeFailure } from './lib/runtime/wake-failure.js';
 import { registerShellGuard } from './lib/runtime/shell-guard.js';
 import { createActivationBudget } from './lib/runtime/activation-budget.js';
+import { blocksActivation, probeProviderRegistration } from './lib/runtime/subagent-probe.js';
 import { aggregatePeople } from './lib/host/people-view.js';
 import { riskView } from './lib/host/risk-view.js';
 import { weeklyView } from './lib/host/weekly-view.js';
@@ -681,6 +682,8 @@ export function apply(ctx, config = {}) {
 		let host = null;
 		let hostPromise = null;
 		const wakeKeys = new Map();
+			// provider 探测状态去重：能力缺失/确认无 provider 只各记一次，避免每轮刷日志。
+			let lastProviderState = '';
 		// PMO tick 是 fire-and-forget：慢 tick（模型/IO）会被下一分钟的定时器再入，
 		// 造成 autoAnswerDecisions/reconcileJobs 并发执行同一条账本。按 Project 去重。
 		const pmoBusy = new Set();
@@ -745,8 +748,19 @@ export function apply(ctx, config = {}) {
 			const permissionPresets = serviceOf(ctx, 'permissionPresets');
 			const sandboxPolicy = serviceOf(ctx, 'sandboxPolicy');
 			if (subagents === undefined || sessions === undefined || permissionPresets === undefined || sandboxPolicy === undefined) return;
-			const providers = typeof subagents.list === 'function' ? subagents.list() : [];
-			if (providers.length === 0) return;
+			const providers = probeProviderRegistration(subagents);
+			if (blocksActivation(providers)) {
+				if (lastProviderState !== 'empty') {
+					lastProviderState = 'empty';
+					diag.append({ ev: 'wake.no-provider', projectId: projectRuntime.id });
+				}
+				return;
+			}
+			if (providers === 'unknown' && lastProviderState !== 'unknown') {
+				// 宿主（rc.2+）没有 list() 自省：能力缺失 ≠ 没有 provider，放行并留一条痕。
+				lastProviderState = 'unknown';
+				diag.append({ ev: 'subagents.introspect-missing' });
+			}
 			const parentInfo = await ensureParent();
 			// A live member already carries the activation context (identity,
 			// personality, skills). A wake is only the Task delta; re-sending the
@@ -1808,8 +1822,8 @@ export function apply(ctx, config = {}) {
 				diag?.append({ ev: 'activate.reject', projectId: projectRuntime.id, memberId: member.id, code: 'E_RUNTIME_UNAVAILABLE' });
 				return { error: { code: 'E_RUNTIME_UNAVAILABLE', message: 'member runtime services are unavailable' }, status: 503 };
 			}
-			const providers = typeof subagents.list === 'function' ? subagents.list() : [];
-			if (providers.length === 0) {
+			const providers = probeProviderRegistration(subagents);
+			if (blocksActivation(providers)) {
 				diag?.append({ ev: 'activate.reject', projectId: projectRuntime.id, memberId: member.id, code: 'E_RUNTIME_UNAVAILABLE', detail: 'no provider' });
 				return { error: { code: 'E_RUNTIME_UNAVAILABLE', message: 'no subagent provider is registered' }, status: 503 };
 			}
