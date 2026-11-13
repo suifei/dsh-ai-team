@@ -745,6 +745,13 @@ export function apply(ctx, config = {}) {
 		let pmoTimer = null;
 		// 项目工作目录（显式，无兜底）：null 表示尚未设置。历史版本在此处用
 		// runtime.dir（账本目录）兜底，曾把成员会话 cwd 钉进插件数据目录。
+		// 技能里的 {{GOAL}}：项目目标来自账本 projects[id].goal；没填就明说，不要让成员
+		// 对着一行空白猜（这也是 {{GOAL}} 之前"原样出现"的替代品）。
+		const goalForProject = (projectRuntime) => {
+			const goal = projectRuntime?.service?.state?.projects?.[projectRuntime?.id]?.goal;
+			const text = typeof goal === 'string' ? goal.trim() : '';
+			return text === '' ? '（本项目尚未填写目标：请先在项目简报里补充）' : text;
+		};
 		const projectWorkspace = (projectRuntime, member) => member?.workspace
 			|| projectRuntime?.service?.state?.projects?.[projectRuntime.id]?.workspacePath
 			|| null;
@@ -1945,7 +1952,12 @@ export function apply(ctx, config = {}) {
 				const result = await runtime.activate(activationMember, {
 					prompt: `${memberIdentity(activationMember)}\n\n${typeof body.payload?.prompt === 'string'
 						? body.payload.prompt
-						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: effectiveDir })}${await loadSkillContext(activationMember, [join(effectiveDir, '.dsh'), dshHome(), projectRuntime.dir])}`,
+						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: effectiveDir })}${await loadSkillContext(activationMember, [join(effectiveDir, '.dsh'), dshHome(), projectRuntime.dir], {
+					GOAL: goalForProject(projectRuntime),
+					PROJECT: projectRuntime.service.state.projects?.[projectRuntime.id]?.name ?? '',
+					MEMBER: activationMember.name ?? '',
+					WORKSPACE: effectiveDir,
+				})}`,
 				});
 				let bound;
 				try {
