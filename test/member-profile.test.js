@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openLedger } from '../lib/ledger/writer.js';
 import { TeamService } from '../lib/host/service.js';
+import { buildAgentOptions } from '../lib/domain/member-config.js';
 
 const PROJECT_ID = 'prj_test';
 
@@ -105,4 +106,43 @@ test('member profile, self-evolution, talent pool and takeover are append-only',
 	assert.ok(ledger.events.some((event) => event.type === 'member/distilled'));
 	assert.ok(ledger.events.some((event) => event.type === 'member/left-team'));
 	assert.ok(ledger.events.some((event) => event.type === 'task/taken-over'));
+});
+
+test('a member can carry a reasoning level, and changing only that level does not rebuild the session', async (t) => {
+	const dir = temp(t);
+	const ledger = openLedger({ dir, projectId: PROJECT_ID });
+	const service = new TeamService({ ledger });
+	const human = { kind: 'human', memberId: 'h1' };
+	await service.dispatch({ type: 'member.add', actor: human, projectId: PROJECT_ID, payload: { id: 'h1', name: '你', kind: 'human', role: 'Human' } });
+	await service.dispatch({ type: 'member.add', actor: human, projectId: PROJECT_ID, payload: { id: 'a1', name: '沈舟', role: 'Lead' } });
+	await service.dispatch({ type: 'project.create', actor: human, projectId: PROJECT_ID, payload: { workspacePath: process.cwd(), name: 'P', goal: 'g', ownerId: 'a1' } });
+
+	const withModel = await service.dispatch({
+		type: 'member.config.update',
+		actor: human,
+		projectId: PROJECT_ID,
+		payload: { memberId: 'a1', patch: { provider: 'p1', model: 'm1' }, reason: 'test' },
+	});
+	assert.equal(withModel.routeChanged, true);
+	assert.equal(service.state.members.a1.config.reasoningEffort, null);
+
+	const withEffort = await service.dispatch({
+		type: 'member.config.update',
+		actor: human,
+		projectId: PROJECT_ID,
+		payload: { memberId: 'a1', patch: { provider: 'p1', model: 'm1', reasoningEffort: 'max' }, reason: 'test' },
+	});
+	assert.equal(service.state.members.a1.config.reasoningEffort, 'max');
+	// 只改推理等级不换路由：provider/model 未变，不需要重建会话。
+	assert.equal(withEffort.routeChanged, false);
+	assert.deepEqual(buildAgentOptions(service.state.members.a1.config), { provider: 'p1', model: 'm1', reasoningEffort: 'max' });
+
+	// 传 null 表示清掉，回到「跟随模型默认」。
+	await service.dispatch({
+		type: 'member.config.update',
+		actor: human,
+		projectId: PROJECT_ID,
+		payload: { memberId: 'a1', patch: { reasoningEffort: null }, reason: 'test' },
+	});
+	assert.equal(service.state.members.a1.config.reasoningEffort, null);
 });

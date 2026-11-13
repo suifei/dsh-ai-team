@@ -45,7 +45,7 @@ import { collectReview, startReview } from './lib/skillopt/review-runner.js';
 import { REVIEWER_NAME } from './lib/skillopt/reviewer.js';
 import { createMemberPermissionGuard } from './lib/host/permission-guard.js';
 import { installFaultAdapter } from './lib/host/fault-adapter.js';
-import { buildModelCatalog } from './lib/host/model-catalog.js';
+import { buildModelCatalog, buildModelEfforts } from './lib/host/model-catalog.js';
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeTaskContext, describeWake, planWakes } from './lib/host/waker.js';
 import { describeCauseChain } from './lib/runtime/error-chain.js';
@@ -407,12 +407,21 @@ export function apply(ctx, config = {}) {
 			if (typeof sessionId !== 'string' || sessionId === '') return;
 			if (typeof selection?.provider !== 'string' || selection.provider === ''
 				|| typeof selection?.model !== 'string' || selection.model === '') return;
-			const route = `${selection.provider}/${selection.model}`;
+			// 推理等级也要记：只写 provider/model 会让下一轮回到模型默认档（实机：
+			// 创建时 max，追加这条事件后第二次请求变成 high）。
+			const effort = typeof selection.reasoningEffort === 'string' && selection.reasoningEffort !== ''
+				? selection.reasoningEffort
+				: null;
+			const route = `${selection.provider}/${selection.model}` + (effort === null ? '' : `#${effort}`);
 			if (modelSelectionLogged.get(sessionId) === route) return;
 			try {
 				const session = serviceOf(ctx, 'sessions')?.get?.(sessionId);
 				if (session === undefined || session === null || typeof session.append !== 'function') return;
-				session.append('model/selection', { provider: selection.provider, model: selection.model });
+				session.append('model/selection', {
+					provider: selection.provider,
+					model: selection.model,
+					...(effort === null ? {} : { reasoningEffort: effort }),
+				});
 				modelSelectionLogged.set(sessionId, route);
 				diag.append({ ev: 'model.selection', sessionId, route, label: label ?? null });
 			} catch (error) {
@@ -2063,6 +2072,15 @@ export function apply(ctx, config = {}) {
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/models') {
 						const catalog = await buildModelCatalog(serviceOf(ctx, 'llm'), serviceOf(ctx, 'agentDefaultModel'));
 						return send(res, catalog);
+					}
+					// 成员模型配置的「推理等级」选项：按选定路由按需解析（目录接口不承担这个成本）。
+					if (req.method === 'GET' && url.pathname === '/ai-team/api/model-efforts') {
+						const efforts = await buildModelEfforts(
+							serviceOf(ctx, 'llm'),
+							url.searchParams.get('provider') ?? '',
+							url.searchParams.get('model') ?? '',
+						);
+						return send(res, efforts, efforts.ok ? 200 : (efforts.error?.code === 'E_INVALID_ARGUMENT' ? 400 : 200));
 					}
 				// R-17 person 别名：视图层绑定（name → personId），文件存策略数据
 				// 目录；聚合时别名生效，未绑定回落同名聚合（可回退路径）。
