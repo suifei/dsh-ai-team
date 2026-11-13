@@ -268,6 +268,11 @@ window.__ModuleLoader__.load({
 			presetCordis: '创造模式',
 			memberProvider: '模型提供商',
 			memberModel: '模型',
+	memberReasoning: '推理等级',
+	memberReasoningDefault: '跟随模型默认',
+	memberReasoningNone: '该模型没有推理等级',
+	memberReasoningError: '推理等级读取失败：{message}',
+	memberReasoningAsk: '为 {model} 选择推理等级',
 			memberProviderDefault: '跟随系统默认',
 			memberModelDefault: '跟随系统默认',
 			memberNoProviders: 'DSH 暂未提供可用模型',
@@ -680,6 +685,11 @@ window.__ModuleLoader__.load({
 			presetCordis: 'Creative',
 			memberProvider: 'Model provider',
 			memberModel: 'Model',
+	memberReasoning: 'Reasoning',
+	memberReasoningDefault: 'Model default',
+	memberReasoningNone: 'This model offers no reasoning levels',
+	memberReasoningError: 'Could not read reasoning levels: {message}',
+	memberReasoningAsk: 'Pick a reasoning level for {model}',
 			memberProviderDefault: 'Follow system default',
 			memberModelDefault: 'Follow system default',
 			memberNoProviders: 'DSH exposes no models yet',
@@ -2491,8 +2501,58 @@ window.__ModuleLoader__.load({
 			}
 		}
 
-		function ModelFields({ t, catalog, provider, model, onProvider, onModel, error }) {
+		function ModelFields({ t, catalog, provider, model, effort, onEffort, onProvider, onModel, error }) {
 			const providers = Array.isArray(catalog?.providers) ? catalog.providers.slice() : [];
+			// 推理等级按「提供商 + 模型」按需解析：不同模型支持的档位不同，宿主也随时可能
+			// 换适配器，写死一份档位表必然漂移。查不到（服务/适配器报错）与「该模型没有档位」
+			// 分开提示，前者不该让用户以为模型不支持推理。
+			const [efforts, setEfforts] = React.useState(null);
+			const [effortsError, setEffortsError] = React.useState('');
+			const [effortsLoading, setEffortsLoading] = React.useState(false);
+			React.useEffect(() => {
+				let alive = true;
+				const routeProvider = provider.trim();
+				const routeModel = model.trim();
+				if (routeProvider === '' || routeModel === '') {
+					setEfforts(null);
+					setEffortsError('');
+					setEffortsLoading(false);
+					return () => { alive = false; };
+				}
+				setEffortsLoading(true);
+				const query = '?provider=' + encodeURIComponent(routeProvider) + '&model=' + encodeURIComponent(routeModel);
+				fetch('/ai-team/api/model-efforts' + query, { headers: { accept: 'application/json' } })
+					.then(async (response) => {
+						const body = await response.json().catch(() => null);
+						if (!response.ok) throw new Error(body?.error?.message ?? ('HTTP ' + response.status));
+						return body;
+					})
+					.then((body) => {
+						if (!alive) return;
+						setEfforts({ efforts: Array.isArray(body?.efforts) ? body.efforts : [], defaultEffort: body?.defaultEffort ?? null });
+						setEffortsError('');
+					})
+					.catch((cause) => {
+						if (!alive) return;
+						setEfforts({ efforts: [], defaultEffort: null });
+						setEffortsError(cause?.message ?? String(cause));
+					})
+					.finally(() => { if (alive) setEffortsLoading(false); });
+				return () => { alive = false; };
+			}, [provider, model]);
+			const availableEfforts = Array.isArray(efforts?.efforts) ? efforts.efforts : [];
+			const effortOptions = availableEfforts.slice();
+			// 账本里已有的档位若不在当前列表（模型换过/宿主改了档位），保留它以免静默改写。
+			if (typeof effort === 'string' && effort !== '' && !effortOptions.some((entry) => entry.id === effort)) {
+				effortOptions.push({ id: effort, name: effort });
+			}
+			const effortHint = effortsError
+				? tf(t, 'memberReasoningError', { message: effortsError })
+				: efforts !== null && availableEfforts.length === 0 && effortsLoading === false
+					? t('memberReasoningNone')
+					: '';
+			const providers2 = providers;
+			const providersAll = providers2;
 			if (provider !== '' && !providers.some((entry) => entry.id === provider)) {
 				providers.unshift({ id: provider, name: provider, models: model === '' ? [] : [{ id: model, name: model }], modelCount: model === '' ? 0 : 1 });
 			}
@@ -2529,7 +2589,9 @@ window.__ModuleLoader__.load({
 					h('label', { className: 'at-field' }, h('span', null, t('memberProvider')),
 						h('select', { value: provider, onChange: chooseProvider },
 							h('option', { value: '' }, t('memberProviderDefault')),
-							providers.map((entry) => h('option', { key: entry.id, value: entry.id }, entry.name + (entry.modelCount ? ' · ' + entry.modelCount : ''))))),
+							providers.map((entry) => h('option', { key: entry.id, value: entry.id }, entry.name + (entry.modelCount ? ' · ' + entry.modelCount : ''))),
+						)
+					),
 					h('label', { className: 'at-field' }, h('span', null, t('memberModel')),
 						h('select', {
 							value: model,
@@ -2537,8 +2599,22 @@ window.__ModuleLoader__.load({
 							onChange: (event) => onModel(event.target.value),
 						},
 							h('option', { value: '' }, t('memberModelDefault')),
-							models.map((entry) => h('option', { key: entry.id, value: entry.id }, entry.name === entry.id ? entry.id : entry.name + ' · ' + entry.id))))),
-				hint ? h('div', { className: 'at-fieldhint' }, hint) : null);
+							models.map((entry) => h('option', { key: entry.id, value: entry.id }, entry.name === entry.id ? entry.id : entry.name + ' · ' + entry.id)),
+						)
+					),
+					h('label', { className: 'at-field' }, h('span', null, t('memberReasoning')),
+						h('select', {
+							value: typeof effort === 'string' ? effort : '',
+							disabled: provider === '' || model === '' || effortsLoading,
+							onChange: (event) => onEffort(event.target.value),
+						},
+							h('option', { value: '' }, t('memberReasoningDefault')),
+							effortOptions.map((entry) => h('option', { key: entry.id, value: entry.id }, entry.name === entry.id ? entry.id : entry.name + ' · ' + entry.id)),
+						)
+					)
+				),
+				hint ? h('div', { className: 'at-fieldhint' }, hint) : null,
+				effortHint ? h('div', { className: 'at-fieldhint' }, effortHint) : null);
 		}
 
 		function Workbench({ t, ctx }) {
@@ -2572,6 +2648,7 @@ window.__ModuleLoader__.load({
 			const [mRole, setMRole] = React.useState('');
 			const [mPrompt, setMPrompt] = React.useState('');
 			const [mProvider, setMProvider] = React.useState('');
+			const [mEffort, setMEffort] = React.useState('');
 			const [mModel, setMModel] = React.useState('');
 			const [modelCatalog, setModelCatalog] = React.useState(null);
 			const [modelCatalogError, setModelCatalogError] = React.useState('');
@@ -2586,6 +2663,7 @@ window.__ModuleLoader__.load({
 			const [pProvider, setPProvider] = React.useState('');
 			const [pModel, setPModel] = React.useState('');
 			const [pMaxTokens, setPMaxTokens] = React.useState('');
+			const [pEffort, setPEffort] = React.useState('');
 			const [pNote, setPNote] = React.useState('');
 			const [pSkill, setPSkill] = React.useState('');
 			const [pMessage, setPMessage] = React.useState('');
@@ -3032,7 +3110,23 @@ window.__ModuleLoader__.load({
 				const pickedIndex = labels.indexOf(picked);
 				const target = values[pickedIndex >= 0 ? pickedIndex : 0];
 				if (target === undefined) return;
-				const patch = { provider: target.providerId, model: target.model };
+				// 该模型若支持推理等级，顺带让用户挑一档；读不到档位就保持模型默认，不阻断改模型。
+				let effort = '';
+				try {
+					const effortsQuery = '?provider=' + encodeURIComponent(target.providerId) + '&model=' + encodeURIComponent(target.model);
+					const effortsResponse = await fetch('/ai-team/api/model-efforts' + effortsQuery, { headers: { accept: 'application/json' } });
+					const effortsBody = await effortsResponse.json().catch(() => null);
+					const effortRows = Array.isArray(effortsBody?.efforts) ? effortsBody.efforts : [];
+					if (effortRows.length > 0) {
+						const effortLabels = [t('memberReasoningDefault')].concat(effortRows.map((entry) => (entry.name === entry.id ? entry.id : entry.name + ' · ' + entry.id)));
+						const pickedEffort = await askPrompt(tf(t, 'memberReasoningAsk', { model: target.modelName ?? target.model }), { options: effortLabels });
+						if (pickedEffort !== null) {
+							const effortIndex = effortLabels.indexOf(pickedEffort) - 1;
+							if (effortIndex >= 0 && effortRows[effortIndex] !== undefined) effort = effortRows[effortIndex].id;
+						}
+					}
+				} catch { /* 读不到档位时按模型默认走 */ }
+				const patch = { provider: target.providerId, model: target.model, ...(effort === '' ? {} : { reasoningEffort: effort }) };
 				let done = 0; let failed = 0;
 				for (const row of person.projects ?? []) {
 					const memberIds = Array.isArray(row.memberIds) ? row.memberIds : [];
@@ -3368,6 +3462,7 @@ window.__ModuleLoader__.load({
 				setMPrompt('');
 				setMProvider(defaults.provider ?? '');
 				setMModel(defaults.model ?? '');
+				setMEffort(defaults.reasoningEffort ?? '');
 				setMOwner((data?.agents ?? []).length === 0);
 				setMError('');
 				setAddOpen(true);
@@ -3390,6 +3485,7 @@ window.__ModuleLoader__.load({
 							patch: {
 								...(mProvider.trim() ? { provider: mProvider.trim() } : {}),
 								...(mModel.trim() ? { model: mModel.trim() } : {}),
+								...(mEffort.trim() ? { reasoningEffort: mEffort.trim() } : {}),
 							},
 							reason: 'workbench add member',
 						});
@@ -3471,6 +3567,7 @@ window.__ModuleLoader__.load({
 				setPProvider(agent.config?.provider ?? '');
 				setPModel(agent.config?.model ?? '');
 				setPMaxTokens(agent.config?.maxTokens ?? '');
+				setPEffort(agent.config?.reasoningEffort ?? '');
 				setPNote('');
 				setPSkill('');
 				setPMessage('');
@@ -3495,6 +3592,9 @@ window.__ModuleLoader__.load({
 					if (pPreset !== (config.preset ?? profileAgent.preset ?? 'standard')) patch.preset = pPreset;
 					if (pProvider.trim() !== (config.provider ?? '')) patch.provider = pProvider.trim();
 					if (pModel.trim() !== (config.model ?? '')) patch.model = pModel.trim();
+					// 空串 = 跟随模型默认，显式写 null 才能真正清掉账本里的旧档位。
+					const nextEffort = pEffort.trim();
+					if (nextEffort !== (config.reasoningEffort ?? '')) patch.reasoningEffort = nextEffort === '' ? null : nextEffort;
 					const maxTokens = Number(pMaxTokens);
 					if (Number.isSafeInteger(maxTokens) && maxTokens > 0 && maxTokens !== config.maxTokens) patch.maxTokens = maxTokens;
 					if (Object.keys(patch).length > 0) {
@@ -4294,6 +4394,8 @@ window.__ModuleLoader__.load({
 								t,
 								catalog: modelCatalog,
 								provider: mProvider,
+								effort: mEffort,
+								onEffort: setMEffort,
 								model: mModel,
 								onProvider: setMProvider,
 								onModel: setMModel,
@@ -4351,6 +4453,8 @@ window.__ModuleLoader__.load({
 								t,
 								catalog: modelCatalog,
 								provider: pProvider,
+								effort: pEffort,
+								onEffort: setPEffort,
 								model: pModel,
 								onProvider: setPProvider,
 								onModel: setPModel,
