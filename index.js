@@ -49,7 +49,7 @@ import { buildModelCatalog, buildModelEfforts } from './lib/host/model-catalog.j
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeTaskContext, describeWake, planWakes } from './lib/host/waker.js';
 import { describeCauseChain } from './lib/runtime/error-chain.js';
-import { classifyWakeFailure } from './lib/runtime/wake-failure.js';
+import { classifyWakeFailure, isMalformedTurnError } from './lib/runtime/wake-failure.js';
 import { registerShellGuard } from './lib/runtime/shell-guard.js';
 import { createActivationBudget } from './lib/runtime/activation-budget.js';
 import { blocksActivation, probeProviderRegistration } from './lib/runtime/subagent-probe.js';
@@ -672,6 +672,11 @@ export function apply(ctx, config = {}) {
 					});
 					// blocked 最常见的原因是归档 gate：立刻复核一次血缘归档状态。
 					if (endKind === 'blocked') void repairArchivedHosts();
+					// 工具参数在传输中截断（MALFORMED_RESPONSE）：那次调用没有执行，成员
+					// 停在半路。重发一次通常就好，交给带预算的续跑（见 retryMalformedTurn）。
+					if (endKind === 'error' && isMalformedTurnError(event?.data?.reason)) {
+						void retryMalformedTurn(eventRuntime, member);
+					}
 					return;
 				}
 				if (member.lastFailure === undefined || member.lastFailure === null) return;
@@ -733,6 +738,67 @@ export function apply(ctx, config = {}) {
 		const projectWorkspace = (projectRuntime, member) => member?.workspace
 			|| projectRuntime?.service?.state?.projects?.[projectRuntime.id]?.workspacePath
 			|| null;
+		// 工具参数截断的续跑预算：与「会话重建」分开计数——重建会丢上下文，
+		// 续跑只是重发一条消息，成本低但也不能无限。
+		const malformedRetries = createActivationBudget({ limit: 3, windowMs: 10 * 60 * 1000 });
+		const retryMalformedTurn = async (projectRuntime, member) => {
+			try {
+				const project = projectRuntime?.service?.state?.projects?.[projectRuntime.id];
+				if (project !== undefined && project.runState === 'stopped') return;
+				const budget = malformedRetries.take(member.id);
+				if (budget.allowed !== true) {
+					diag.append({
+						ev: 'member.malformed.retry.suppressed.fail',
+						projectId: projectRuntime?.id ?? null,
+						memberId: member.id,
+						count: budget.count,
+						limit: budget.limit,
+						windowMs: budget.windowMs,
+					});
+					return;
+				}
+				const cwd = projectWorkspace(projectRuntime, member);
+				if (typeof cwd !== 'string' || cwd === '') return;
+				const parentInfo = await ensureParent();
+				if (parentInfo?.agent === undefined) return;
+				const subagents = serviceOf(ctx, 'subagents');
+				const sessionRuntime = new MemberRuntime({
+					subagents,
+					sessions: serviceOf(ctx, 'sessions'),
+					permissionPresets: serviceOf(ctx, 'permissionPresets'),
+					sandboxPolicy: serviceOf(ctx, 'sandboxPolicy'),
+					agents: serviceOf(ctx, 'agents'),
+					agentPresets: serviceOf(ctx, 'agentPresets'),
+					direct: false,
+					parent: parentInfo.agent,
+					provider: (typeof subagents?.list === 'function' ? subagents.list() : [])[0],
+					preset: 'standard',
+					cwd,
+					trackHandle: (sessionId, handle) => resumedHandles.set(sessionId, handle),
+				});
+				const delivered = await sessionRuntime.wake(member, {
+					prompt: [
+						'上一轮你发起的工具调用在传输中被截断（Unexpected end of JSON input），那次调用没有执行。',
+						'请重新发起同一次调用：参数写成一行紧凑 JSON，不要在参数里展开大段文本；',
+						'需要写长内容时改用更短的措辞，或先落盘再引用路径。',
+					].join(''),
+				});
+				diag.append({
+					ev: 'member.malformed.retry',
+					projectId: projectRuntime?.id ?? null,
+					memberId: member.id,
+					attempt: budget.count,
+					messageId: delivered?.messageId ?? null,
+				});
+			} catch (error) {
+				diag.append({
+					ev: 'member.malformed.retry.fail',
+					projectId: projectRuntime?.id ?? null,
+					memberId: member?.id ?? null,
+					message: error?.message ?? String(error),
+				});
+			}
+		};
 		const wakeFromResult = async (projectRuntime, result, actor = {}) => {
 			if (projectRuntime === null || projectRuntime === undefined) return;
 			// P6 停止门（事件 hook 侧）：stopped 项目停止**自动派发**；Human
