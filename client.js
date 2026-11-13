@@ -270,7 +270,7 @@ window.__ModuleLoader__.load({
 			memberModel: '模型',
 	memberReasoning: '推理等级',
 	memberReasoningDefault: '跟随模型默认',
-	memberReasoningNone: '该模型没有推理等级',
+	memberReasoningNone: '该模型没有声明推理档位；在 DSH 提供商设置里为它配置 reasoningEfforts 后，这里才会出现可选档位',
 	memberReasoningError: '推理等级读取失败：{message}',
 	memberReasoningAsk: '为 {model} 选择推理等级',
 			memberProviderDefault: '跟随系统默认',
@@ -687,7 +687,7 @@ window.__ModuleLoader__.load({
 			memberModel: 'Model',
 	memberReasoning: 'Reasoning',
 	memberReasoningDefault: 'Model default',
-	memberReasoningNone: 'This model offers no reasoning levels',
+	memberReasoningNone: 'This model declares no reasoning levels; add reasoningEfforts for it in the DSH provider settings to enable this selector',
 	memberReasoningError: 'Could not read reasoning levels: {message}',
 	memberReasoningAsk: 'Pick a reasoning level for {model}',
 			memberProviderDefault: 'Follow system default',
@@ -2529,6 +2529,11 @@ window.__ModuleLoader__.load({
 					})
 					.then((body) => {
 						if (!alive) return;
+						// 端点用 ok:false 表达「查不到」：不能当成「该模型没有档位」，否则用户
+						// 会以为模型不支持推理，而实际是适配器没回答。
+						if (body !== null && typeof body === 'object' && body.ok === false) {
+							throw new Error(body?.error?.message ?? t('memberReasoningError'));
+						}
 						setEfforts({ efforts: Array.isArray(body?.efforts) ? body.efforts : [], defaultEffort: body?.defaultEffort ?? null });
 						setEffortsError('');
 					})
@@ -2551,8 +2556,6 @@ window.__ModuleLoader__.load({
 				: efforts !== null && availableEfforts.length === 0 && effortsLoading === false
 					? t('memberReasoningNone')
 					: '';
-			const providers2 = providers;
-			const providersAll = providers2;
 			if (provider !== '' && !providers.some((entry) => entry.id === provider)) {
 				providers.unshift({ id: provider, name: provider, models: model === '' ? [] : [{ id: model, name: model }], modelCount: model === '' ? 0 : 1 });
 			}
