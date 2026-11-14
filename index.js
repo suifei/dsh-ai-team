@@ -23,6 +23,7 @@ import { migrateLegacyNamespace, resolveProfile } from './lib/ledger/namespace.j
 import { ids } from './lib/domain/ids.js';
 import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-runtime.js';
 import { ensureHostAgent } from './lib/runtime/host-agent.js';
+import { activationSpec } from './lib/runtime/activation-spec.js';
 import { repairArchivedHosts as repairHostSessions } from './lib/runtime/host-repair.js';
 import { classifyLlmFailure, nextRequestAttempt, retryDecision } from './lib/runtime/failure-policy.js';
 import { memberIdentity } from './lib/domain/member-profile.js';
@@ -1119,7 +1120,7 @@ export function apply(ctx, config = {}) {
 						startChild: async (label, spec) => {
 							// 必须走 serviceOf：这里不在 activateMember/wakeFromResult 的
 							// 词法作用域内，裸写 subagents 会在判官轮抛 ReferenceError。
-							const child = await serviceOf(ctx, 'subagents').startActivation({ ...spec, label });
+							const child = await serviceOf(ctx, 'subagents').startActivation(activationSpec({ ...spec, label }));
 							return { childId: child.childId, outputStart: child.outputStart ?? null };
 						},
 						readText: (file) => readFileSync(file, 'utf8'),
@@ -1567,7 +1568,7 @@ export function apply(ctx, config = {}) {
 										ensureParent: () => ensureParent(),
 										votes: config.skilloptJudgeVotes ?? 3,
 										startChild: async (label, spec) => {
-											const child = await serviceOf(ctx, 'subagents').startActivation({ ...spec, label });
+											const child = await serviceOf(ctx, 'subagents').startActivation(activationSpec({ ...spec, label }));
 											return { childId: child.childId, outputStart: child.outputStart ?? null };
 										},
 										readText: (file) => readFileSync(file, 'utf8'),
