@@ -295,3 +295,12 @@ test('a route change wakes the member and rebuilds the session, even when it fai
 		event: { type: 'member/config-updated', seq: 32, payload: { memberId: 'a1', routeChanged: true } },
 	}, {}).length, 0);
 });
+
+test('a route change on an idle member only marks it stale: no wake without unfinished work', () => {
+	// r08：初装后统一改模型，6 个空闲成员各被 route_changed 激活一次，空转烧会话。
+	const idle = { ...state, tasks: {} };
+	const plans = planWakes(idle, {
+		event: { type: 'member/config-updated', seq: 40, payload: { memberId: 'a1', routeChanged: true } },
+	}, {});
+	assert.deepEqual(plans, []);
+});

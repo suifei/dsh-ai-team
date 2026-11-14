@@ -374,21 +374,25 @@ export function apply(ctx, config = {}) {
 		// 会话标题带项目前缀：多项目同名成员在 DSH 侧栏无法区分（用户实证）。
 		const memberSessionTitle = (member, projectName) => `${projectName ? '【' + projectName + '】' : ''}${member?.name ?? 'Agent'}（${member?.role ?? 'Agent'}）`.trim().slice(0, 120);
 		const projectNameOf = (projectRuntime) => projectRuntime?.service?.state?.projects?.[projectRuntime?.id]?.name ?? '';
-		const titleMemberSession = async (projectRuntime, member) => {
-			if (member === undefined) return;
+		const pmoSessionTitle = (projectName) => `${projectName ? '【' + projectName + '】' : ''}文渊阁·PMO`.slice(0, 120);
+		/** 给一个在线会话改标题（幂等）；不在线时跳过，下次再试。 */
+		const titleSession = (sessionId, title, projectId = null) => {
 			const sessions = serviceOf(ctx, 'sessions');
 			const titleService = serviceOf(ctx, 'sessionTitle');
-			const session = sessions?.get?.(member.sessionId);
+			const session = sessions?.get?.(sessionId);
 			if (session === undefined || session === null || typeof titleService?.rename !== 'function') return;
-			const title = memberSessionTitle(member, projectNameOf(projectRuntime));
 			try {
 				if (typeof titleService.get === 'function' && titleService.get(session)?.title === title) return;
 				titleService.rename(session, title);
-				diag.append({ ev: 'session.title', sessionId: member.sessionId, title, projectId: projectRuntime.id });
+				diag.append({ ev: 'session.title', sessionId, title, projectId });
 			} catch (error) {
-				diag.append({ ev: 'session.title.fail', sessionId: member.sessionId, message: error?.message ?? String(error) });
+				diag.append({ ev: 'session.title.fail', sessionId, message: error?.message ?? String(error) });
 				console.warn('[ai-team] session title failed:', error?.message ?? error);
 			}
+		};
+		const titleMemberSession = async (projectRuntime, member) => {
+			if (member === undefined) return;
+			titleSession(member.sessionId, memberSessionTitle(member, projectNameOf(projectRuntime)), projectRuntime.id);
 		};
 		const attachMemberWorkspace = async (projectRuntime, sessionId) => {
 			if (typeof sessionId !== 'string' || sessionId === '') return;
@@ -708,8 +712,9 @@ export function apply(ctx, config = {}) {
 		const offLlmFault = process.env.DSH_AI_TEAM_TEST === '1'
 			? installFaultAdapter(serviceOf(ctx, 'llm'), () => llmFaultMode)
 			: () => {};
-		let host = null;
-		let hostPromise = null;
+		// 每个项目一个 PMO 会话（核心模型）：projectId → 已就绪的 host / 进行中的创建。
+		const hosts = new Map();
+		const hostPromises = new Map();
 		const wakeKeys = new Map();
 			// provider 探测状态去重：能力缺失/确认无 provider 只各记一次，避免每轮刷日志。
 			let lastProviderState = '';
@@ -787,7 +792,7 @@ export function apply(ctx, config = {}) {
 				}
 				const cwd = projectWorkspace(projectRuntime, member);
 				if (typeof cwd !== 'string' || cwd === '') return;
-				const parentInfo = await ensureParent();
+				const parentInfo = await ensureParent(projectRuntime);
 				if (parentInfo?.agent === undefined) return;
 				const subagents = serviceOf(ctx, 'subagents');
 				const sessionRuntime = new MemberRuntime({
@@ -861,7 +866,7 @@ export function apply(ctx, config = {}) {
 				lastProviderState = 'unknown';
 				diag.append({ ev: 'subagents.introspect-missing' });
 			}
-			const parentInfo = await ensureParent();
+			const parentInfo = await ensureParent(projectRuntime);
 			// A live member already carries the activation context (identity,
 			// personality, skills). A wake is only the Task delta; re-sending the
 			// whole activation prompt caused the duplicated blocks users saw.
@@ -1080,7 +1085,7 @@ export function apply(ctx, config = {}) {
 						provider: resolveSubagentProviderName(serviceOf(ctx, 'subagents'), config?.subagentProviderName),
 						// parent 惰性解析：仅启动 judge 子代理时需要；generating 阶段
 						// 不依赖 agents 服务，避免 tick 阶段服务不可用时整块失败。
-						ensureParent: () => ensureParent(),
+						ensureParent: () => ensureParent(projectRuntime),
 						votes: config.skilloptJudgeVotes ?? 3,
 						startChild: async (label, spec) => {
 							// 必须走 serviceOf：这里不在 activateMember/wakeFromResult 的
@@ -1785,60 +1790,62 @@ export function apply(ctx, config = {}) {
 				diag.append({ ev: 'host.unarchive.sweep.fail', error: error?.message ?? String(error) });
 			}
 		};
-		const ensureParent = async () => {
-			if (host !== null) return host;
+		/**
+		 * 取项目的 PMO 会话（成员的父会话）。核心模型：一个项目一个 PMO，驻留在项目工作区；
+		 * 成员都是它的子会话，于是全部落在同一工作区。不传项目时取活动项目（skillopt 评审等
+		 * 与具体项目无关的子代理）。没有工作区的项目没有 PMO——必须指定工作区才能工作。
+		 */
+		const ensureParent = async (projectRuntime = booted?.runtime) => {
+			if (projectRuntime === null || projectRuntime === undefined) {
+				throw Object.assign(new Error('no project runtime for the PMO session'), { code: 'E_RUNTIME_UNAVAILABLE' });
+			}
+			const projectId = projectRuntime.id;
+			const ready = hosts.get(projectId);
+			if (ready !== undefined) return ready;
 			await repairArchivedHosts();
-			if (hostPromise === null) {
-				const existingHost = [...(booted?.runtimes?.values() ?? [])]
-					.map((runtime) => runtime.service.state.hostSessionId)
-					.find((value) => value !== undefined && value !== null);
-				// Host 会话的 cwd 必须是**项目工作区**，不能是插件数据目录：成员会话是它的
-				// 子会话，会继承这个 cwd，于是 workspace.attachSession 报
-				// "its cwd resolves to <…>/ai-team/<profile>" 而被拒，成员实际在数据目录里干活。
-				// 取当前活动项目的 workspacePath，没有才退回数据目录。
-				const hostCwd = () => {
-					const active = booted?.runtime?.service?.state?.projects?.[booted?.activeProjectId ?? ''];
-					const fromActive = typeof active?.workspacePath === 'string' ? active.workspacePath.trim() : '';
-					if (fromActive !== '') return fromActive;
-					const fromRegistry = (booted?.registry?.list?.() ?? [])
-						.map((project) => (typeof project.workspacePath === 'string' ? project.workspacePath.trim() : ''))
-						.find((value) => value !== '');
-					return fromRegistry !== undefined && fromRegistry !== '' ? fromRegistry : (booted?.dataDir ?? process.cwd());
-				};
-				hostPromise = ensureHostAgent({
+			let pending = hostPromises.get(projectId);
+			if (pending === undefined) {
+				const project = projectRuntime.service.state.projects?.[projectId];
+				const cwd = typeof project?.workspacePath === 'string' ? project.workspacePath.trim() : '';
+				if (cwd === '') {
+					throw Object.assign(new Error('the project has no workspace; set one before the team can work'), { code: 'E_WORKSPACE_REQUIRED' });
+				}
+				pending = ensureHostAgent({
 					agents: serviceOf(ctx, 'agents'),
 					agentDefaultModel: serviceOf(ctx, 'agentDefaultModel'),
 					workspaceRegistry: serviceOf(ctx, 'workspaceRegistry'),
 					sessions: serviceOf(ctx, 'sessions'),
-					cwd: hostCwd(),
-					resumeSessionId: existingHost,
+					cwd,
+					resumeSessionId: projectRuntime.service.state.hostSessionId,
 				}).then(async (value) => {
 					// 卸载后才完成的父代理：句柄不能留在进程里，也不能写账本。
 					if (disposed) {
 						try { await value.dispose?.(); } catch { /* already gone */ }
-						diag.append({ ev: 'host.created.after-dispose', sessionId: value.sessionId ?? null });
+						diag.append({ ev: 'host.created.after-dispose', projectId, sessionId: value.sessionId ?? null });
 						return value;
 					}
-					// Host 会话必须落账：它决定冷恢复与 sendMessage 的 parent，也决定归档
-					// 修复 sweep 能不能看见根会话。除了「首次创建」，从 roots() 里选中
-					// 既有会话、以及父级发生变化（换成了另一条根会话）时同样要重绑——
-					// 否则之后每次 sendMessage/coldResume 都以 UNAUTHORIZED 失败且无自愈。
-					for (const runtime of booted?.runtimes?.values() ?? []) {
-						if (runtime.service.state.hostSessionId === value.sessionId) continue;
+					// 落账（只落本项目）：它决定冷恢复与 sendMessage 的 parent；换了 PMO 时 fold
+					// 会把旧 PMO 下的成员标为 routeStale，下次唤醒在新 PMO 下重建。
+					if (projectRuntime.service.state.hostSessionId !== value.sessionId) {
 						try {
-							await runtime.service.bindHostSession(value.sessionId, runtime.id);
+							await projectRuntime.service.bindHostSession(value.sessionId, projectId);
 						} catch (error) {
-							diag.append({ ev: 'host.bind.fail', projectId: runtime.id, sessionId: value.sessionId, message: error?.message ?? String(error) });
+							diag.append({ ev: 'host.bind.fail', projectId, sessionId: value.sessionId, message: error?.message ?? String(error) });
 						}
 					}
-					host = value;
+					// 归入项目工作区并命名：否则 DSH 侧栏里它是「未分组 / 未命名」，成员子会话跟着它。
+					await attachMemberWorkspace(projectRuntime, value.sessionId);
+					titleSession(value.sessionId, pmoSessionTitle(projectNameOf(projectRuntime)), projectId);
+					diag.append({ ev: 'host.ready', projectId, sessionId: value.sessionId, created: value.created === true, resumed: value.resumed === true });
+					hosts.set(projectId, value);
 					return value;
 				}).catch((error) => {
-					hostPromise = null;
+					hostPromises.delete(projectId);
 					throw error;
 				});
+				hostPromises.set(projectId, pending);
 			}
-			return hostPromise;
+			return pending;
 		};
 		const activateMember = async (body, projectRuntime) => {
 			const member = projectRuntime.service.state.members?.[body.payload?.memberId];
@@ -1902,7 +1909,7 @@ export function apply(ctx, config = {}) {
 				if (!activationMember.config?.provider || !activationMember.config?.model) {
 					return { error: { code: 'E_RUNTIME_UNAVAILABLE', message: 'no member or default provider/model is configured' }, status: 503 };
 				}
-				const parentInfo = await ensureParent();
+				const parentInfo = await ensureParent(projectRuntime);
 				const runtime = new MemberRuntime({
 					subagents,
 					sessions,
@@ -2748,9 +2755,12 @@ export function apply(ctx, config = {}) {
 				}));
 			}
 			activations.clear();
-			if (host !== null) cleanup.push(Promise.resolve().then(async () => {
-				try { await host.dispose?.(); } catch { /* already gone */ }
-			}));
+			for (const value of hosts.values()) {
+				cleanup.push(Promise.resolve().then(async () => {
+					try { await value.dispose?.(); } catch { /* already gone */ }
+				}));
+			}
+			hosts.clear();
 			try { disposePermissionGuard(); } catch { /* already disposed */ }
 			try { offLlmFault(); } catch { /* already disposed */ }
 			try { disposeSkillProvider(); } catch { /* already disposed */ }
