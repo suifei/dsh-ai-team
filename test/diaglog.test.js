@@ -36,7 +36,7 @@ test('a benign flush on a closed handle is not an error event', () => {
 test('self-heal outcomes stay visible at the shipped level', () => {
 	// 与 host.repair.ok 同理：这些是「救回来没有」的关键证据，不能只在 full 级别出现。
 	assert.equal(isErrorEvent('host.repair.ok'), true);
-	assert.equal(isErrorEvent('member.autoreseat'), true);
+	assert.equal(isErrorEvent('member.session.reused'), true);
 	// 普通进度行仍然被过滤（errors 级别不能变成 full）。
 	assert.equal(isErrorEvent('dispatch.start'), false);
 	assert.equal(isErrorEvent('ledger.open'), false);

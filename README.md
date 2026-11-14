@@ -179,7 +179,7 @@ POST /ai-team/api/projects/<id>/commands
 - 真实 E2E 覆盖：
   - 两 Agent claim → Thread → 独立验收；
   - 一句话 → Lead 开卡 → QA 自动验收 → owner 自进化；
-  - 强停重启 → `startup_resume` → 继续 Task（`NOT_RESUMABLE` 时自动重建会话，见 `member.autoreseat`）；
+  - 强停重启 → `startup_resume` → 继续 Task（一个成员一个会话：续接走 `subagents.sendMessage` 冷恢复；会话确实无法续接时不新建子智能体，成员转 failed 并给 Human 决策项，见 `member.session.unresumable.fail`）；
   - 真实浏览器私信成员；
   - 四运行配方分别执行 `run_code` / `pwsh`；
   - 并发 Project + 跨 Project 收件箱；
@@ -188,7 +188,7 @@ POST /ai-team/api/projects/<id>/commands
   - billing 402 / ECONNRESET 三次重试与恢复；
   - 从 npm 安装后在独立 profile 启动 health 200；
   - 归档 host 自动解归档（`host.repair.ok`，带解归档数量）；
-  - 诊断日志分级：发布默认 `errors` 只保留失败与关键成功行（`host.repair.ok` / `member.autoreseat`），且诊断目录跟随 `DSH_HOME`。
+  - 诊断日志分级：发布默认 `errors` 只保留失败与关键成功行（`host.repair.ok` / `member.session.reused` / `workspace.detach`），且诊断目录跟随 `DSH_HOME`。
 
 证据目录（本机 `.ptc/rounds/`，不随 npm 发布）：
 

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.95 - 2026-11-15
+
+**一个成员一个会话：插件不再自动新建子智能体**
+
+官方契约（`reference/subsystems/subagent`）：可续接子智能体只在首次 `startActivation` 时创建，之后一律
+`subagents.sendMessage`——运行中则插话，离线由宿主冷恢复，生命周期归 SubagentManager。插件此前在唤醒失败
+（`NOT_RESUMABLE`）时「自愈」重建会话：il2c 在 11-12/13 两天重建 322 次，PMO 的子智能体列表涨到 330 个。
+现在规矩前置：会话只在成员还没有会话时创建；续接永远复用；新建只来自 Human（手动重建、改 provider/model）。
+
+- 唤醒时原会话无法续接：不再新建子智能体；成员记为 failed（waker 不再唤醒，不会循环），并给 Human 一条
+  `member_failure` 决策项（新失败类别 `session`），由 Human 手动重建或复用同一会话（`member.bind`）。
+  会话被占用（write handle busy）是瞬时状态，不算失败。诊断 `member.session.unresumable.fail`；
+- 运行时不可用恢复后（boot 对账）：已有会话的成员重新绑定**同一会话**（`member.session.reused`），不再 force 重建；
+- 技能优化评审前不再强制重建评审官会话（旧逻辑每调用一次就多一个子智能体）；
+- 移除配置 `autoReseatLimitPer30Min`（自动重建已不存在）；
+- 测试：`node --test` **333 通过 / 1 跳过**；`host.test` 新增「`NOT_RESUMABLE` 不新建子智能体、成员 failed、
+  复用同一会话恢复」（旧代码即失败），新增 `member-one-session.test`；
+- E2E（隔离 DSH_HOME）：rc.1 / rc.3 上移走成员会话后派卡——会话目录数不增、成员 failed、Human 决策项 1 条；
+  rc.1 完整排序任务一轮：PMO + 3 成员共 4 个会话，6 次唤醒全部投递原会话，每成员只绑定过 1 个会话。
+
 ## 0.4.94 - 2026-11-15
 
 **成员会话重建后，旧会话从工作区摘下**

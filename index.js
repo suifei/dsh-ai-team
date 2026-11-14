@@ -107,8 +107,6 @@ export const Config = z.object({
 	defaultWorkspace: z.string().default(''),
 	// 启动成员会话用的 subagent provider 名；留空按宿主实际注册的自动解析（默认 spawn）。
 	subagentProviderName: z.string().default('spawn'),
-	// 同一成员 30 分钟内允许的自动重建次数（失败→自愈→再失败的死循环闸门）。
-	autoReseatLimitPer30Min: z.number().step(1).min(1).max(100).default(6),
 	// 成员 shell 风险守卫：'warn' 只记诊断（默认），'block' 直接拒绝，'off' 不介入。
 	// 实机事故：成员写 serve.ps1 并用隐藏窗口拉起常驻进程，触发杀软报毒。
 	shellGuard: z.union(['off', 'warn', 'block']).default('warn'),
@@ -483,15 +481,26 @@ export function apply(ctx, config = {}) {
 							const runtimeUnavailable = isRuntimeUnavailableFailure(member);
 							if (member.routeStale !== true && runtimeUnavailable !== true) continue;
 							if (member.status === 'retired') continue;
-							const budget = activationBudget.take(member.id);
-							if (budget.allowed !== true) {
-								diag.append({ ev: 'member.route-reconcile.suppressed.fail', projectId: runtime.id, memberId: member.id, count: budget.count, limit: budget.limit });
+							// 一个成员一个会话：只有「路由过期」（Human 换了 provider/model，会话的路由在
+							// 创建时钉死）才新建会话。运行时不可用恢复后，已有会话原样复用——重新绑定同一
+							// 会话把成员拉回 running，之后照常经 subagents.sendMessage 投递（冷恢复归宿主）；
+							// 还没有会话的才首次创建。
+							const reuse = member.routeStale !== true && typeof member.sessionId === 'string' && member.sessionId !== '';
+							if (reuse) {
+								void runtime.service.bindMemberSession(
+									{ actor: { kind: 'human', memberId: HUMAN_ID }, projectId: runtime.id },
+									{ memberId: member.id, sessionId: member.sessionId },
+								).then(() => {
+									diag.append({ ev: 'member.session.reused', projectId: runtime.id, memberId: member.id, sessionId: member.sessionId });
+								}).catch((error) => {
+									diag.append({ ev: 'member.route-reconcile.fail', projectId: runtime.id, memberId: member.id, message: error?.message ?? String(error) });
+								});
 								continue;
 							}
 							void activateMember({
 								payload: {
 									memberId: member.id,
-									force: true,
+									...(member.routeStale === true ? { force: true } : {}),
 									prompt: runtimeUnavailable && member.routeStale !== true
 										? '运行时已恢复（此前因 subagent provider 不可用而中断）。先读 tasks 与 thread 的当前状态，继续未完成的工作，不要重复已完成的事。'
 										: '模型/提供方已切换，会话按新路由重建。先读 tasks 与 thread 的当前状态，继续未完成的工作，不要重复已完成的事。',
@@ -781,10 +790,6 @@ export function apply(ctx, config = {}) {
 		// 本次请求的连续失败计数（按成员会话、10 分钟窗口）。
 		const requestAttempts = new Map();
 		const activationTasks = new Map();
-		// 自动重建预算：见 lib/runtime/activation-budget.js（issue #1 的 7 小时循环）。
-		const activationBudget = createActivationBudget({
-			limit: Number.isSafeInteger(config?.autoReseatLimitPer30Min) ? config.autoReseatLimitPer30Min : 6,
-		});
 		const pmoLastKick = new Map();
 		const pmoQuiet = new Set();
 		const pmoLastStall = new Map();
@@ -1023,10 +1028,9 @@ export function apply(ctx, config = {}) {
 						cause: causeChain,
 					});
 					console.warn('[ai-team] wake failed:', plan.memberId, error?.code ?? error?.message ?? error);
-					// 一次性迁移自愈：旧形态成员会话（历史上由 agents.create 创建、
-					// 不在 subagent catalog）或重启后不可恢复的会话（NOT_RESUMABLE /
-					// is unavailable）无法经父→子通道投递。识别该失败后自动以 subagent
-					// 形态重建一次（重置会话），避免成员静默不再被唤醒。
+					// 会话续接失败：不自动新建子智能体（见下方 legacySession 分支），只把成员
+					// 记为 failed 并交给 Human；会话被占用（write handle busy）是瞬时状态，
+					// 不算失败，下一次唤醒照常投递到同一会话。
 					// 注意：member 是 try 块内变量，catch 里必须从 state 取成员。
 					const targetMember = projectRuntime.service.state.members?.[plan.memberId];
 					const failureText = `${error?.code ?? ''} ${error?.message ?? String(error)}`;
@@ -1047,6 +1051,7 @@ export function apply(ctx, config = {}) {
 						|| failureCode === 'NOT_RESUMABLE'
 						|| failureCode === 'ENOTFOUND';
 					const legacySession = deadSessionPool
+						&& classifyWakeFailure(causeChain) !== 'wake.session-busy'
 						&& typeof targetMember?.sessionId === 'string' && targetMember.sessionId !== '';
 					diag.append({
 						ev: 'wake.catch.probe.fail',
@@ -1056,51 +1061,27 @@ export function apply(ctx, config = {}) {
 						hasActivateMember: typeof activateMember === 'function',
 					});
 					if (legacySession) {
-						// 自动重建必须限额：issue #1 的「7 小时 / 200+ 子代理」就是这条路径
-						// 无上限地循环。超额后不再重建，成员保持 failed 并留可见诊断。
-						const budget = activationBudget.take(plan.memberId);
-						if (budget.allowed !== true) {
-							diag.append({
-								ev: 'member.reseat.suppressed.fail',
-								projectId: projectRuntime.id,
-								memberId: plan.memberId,
-								reason: plan.reason,
-								count: budget.count,
-								limit: budget.limit,
-								windowMs: budget.windowMs,
-							});
-							return;
-						}
+						// 一个成员一个会话（官方契约：可续接子智能体只在首次 startActivation 创建，
+						// 之后一律 subagents.sendMessage，离线由宿主冷恢复）。原会话续接不上时插件
+						// **不新建**子智能体：成员记为 failed（waker 不再唤醒它），给 Human 一条决策项，
+						// 由 Human 手动重建（member.reseat）或排查宿主。实机教训：自愈重建在 il2c 两天
+						// 建了 322 个子智能体（issue #1 也是这条路径）。
+						diag.append({
+							ev: 'member.session.unresumable.fail',
+							projectId: projectRuntime.id,
+							memberId: plan.memberId,
+							sessionId: targetMember.sessionId,
+							reason: plan.reason,
+							failureCode,
+						});
 						try {
-							const reseated = await activateMember({
-								payload: {
-									memberId: plan.memberId,
-									force: true,
-									// 重建 = 上下文清零：把当前 Task 与 Thread 尾巴直接递到手上，
-									// 不让成员靠猜测恢复现场（数据来自账本投影，不另存一份）。
-									prompt: `会话已重建（原会话不可恢复）。先读 tasks/thread 当前状态，继续推进；不要重复已完成的工作。${describeTaskContext(projectRuntime.service.state, plan.taskId, { includeThread: true })}`,
-								},
-							}, projectRuntime);
-							diag.append({
-								ev: 'member.autoreseat',
-								projectId: projectRuntime.id,
-								memberId: plan.memberId,
-								oldSessionId: targetMember.sessionId,
-								newSessionId: reseated?.sessionId ?? null,
-								// 记下触发码：11-12/13 的 322 次重建事后无从区分成因。
-								failureCode,
-								reason: plan.reason,
-								ok: reseated?.error === undefined,
-								error: reseated?.error ?? null,
-							});
-						} catch (reseatError) {
-							diag.append({
-								ev: 'member.autoreseat.fail',
-								projectId: projectRuntime.id,
-								memberId: plan.memberId,
-								message: reseatError?.message ?? String(reseatError),
-							});
-						}
+							await projectRuntime.service.recordMemberFailure(plan.memberId, {
+								category: 'session',
+								code: failureCode,
+								taskId: plan.taskId ?? null,
+								message: `会话 ${targetMember.sessionId} 无法续接（${failureCode}）。插件不会自动新建子智能体；请手动重建该成员或排查宿主。`,
+							}, projectRuntime.id);
+						} catch { /* ledger may be closed */ }
 					}
 					try {
 						await projectRuntime.service.recordWake(plan.memberId, {
@@ -1504,25 +1485,8 @@ export function apply(ctx, config = {}) {
 						if (runtime === null) return '[skillopt optimize] no active project runtime';
 						const jobId = 'job_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 						const actor = { kind: 'human', memberId: HUMAN_ID };
-						// 评审前先刷新评审官会话：subagent provider 不提供 continuable
-						// 会话，旧会话在重启/回合结束后即不可投递（NOT_RESUMABLE）。
-						// 这一步让评审投递落在**新鲜会话**上，闭环才成立。
-						try {
-							const reviewer = Object.values(runtime.service.state.members ?? {})
-								.find((member) => member.kind === 'agent' && (member.role === '评审' || member.name === '评审官'));
-							if (reviewer !== undefined) {
-								const refreshed = await activateMember({
-									payload: {
-										memberId: reviewer.id,
-										force: true,
-										prompt: '会话已刷新（评审官）。职责不变：只做 A/B 盲评，把一行 JSON 结论用 team 工具发到评审卡。',
-									},
-								}, runtime);
-								diag.append({ ev: refreshed.error === undefined ? 'skillopt.reviewer.refreshed' : 'skillopt.reviewer.refresh.fail', projectId: runtime.id, memberId: reviewer.id, sessionId: refreshed.sessionId ?? null, message: refreshed.error?.message ?? null });
-							}
-						} catch (error) {
-							diag.append({ ev: 'skillopt.reviewer.refresh.fail', projectId: runtime.id, message: error?.message ?? String(error) });
-						}
+						// 评审投递走评审官原有会话（subagents.sendMessage 负责冷恢复，0.4.88 起）。
+						// 旧版本在每次评审前 force 重建评审官会话——每调一次就多一个子智能体。
 						const jobRecord = {
 							id: jobId,
 							state: 'judging',
@@ -2250,11 +2214,7 @@ export function apply(ctx, config = {}) {
 							const eligible = includeAll ? member.status === 'failed' : isRuntimeUnavailableFailure(member);
 							if (eligible !== true) continue;
 							if (member.status === 'running') { skipped.push({ memberId: member.id, reason: 'running' }); continue; }
-							const budget = activationBudget.take(member.id);
-							if (budget.allowed !== true) {
-								skipped.push({ memberId: member.id, reason: 'budget' });
-								continue;
-							}
+							// Human 点的批量恢复：显式意图，不受自动重建冷却限制。
 							const result = await activateMember({
 								payload: {
 									memberId: member.id,
