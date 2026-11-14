@@ -63,6 +63,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 	const requestErrorListeners = [];
 	const sessionEventListeners = [];
 	const wakeCalls = [];
+	const interrupts = [];
 	const memberAgents = new Map();
 	const disposedHandles = [];
 	let toolRegistration = null;
@@ -160,6 +161,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 						wakeCalls.push({ parent, targetId, content });
 						return 'msg-wake-1';
 					},
+					interrupt: (targetId, authority) => { interrupts.push({ targetId, authority }); },
 				};
 			}
 			if (id === 'sessions') return { get: (sessionId) => memberSessions.get(sessionId), flush: async () => true };
@@ -258,6 +260,24 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		const afterStream = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
 		assert.equal(afterStream.stream.at(-1).body, '先做第一件事');
 		assert.equal(afterStream.agents.find((agent) => agent.id === 'mem_lead').sessionId !== null, true);
+
+		// Human 停止项目 → 中断成员正在进行的回合（实机 il2c：停止后成员仍在执行命令）。
+		const leadSession = afterStream.agents.find((agent) => agent.id === 'mem_lead').sessionId;
+		const stop = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ type: 'project.runState', payload: { runState: 'stopped' } }),
+		});
+		assert.equal(stop.status, 200);
+		assert.deepEqual(interrupts.filter((call) => call.targetId === leadSession).map((call) => call.authority.kind), ['user']);
+		assert.equal(typeof interrupts[0].authority.parentSessionId, 'string', 'rc.1 authorizes a user interrupt by the direct parent session');
+		const resume = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ type: 'project.runState', payload: { runState: 'running' } }),
+		});
+		assert.equal(resume.status, 200);
+		assert.equal(interrupts.filter((call) => call.targetId === leadSession).length, 1, 'running again interrupts nothing');
 
 		const models = await fetch(`${base}/ai-team/api/models`);
 		assert.equal(models.status, 200);

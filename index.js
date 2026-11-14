@@ -716,6 +716,33 @@ export function apply(ctx, config = {}) {
 		// 每个项目一个 PMO 会话（核心模型）：projectId → 已就绪的 host / 进行中的创建。
 		const hosts = new Map();
 		const hostPromises = new Map();
+		/**
+		 * Human 停止项目：中断每个成员**正在进行的回合**。停止门只拦新的自动派发，已在跑
+		 * 的回合会一直干下去（实机 il2c：点停止后两名成员仍执行命令、写会话）。
+		 * `subagents.interrupt` 以 user 权威取消当前执行；未认领的收件保留、Task 状态不动，
+		 * 重新运行后由心跳/巡检接着推进。缺此能力的宿主记一次 .fail，不影响停止本身。
+		 * user 权威必须带直接父会话：rc.1 校验 `activation.parent.id === parentSessionId`
+		 * （否则 UNAUTHORIZED「belongs to another parent session」），rc.3 不校验此字段。
+		 * 成员都是本项目 PMO 会话的直接子会话。
+		 */
+		const interruptTeam = (projectRuntime) => {
+			const subagents = serviceOf(ctx, 'subagents');
+			if (typeof subagents?.interrupt !== 'function') {
+				diag.append({ ev: 'team.interrupt.unavailable.fail', projectId: projectRuntime.id });
+				return;
+			}
+			const interrupted = [];
+			for (const member of Object.values(projectRuntime.service.state.members ?? {})) {
+				if (member.kind !== 'agent' || typeof member.sessionId !== 'string' || member.sessionId === '') continue;
+				try {
+					subagents.interrupt(member.sessionId, { kind: 'user', parentSessionId: projectRuntime.service.state.hostSessionId });
+					interrupted.push(member.id);
+				} catch (error) {
+					diag.append({ ev: 'team.interrupt.fail', projectId: projectRuntime.id, memberId: member.id, message: error?.message ?? String(error) });
+				}
+			}
+			diag.append({ ev: 'team.interrupt', projectId: projectRuntime.id, members: interrupted });
+		};
 		const wakeKeys = new Map();
 			// provider 探测状态去重：能力缺失/确认无 provider 只各记一次，避免每轮刷日志。
 			let lastProviderState = '';
@@ -1790,6 +1817,14 @@ export function apply(ctx, config = {}) {
 					return;
 				}
 				hostRepaired = true;
+				// 已绑定的 PMO 会话归入项目工作区（只动注册表，不唤醒会话）。0.4.90 之前的
+				// host 从未 attach，侧栏里挂在「未分组」；而 ensureParent 只在唤醒时才跑，
+				// pmoAuto 关闭、看板静止的项目重载后永远等不到那一次（实机 il2c：7 个成员
+				// 已入工作区，唯独 PMO 不在）。cwd 不符的旧 host 会 attach 失败并记 .fail，
+				// 下次唤醒由 ensureParent 换成项目工作区里的新 PMO。
+				for (const runtime of booted?.runtimes?.values() ?? []) {
+					await attachMemberWorkspace(runtime, runtime?.service?.state?.hostSessionId);
+				}
 				// 成功行必须留在 errors 级别：否则「归档修复有没有跑过」永远无法判定
 				// （只有 boot 瞬间那一行 deferred.fail 可见，见 lib/diaglog.js 白名单）。
 				diag.append({
@@ -2002,6 +2037,7 @@ export function apply(ctx, config = {}) {
 		attachRuntime = (runtime) => {
 			runtime.ledger.onEvent = (event) => {
 				broadcast(event, runtime);
+				if (event?.type === 'project/run-state' && event.payload?.runState === 'stopped') interruptTeam(runtime);
 				const actorId = event?.actor?.kind === 'agent' ? event.actor.memberId : undefined;
 				void wakeFromResult(runtime, { event }, actorId === undefined ? {} : { agentId: actorId }).catch((error) => {
 					diag.append({ ev: 'wake.plan.fail', projectId: runtime.id, eventType: event?.type ?? null, message: error?.message ?? String(error) });
