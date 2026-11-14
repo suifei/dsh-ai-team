@@ -414,6 +414,20 @@ export function apply(ctx, config = {}) {
 				console.warn('[ai-team] member session workspace attach failed:', error?.message ?? error, '— reseat the member (team member.reseat) to recreate its session in the project workspace');
 			}
 		};
+		// 重建（reseat）替换掉的旧成员会话从工作区摘下。宿主没有删会话的 API，
+		// 不摘的话每次重建都在工作区列表里多挂一个永不再用的会话（实机 il2c：
+		// 11-12/13 两天 322 次自愈重建 → 323 个死会话挂在 il2c 工作区下）。
+		const detachMemberWorkspace = async (projectRuntime, sessionId) => {
+			if (typeof sessionId !== 'string' || sessionId === '') return;
+			const workspace = await workspaceForProject(projectRuntime);
+			if (workspace === null || workspace === undefined || typeof workspace.detachSession !== 'function') return;
+			try {
+				await workspace.detachSession(sessionId);
+				diag.append({ ev: 'workspace.detach', sessionId, projectId: projectRuntime?.id ?? null });
+			} catch (error) {
+				diag.append({ ev: 'workspace.detach.fail', sessionId, projectId: projectRuntime?.id ?? null, message: error?.message ?? String(error) });
+			}
+		};
 		// A restored member session has no live AgentOptions; without a recorded
 		// model/selection event its prompt renders with an unresolvable {{model}}.
 		const modelSelectionLogged = new Map();
@@ -1073,6 +1087,9 @@ export function apply(ctx, config = {}) {
 								memberId: plan.memberId,
 								oldSessionId: targetMember.sessionId,
 								newSessionId: reseated?.sessionId ?? null,
+								// 记下触发码：11-12/13 的 322 次重建事后无从区分成因。
+								failureCode,
+								reason: plan.reason,
 								ok: reseated?.error === undefined,
 								error: reseated?.error ?? null,
 							});
@@ -1920,8 +1937,10 @@ export function apply(ctx, config = {}) {
 			// 久管理，插件不再持有或唤醒它；新会话落在当前项目工作目录。这是
 			// 修复历史"账本目录兜底 cwd"游离会话的唯一路径（会话 cwd 创建时
 			// 钉死，resume 不覆盖，DSH 不提供原地改 cwd 的 API）。
-			if (typeof member.sessionId === 'string' && member.sessionId !== '' && body.payload?.force === true) {
-				const staleId = member.sessionId;
+			const staleId = typeof member.sessionId === 'string' && member.sessionId !== '' && body.payload?.force === true
+				? member.sessionId
+				: null;
+			if (staleId !== null) {
 				const staleActivation = activations.get(staleId);
 				if (staleActivation !== undefined) {
 					activations.delete(staleId);
@@ -2002,6 +2021,7 @@ export function apply(ctx, config = {}) {
 				}
 				activations.set(result.childId, result.activation);
 				await attachMemberWorkspace(projectRuntime, result.childId);
+				if (staleId !== null && staleId !== result.childId) await detachMemberWorkspace(projectRuntime, staleId);
 				persistModelSelection(result.childId, activationMember.config, member.name);
 				return {
 					ok: true,
