@@ -2,8 +2,14 @@
 
 ## 0.4.91 - 2026-11-14
 
-**重启不再惊动已静默的团队；已绑定的 PMO 会话启动即归入工作区**
+**停止即中断成员回合；重启不再惊动已静默的团队；已绑定的 PMO 会话启动即归入工作区**
 
+- 停止即中断（`index.js` `interruptTeam`）：停止门只拦新的自动派发，已在跑的回合会一直干下去——实机 il2c
+  12:34:20 停止后，青岚 12:39 仍提交了 #100、玄策 12:44 仍在 #101 发帖。现在项目切到 stopped 时对每个成员
+  `subagents.interrupt(sessionId, {kind:'user', parentSessionId: PMO 会话})`：取消当前执行，未认领收件保留、
+  Task 状态不动，重新运行后由心跳/巡检接着推进。rc.1 的 user 权威校验直接父会话（不带则 UNAUTHORIZED
+  「belongs to another parent session」，首轮 E2E 实测），rc.3 不校验该字段。诊断 `team.interrupt` 保留在
+  errors 级别；
 - 簿记事件不算 Human 意图（`lib/ledger/fold.js` `isHumanIntent`，`FOLD_STATE_VERSION` 6→7）：插件激活成员时以
   Human 身份记 `member/session-bound`（失败记 `member/failed`），反思后记 `member/distilled`。它们曾被当作
   Human 动作——每次重启重新激活成员，就重置 PMO 预算并把 `pmoNews` 置真，已静默的项目在启动 1 秒内各开一次会
@@ -12,9 +18,11 @@
   而 `ensureParent` 只在唤醒时才跑，`pmoAuto` 关闭、看板静止的项目重载后永远等不到（实机 il2c：7 个成员已入
   工作区，唯独 PMO 不在）。现在随归档修复一起对每个项目的 `hostSessionId` 做 `attachSession`，只动注册表、
   不唤醒会话；cwd 不符的旧 host 记 `workspace.attach.fail`，下次唤醒由 `ensureParent` 换新；
-- 测试：`node --test` **329 通过 / 1 跳过**；`pmo-quiet` 新增重启簿记 1 条；
+- 测试：`node --test` **329 通过 / 1 跳过**；`pmo-quiet` 新增重启簿记 1 条，`host` 新增停止中断断言；
 - E2E（隔离 DSH_HOME）：从 `workspace.json` 摘掉两个 PMO 会话后重启 → 两个工作区各自重新挂回；用新折叠重放
   r10 重启账本，推进前 `pmoNews` 为 false（旧折叠为 true）；静默项目重启 150 秒内 0 次推进、0 次会议唤醒。
+  停止中断：主理人回合进行中停止 → 6 名成员中断，停止 15 秒后 0 个成员会话再写入；新建项目（新工作区）
+  启动后 PMO 会话与成员会话归入该工作区，侧栏挂在项目分组下。
 
 ## 0.4.90 - 2026-11-14
 
