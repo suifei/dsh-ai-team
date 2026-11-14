@@ -84,3 +84,20 @@ test('the quiet mark is folded from the ledger and survives a restart', async ()
 		assert.equal(pmoHasNews(restarted.state), false);
 	});
 });
+
+test('a restart re-binding member sessions is bookkeeping, not a Human action', async () => {
+	// r10 re-check: the plugin re-activates members on restart and records
+	// member/session-bound with a Human actor; both quiet projects held a meeting
+	// within a second of boot, and the PMO budget was reset on every restart.
+	await withService(async (service) => {
+		await finishOneTask(service);
+		await service.recordWake('lead', { ok: true, reason: 'wave_done' }, 'prj_q');
+		const used = service.state.pmoRoundsUsed;
+		const freeWave = service.state.pmoFreeWave;
+		await service.dispatch({ type: 'member.bind', actor: human, payload: { memberId: 'lead', sessionId: 's-lead-2' } });
+		await service.failMember({ actor: human, projectId: 'prj_q' }, { memberId: 'lead', reason: 'E_RUNTIME: boom' });
+		assert.equal(pmoHasNews(service.state), false);
+		assert.equal(service.state.pmoRoundsUsed, used);
+		assert.equal(service.state.pmoFreeWave, freeWave);
+	});
+});

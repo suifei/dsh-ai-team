@@ -1790,6 +1790,14 @@ export function apply(ctx, config = {}) {
 					return;
 				}
 				hostRepaired = true;
+				// 已绑定的 PMO 会话归入项目工作区（只动注册表，不唤醒会话）。0.4.90 之前的
+				// host 从未 attach，侧栏里挂在「未分组」；而 ensureParent 只在唤醒时才跑，
+				// pmoAuto 关闭、看板静止的项目重载后永远等不到那一次（实机 il2c：7 个成员
+				// 已入工作区，唯独 PMO 不在）。cwd 不符的旧 host 会 attach 失败并记 .fail，
+				// 下次唤醒由 ensureParent 换成项目工作区里的新 PMO。
+				for (const runtime of booted?.runtimes?.values() ?? []) {
+					await attachMemberWorkspace(runtime, runtime?.service?.state?.hostSessionId);
+				}
 				// 成功行必须留在 errors 级别：否则「归档修复有没有跑过」永远无法判定
 				// （只有 boot 瞬间那一行 deferred.fail 可见，见 lib/diaglog.js 白名单）。
 				diag.append({

@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.91 - 2026-11-14
+
+**重启不再惊动已静默的团队；已绑定的 PMO 会话启动即归入工作区**
+
+- 簿记事件不算 Human 意图（`lib/ledger/fold.js` `isHumanIntent`，`FOLD_STATE_VERSION` 6→7）：插件激活成员时以
+  Human 身份记 `member/session-bound`（失败记 `member/failed`），反思后记 `member/distilled`。它们曾被当作
+  Human 动作——每次重启重新激活成员，就重置 PMO 预算并把 `pmoNews` 置真，已静默的项目在启动 1 秒内各开一次会
+  （r10 重启复验：两项目各 1 次推进 + 5 次会议唤醒）。有界预算与新进展判定共用这一个判定；历史账本无需迁移；
+- PMO 会话启动即归入工作区（`index.js` 启动修复）：0.4.90 之前的 host 从未 attach，侧栏里挂在「未分组」；
+  而 `ensureParent` 只在唤醒时才跑，`pmoAuto` 关闭、看板静止的项目重载后永远等不到（实机 il2c：7 个成员已入
+  工作区，唯独 PMO 不在）。现在随归档修复一起对每个项目的 `hostSessionId` 做 `attachSession`，只动注册表、
+  不唤醒会话；cwd 不符的旧 host 记 `workspace.attach.fail`，下次唤醒由 `ensureParent` 换新；
+- 测试：`node --test` **329 通过 / 1 跳过**；`pmo-quiet` 新增重启簿记 1 条；
+- E2E（隔离 DSH_HOME）：从 `workspace.json` 摘掉两个 PMO 会话后重启 → 两个工作区各自重新挂回；用新折叠重放
+  r10 重启账本，推进前 `pmoNews` 为 false（旧折叠为 true）；静默项目重启 150 秒内 0 次推进、0 次会议唤醒。
+
 ## 0.4.90 - 2026-11-14
 
 **核心模型落地：每个项目一个 PMO 会话，成员会话归入项目工作区；PMO 成为主流唯一发言人（先对话后开卡）**
