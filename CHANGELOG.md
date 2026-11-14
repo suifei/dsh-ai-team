@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.96 - 2026-11-15
+
+**停止即停：停止期间 PMO 与成员不能再用宿主内置工具互相唤醒**
+
+实机（il2c，11-14 20:14）：Human 停止后插件中断了全部成员（生效：成员回合以 `aborted:user` 结束），但宿主随即
+给父会话（PMO）递送「Background subagent … was stopped before it finished」，PMO 开新回合，用宿主内置的
+`send_message` 发「续跑唤醒」——成员接着跑了 25 分钟（又提交了一张卡、执行了 14 次 shell）。插件自己的唤醒
+有运行状态闸，宿主内置工具完全绕过它。
+
+- 新增 `lib/runtime/stop-guard.js`：在 `tools.guard` 上挂守卫，项目停止期间该项目的 PMO / 成员会话调用
+  `send_message`、`subagent`、`subagent_fork`、`subagent_oar`、`ralph` 一律拒绝；拒绝理由回给模型（「停是 Human 的
+  决定，不是异常中断，不要续跑」）。项目运行中、其他会话、其他工具不受影响；
+- 诊断 `team.stopped.blocked`（`errors` 级可见）；
+- 测试：`node --test` **335 通过 / 1 跳过**；`host.test` 停止窗口内断言守卫拒绝（旧代码即失败），新增 `stop-guard.test`；
+- E2E（隔离 DSH_HOME，rc.1 / rc.3）：项目停止后成员调用 `send_message`，工具结果为拒绝文本、诊断有 `team.stopped.blocked`；
+  另复现确认单成员长回合中停止即停（3 分钟内无新输出）。
+
 ## 0.4.95 - 2026-11-15
 
 **一个成员一个会话：插件不再自动新建子智能体**

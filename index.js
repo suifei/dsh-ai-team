@@ -54,6 +54,7 @@ import { describeTaskContext, describeWake, planWakes } from './lib/host/waker.j
 import { describeCauseChain } from './lib/runtime/error-chain.js';
 import { classifyWakeFailure, isMalformedTurnError } from './lib/runtime/wake-failure.js';
 import { registerShellGuard } from './lib/runtime/shell-guard.js';
+import { registerStopGuard } from './lib/runtime/stop-guard.js';
 import { createActivationBudget } from './lib/runtime/activation-budget.js';
 import { blocksActivation, probeProviderRegistration } from './lib/runtime/subagent-probe.js';
 import { isRuntimeUnavailableFailure, resolveSubagentProviderName } from './lib/runtime/subagent-provider.js';
@@ -1764,6 +1765,25 @@ export function apply(ctx, config = {}) {
 		} catch (error) {
 			diag.append({ ev: 'shell.guard.fail', message: error?.message ?? String(error) });
 		}
+		// 停止即停：停止期间 PMO 与成员不得用宿主内置工具（send_message 等）互相唤醒或派生
+		// 子智能体——实机停止后 PMO 收到「成员被停」通知，又用 send_message 把成员续跑了 25 分钟。
+		let disposeStopGuard = () => {};
+		try {
+			const teamProjectOf = (sessionId) => {
+				for (const runtime of booted?.runtimes?.values() ?? []) {
+					const state = runtime.service.state;
+					const inTeam = state.hostSessionId === sessionId
+						|| Object.values(state.members ?? {}).some((member) => member?.sessionId === sessionId);
+					if (!inTeam) continue;
+					const project = state.projects?.[runtime.id];
+					return { projectId: runtime.id, projectName: project?.name ?? '', stopped: project?.runState === 'stopped' };
+				}
+				return null;
+			};
+			disposeStopGuard = registerStopGuard({ tools: tools ?? serviceOf(ctx, 'tools'), projectOf: teamProjectOf, diag });
+		} catch (error) {
+			diag.append({ ev: 'stop.guard.fail', message: error?.message ?? String(error) });
+		}
 
 		// 历史归档修复：成员是 host 的子会话，`archived-session-gate` 会沿 subagent
 		// 血缘上溯，父会话被归档即拒绝整条血缘 —— 回合以 {kind:'blocked'} 结束且不发
@@ -2768,6 +2788,7 @@ export function apply(ctx, config = {}) {
 			disposed = true;
 			try { removeDiagSink(); } catch { /* sink already replaced */ }
 			try { disposeShellGuard(); } catch { /* already disposed */ }
+			try { disposeStopGuard(); } catch { /* already disposed */ }
 			const cleanup = [];
 			for (const client of sseClients) {
 				try { client.res.end(); } catch { /* socket already gone */ }
