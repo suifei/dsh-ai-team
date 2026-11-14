@@ -8,6 +8,7 @@
  * The member runtime (real Agent sessions) lands in M2. Until then the
  * ledger/domain service is the only writer and the Host never fakes work.
  */
+import { planTaskNudges } from './lib/host/pmo.js';
 import { homedir } from 'node:os';
 import { join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -109,6 +110,9 @@ export const Config = z.object({
 	// 成员 shell 风险守卫：'warn' 只记诊断（默认），'block' 直接拒绝，'off' 不介入。
 	// 实机事故：成员写 serve.ps1 并用隐藏窗口拉起常驻进程，触发杀软报毒。
 	shellGuard: z.union(['off', 'warn', 'block']).default('warn'),
+	// 有界自主：Human 每次操作后，PMO 最多自主推进（无 active Task 时开会、自拟下一批卡）几轮；
+	// 用尽即暂停并在主流告知，等 Human 续。0 = 从不自主推进。Issue #1：一句「在吗」跑 7 小时。
+	pmoMaxRounds: z.number().step(1).min(0).max(100).default(3),
 });
 
 /**
@@ -224,6 +228,7 @@ async function boot(diag, config = {}) {
 			projectGoal: project.goal,
 			workspacePath: project.workspacePath ?? '',
 			diag,
+			pmoMaxRounds: config.pmoMaxRounds,
 		});
 		runtimes.set(project.id, runtime);
 	}
@@ -1138,67 +1143,21 @@ export function apply(ctx, config = {}) {
 					event: { type: 'pmo/dispatch', payload: { taskId: task.id, bucket: Math.floor(now / 60_000) } },
 				}, {});
 			}
+			// 巡检提醒：两个时钟（Thread 闲 / 状态停滞）的判定在 planTaskNudges（lib/host/pmo.js）。
+			const nudgeClocks = { review: pmoLastReview, heartbeat: pmoLastHeartbeat, escalate: pmoLastEscalate, stall: pmoLastStall };
+			const nudgeEvent = {
+				review: (task) => ({ type: 'pmo/review', payload: { taskId: task.id, bucket: Math.floor(now / 600_000) } }),
+				heartbeat: (task) => ({ type: 'pmo/heartbeat', payload: { taskId: task.id, memberId: task.assigneeId ?? task.ownerId, bucket: Math.floor(now / 600_000) } }),
+				escalate: (task) => ({ type: 'pmo/escalate', payload: { taskId: task.id, bucket: Math.floor(now / 3_600_000) } }),
+				stall: (task) => ({ type: 'pmo/stall', payload: { taskId: task.id, bucket: Math.floor(now / 1_800_000) } }),
+			};
 			for (const task of active) {
-				const thread = state.threads?.[task.id];
-				const threadAt = thread?.entries?.at(-1)?.at;
-				const taskAt = Number.isFinite(task.updatedAt) ? task.updatedAt : 0;
-				// For acceptance, assignee Thread chatter must not mask a silent QA.
-				// Use the submission timestamp (task.updatedAt) as the review clock.
-				const updatedAt = task.status === 'pending_acceptance'
-					? taskAt
-					: Math.max(taskAt, Number.isFinite(threadAt) ? threadAt : 0);
-				if (updatedAt === 0) continue;
-				const idleFor = now - updatedAt;
-				if (task.status === 'pending_acceptance' && task.qaRequired === true && idleFor >= 10 * 60_000) {
-					const lastReview = pmoLastReview.get(task.id) ?? 0;
-					if (now - lastReview >= 10 * 60_000) {
-						pmoLastReview.set(task.id, now);
-						await wakeFromResult(projectRuntime, {
-							event: { type: 'pmo/review', payload: { taskId: task.id, bucket: Math.floor(now / 600_000) } },
-						}, {});
-					}
-					// Acceptance waiting on a Thread-only handoff needs the same
-					// hourly escalation as in-progress work, or the review loop
-					// nudges QA forever while the decided executor never wakes.
-					if (idleFor >= 60 * 60_000) {
-						const lastEscalate = pmoLastEscalate.get(task.id) ?? 0;
-						if (now - lastEscalate >= 60 * 60_000) {
-							pmoLastEscalate.set(task.id, now);
-							await wakeFromResult(projectRuntime, {
-								event: { type: 'pmo/escalate', payload: { taskId: task.id, bucket: Math.floor(now / 3_600_000) } },
-							}, {});
-						}
-					}
-					continue;
+				const threadAt = state.threads?.[task.id]?.entries?.at(-1)?.at ?? null;
+				const last = Object.fromEntries(Object.entries(nudgeClocks).map(([kind, map]) => [kind, map.get(task.id) ?? 0]));
+				for (const kind of planTaskNudges(task, { threadAt, now, last })) {
+					nudgeClocks[kind].set(task.id, now);
+					await wakeFromResult(projectRuntime, { event: nudgeEvent[kind](task) }, {});
 				}
-				if (idleFor >= 10 * 60_000 && idleFor < 30 * 60_000) {
-					const lastHeartbeat = pmoLastHeartbeat.get(task.id) ?? 0;
-					if (now - lastHeartbeat >= 10 * 60_000) {
-						pmoLastHeartbeat.set(task.id, now);
-						await wakeFromResult(projectRuntime, {
-							event: {
-								type: 'pmo/heartbeat',
-								payload: { taskId: task.id, memberId: task.assigneeId ?? task.ownerId, bucket: Math.floor(now / 600_000) },
-							},
-						}, {});
-					}
-				}
-				if (idleFor >= 60 * 60_000) {
-					const lastEscalate = pmoLastEscalate.get(task.id) ?? 0;
-					if (now - lastEscalate >= 60 * 60_000) {
-						pmoLastEscalate.set(task.id, now);
-						await wakeFromResult(projectRuntime, {
-							event: { type: 'pmo/escalate', payload: { taskId: task.id, bucket: Math.floor(now / 3_600_000) } },
-						}, {});
-					}
-				}
-				if (idleFor < 30 * 60_000) continue;
-				const lastPing = pmoLastStall.get(task.id) ?? 0;
-				if (now - lastPing < 30 * 60_000) continue;
-				pmoLastStall.set(task.id, now);
-				await wakeFromResult(projectRuntime, {
-					event: { type: 'pmo/stall', payload: { taskId: task.id, bucket: Math.floor(now / 1_800_000) } },
-				}, {});
 			}
 			if (active.length > 0) {
 				// Prune per-task clock entries whose task left the active set, so
@@ -1218,6 +1177,9 @@ export function apply(ctx, config = {}) {
 			const last = pmoLastKick.get(projectRuntime.id) ?? 0;
 			if (now - last < 10 * 60_000) return;
 			pmoLastKick.set(projectRuntime.id, now);
+			const gate = await projectRuntime.service.pmoGate(projectRuntime.id);
+			diag.append({ ev: gate.admitted ? 'pmo.continue' : 'pmo.continue.paused', projectId: projectRuntime.id, used: gate.used, cap: gate.cap, freeWave: gate.freeWave, announcedNow: gate.announcedNow });
+			if (!gate.admitted) return;
 			await wakeFromResult(projectRuntime, {
 				event: { type: 'pmo/continue', payload: { bucket: Math.floor(now / 600_000) } },
 			}, {});
@@ -2112,6 +2074,7 @@ export function apply(ctx, config = {}) {
 					projectGoal,
 					workspacePath,
 					diag,
+					pmoMaxRounds: config.pmoMaxRounds,
 				});
 				booted.runtimes.set(nextProjectId, next);
 				attachRuntime(next);
