@@ -1844,11 +1844,18 @@ export function apply(ctx, config = {}) {
 		 * 成员都是它的子会话，于是全部落在同一工作区。不传项目时取活动项目（skillopt 评审等
 		 * 与具体项目无关的子代理）。没有工作区的项目没有 PMO——必须指定工作区才能工作。
 		 */
-		const ensureParent = async (projectRuntime = booted?.runtime) => {
+		const ensureParent = async (projectRuntime = booted?.runtime, options = {}) => {
 			if (projectRuntime === null || projectRuntime === undefined) {
 				throw Object.assign(new Error('no project runtime for the PMO session'), { code: 'E_RUNTIME_UNAVAILABLE' });
 			}
 			const projectId = projectRuntime.id;
+			// fresh：Human 的「换新团队会话」——丢掉当前 PMO 句柄，不续接旧会话、直接新建。
+			if (options.fresh === true) {
+				const previous = hosts.get(projectId);
+				hosts.delete(projectId);
+				hostPromises.delete(projectId);
+				try { await previous?.dispose?.(); } catch { /* already gone */ }
+			}
 			const ready = hosts.get(projectId);
 			if (ready !== undefined) return ready;
 			await repairArchivedHosts();
@@ -1865,7 +1872,7 @@ export function apply(ctx, config = {}) {
 					workspaceRegistry: serviceOf(ctx, 'workspaceRegistry'),
 					sessions: serviceOf(ctx, 'sessions'),
 					cwd,
-					resumeSessionId: projectRuntime.service.state.hostSessionId,
+					resumeSessionId: options.fresh === true ? null : projectRuntime.service.state.hostSessionId,
 				}).then(async (value) => {
 					// 卸载后才完成的父代理：句柄不能留在进程里，也不能写账本。
 					if (disposed) {
@@ -2665,6 +2672,67 @@ export function apply(ctx, config = {}) {
 						}
 						// 成员恢复巡检（不依赖 boot/tick）：subagent provider 不提供
 						// continuable 会话，唤醒失败后必须重建会话——单成员或全量。
+						// 换新团队会话（Human）：新建 PMO 会话、7 个成员在新 PMO 下各重建一次、归档旧 PMO。
+						// 用途：旧 PMO 的子智能体目录在创建时记下全部成员关系且永久保留（官方契约，无删除
+						// API）——il2c 的旧 PMO 因历史自愈重建挂着 330 个子智能体。只能在项目停止时做。
+						if (body.type === 'project.team.renew') {
+							const state = runtime.service.state;
+							if (state.projects?.[runtime.id]?.runState !== 'stopped') {
+								return send(res, { error: { code: 'E_INVALID_STATE', message: 'stop the project before renewing its team sessions' } }, 409);
+							}
+							const previousHostSessionId = typeof state.hostSessionId === 'string' ? state.hostSessionId : null;
+							let host;
+							try {
+								host = await ensureParent(runtime, { fresh: true });
+							} catch (error) {
+								diag.append({ ev: 'team.renew.fail', projectId: runtime.id, stage: 'host', message: error?.message ?? String(error) });
+								return send(res, { error: { code: error?.code ?? 'E_RUNTIME', message: error?.message ?? String(error) } }, 409);
+							}
+							const results = [];
+							for (const member of Object.values(runtime.service.state.members ?? {}).filter((entry) => entry.kind === 'agent' && entry.status !== 'retired')) {
+								const before = member.sessionId ?? null;
+								// 把成员手上那张卡（及最近讨论）直接递过去：重建 = 上下文清零。
+								const activeTaskOf = (target) => Object.values(runtime.service.state.tasks ?? {}).find((task) => task.tombstone !== true
+									&& ['in_progress', 'pending_acceptance', 'pending'].includes(task.status)
+									&& (task.assigneeId === target.id || task.ownerId === target.id))?.id ?? null;
+								try {
+									const activated = await activateMember({
+										payload: {
+											memberId: member.id,
+											force: true,
+											prompt: `团队会话已换新（Human 操作，你的上一段对话不在本会话里）。先读 tasks 与 thread 的当前状态，再继续你名下未完成的工作；项目当前已停止，等 Human 重新启动后再动手。${describeTaskContext(runtime.service.state, activeTaskOf(member), { includeThread: true })}`,
+										},
+									}, runtime);
+									results.push({ memberId: member.id, ok: activated.error === undefined, oldSessionId: before, newSessionId: activated.sessionId ?? null, error: activated.error ?? null });
+								} catch (error) {
+									results.push({ memberId: member.id, ok: false, oldSessionId: before, newSessionId: null, error: { code: 'E_RUNTIME', message: error?.message ?? String(error) } });
+								}
+							}
+							// 旧 PMO：从工作区摘下并归档，侧栏不再出现；它名下的旧子智能体随血缘一起归档。
+							let archived = false;
+							if (previousHostSessionId !== null && previousHostSessionId !== host.sessionId) {
+								await detachMemberWorkspace(runtime, previousHostSessionId);
+								const registry = serviceOf(ctx, 'workspaceRegistry');
+								try {
+									if (typeof registry?.archiveSession === 'function') {
+										await registry.archiveSession(previousHostSessionId, { stopActivity: true });
+										archived = true;
+									}
+								} catch (error) {
+									diag.append({ ev: 'team.renew.fail', projectId: runtime.id, stage: 'archive', sessionId: previousHostSessionId, message: error?.message ?? String(error) });
+								}
+							}
+							diag.append({
+								ev: 'team.renewed',
+								projectId: runtime.id,
+								previousHostSessionId,
+								hostSessionId: host.sessionId,
+								archived,
+								members: results.map((row) => ({ memberId: row.memberId, ok: row.ok, oldSessionId: row.oldSessionId, newSessionId: row.newSessionId })),
+							});
+							broadcast(undefined);
+							return send(res, { ok: results.every((row) => row.ok), hostSessionId: host.sessionId, previousHostSessionId, archived, results });
+						}
 						if (body.type === 'member.reseat') {
 							const payload = body.payload ?? {};
 							const state = runtime.service.state;

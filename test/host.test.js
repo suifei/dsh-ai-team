@@ -64,6 +64,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 	// 下一次 sendMessage 抛出的错误（按序消费）：模拟会话无法续接。
 	const sendFailures = [];
 	const toolGuards = [];
+	const archivedSessions = [];
 	const requestErrorListeners = [];
 	const sessionEventListeners = [];
 	const wakeCalls = [];
@@ -144,7 +145,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 						attachSession: async (sessionId) => { workspaceAttachments.push(sessionId); },
 						detachSession: async (sessionId) => { workspaceDetachments.push(sessionId); },
 					}),
-					archiveSession: async () => {},
+					archiveSession: async (sessionId, options) => { archivedSessions.push({ sessionId, options }); },
 				};
 			}
 			if (id === 'subagents') {
@@ -559,6 +560,31 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		const healthAfterSwitch = await (await fetch(`${base}/ai-team/api/health`)).json();
 		assert.equal(healthAfterSwitch.activeProjectId, 'prj_main');
 		assert.equal(healthAfterSwitch.projects.length, 2);
+
+		// 换新团队会话（Human）：旧 PMO 的子智能体目录永久保留（il2c 挂着 330 个），只能换新 PMO。
+		const renewCall = (type) => fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ type, payload: type === 'project.runState' ? { runState: 'stopped' } : {} }),
+		});
+		const runningRenew = await renewCall('project.team.renew');
+		assert.equal(runningRenew.status, 409, 'a running project cannot renew its team sessions');
+		assert.equal((await renewCall('project.runState')).status, 200);
+		const oldHost = [...memberAgents.keys()].find((id) => id.startsWith('session-team-host'));
+		const renew = await renewCall('project.team.renew');
+		assert.equal(renew.status, 200, await renew.clone().text());
+		const renewed = await renew.json();
+		assert.equal(renewed.previousHostSessionId, oldHost);
+		assert.match(renewed.hostSessionId, /^session-team-host-/);
+		assert.notEqual(renewed.hostSessionId, oldHost, 'a brand-new PMO session');
+		assert.ok(renewed.results.length > 0);
+		for (const row of renewed.results) {
+			assert.equal(row.ok, true, JSON.stringify(row));
+			assert.notEqual(row.newSessionId, row.oldSessionId, `${row.memberId} rebuilt under the new PMO`);
+		}
+		assert.deepEqual(archivedSessions.map((row) => row.sessionId), [oldHost], 'the old PMO is archived');
+		assert.ok(workspaceDetachments.includes(oldHost), 'and detached from the workspace');
+		assert.ok(workspaceAttachments.includes(renewed.hostSessionId), 'the new PMO joins the workspace');
 
 		const missing = await fetch(`${base}/ai-team/api/nope`);
 		assert.equal(missing.status, 404);
