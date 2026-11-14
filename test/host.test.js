@@ -63,6 +63,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 	const workspaceDetachments = [];
 	// 下一次 sendMessage 抛出的错误（按序消费）：模拟会话无法续接。
 	const sendFailures = [];
+	const toolGuards = [];
 	const requestErrorListeners = [];
 	const sessionEventListeners = [];
 	const wakeCalls = [];
@@ -178,6 +179,10 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 						toolRegistration = { definition, options };
 						return () => {};
 					},
+					guard(fn) {
+						toolGuards.push(fn);
+						return () => {};
+					},
 				};
 			}
 			return undefined;
@@ -278,6 +283,16 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(stop.status, 200);
 		assert.deepEqual(interrupts.filter((call) => call.targetId === leadSession).map((call) => call.authority.kind), ['user']);
 		assert.equal(typeof interrupts[0].authority.parentSessionId, 'string', 'rc.1 authorizes a user interrupt by the direct parent session');
+		// 停止即停：停止期间团队会话（PMO / 成员）用宿主内置工具唤醒或派生智能体一律拒绝
+		// （实机：PMO 收到「成员被停」通知后用 send_message 把成员续跑了 25 分钟）。
+		const hostSession = [...memberAgents.keys()].find((id) => id.startsWith('session-team-host'));
+		assert.equal(typeof hostSession, 'string', 'the PMO session exists');
+		const guardSays = (name, sessionId) => toolGuards.map((guard) => guard({ name, agent: { id: sessionId }, arguments: {} })).find((verdict) => typeof verdict === 'string');
+		assert.match(guardSays('send_message', leadSession) ?? '', /已被 Human 停止/, 'a member cannot wake anyone while stopped');
+		assert.match(guardSays('subagent', leadSession) ?? '', /已被 Human 停止/, 'nor spawn a subagent');
+		assert.match(guardSays('send_message', hostSession) ?? '', /已被 Human 停止/, 'the PMO cannot re-wake members while stopped');
+		assert.equal(guardSays('read', leadSession), undefined, 'other tools are untouched');
+		assert.equal(guardSays('send_message', 'session-not-in-team'), undefined, 'sessions outside the team are untouched');
 		const resume = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
 			method: 'POST',
 			headers: { 'content-type': 'application/json' },
@@ -285,6 +300,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		});
 		assert.equal(resume.status, 200);
 		assert.equal(interrupts.filter((call) => call.targetId === leadSession).length, 1, 'running again interrupts nothing');
+		assert.equal(guardSays('send_message', leadSession), undefined, 'running again: members may message each other');
 
 		const models = await fetch(`${base}/ai-team/api/models`);
 		assert.equal(models.status, 200);
