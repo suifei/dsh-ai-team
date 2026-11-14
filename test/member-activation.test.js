@@ -57,6 +57,25 @@ test('activation goes through subagents.startActivation (catalog-managed child)'
 	assert.equal(spec.delivery, 'parent');
 });
 
+test('the activation spec reads correctly on both host shapes (rc.1 nested, rc.2+ flat)', async () => {
+	// rc.2+ 把 SubagentActivationSpec 扁平化（extends SubagentStartRequest），只读
+	// spec.parent / spec.cwd；只给嵌套 request 时 100% 激活失败（"requires the exact
+	// live parent agent"）。rc.1 仍读 spec.request.*。同一个 spec 两边都要能读。
+	const { runtime, activations } = makeRuntime();
+	await runtime.activate({ ...member, sessionId: null, config: { provider: 'p', model: 'm' } }, { prompt: '开始' });
+	const spec = activations[0];
+	const rc1 = { parent: spec.request.parent, cwd: spec.request.cwd, prompt: spec.request.prompt, agentOptions: spec.request.agentOptions, agentPreset: spec.request.agentPreset };
+	const flat = { parent: spec.parent, cwd: spec.cwd, prompt: spec.prompt, agentOptions: spec.agentOptions, agentPreset: spec.agentPreset };
+	assert.deepEqual(flat, rc1);
+	assert.equal(flat.parent.id, 'parent_agent');
+	assert.equal(flat.cwd, 'E:/works/probe');
+	assert.equal(flat.agentPreset, 'standard');
+	assert.equal(typeof flat.agentOptions, 'object');
+	assert.equal(spec.provider, 'local');
+	assert.equal(spec.label, '青岚');
+	assert.ok(spec.signal instanceof AbortSignal);
+});
+
 test('wake of a live member uses subagents.sendMessage (parent -> child delivery)', async () => {
 	const { runtime, messages } = makeRuntime();
 	await runtime.wake(member, { prompt: '继续处理高风险项' });

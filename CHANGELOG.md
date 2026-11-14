@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.93 - 2026-11-14
+
+**rc.2+ 宿主上成员能激活了：`startActivation` 同时给出扁平与嵌套两种 spec**
+
+DSH rc.2 起 `SubagentActivationSpec extends SubagentStartRequest`——`parent` / `cwd` / `prompt` /
+`agentPreset` / `agentOptions` 平铺在 spec 顶层；rc.1（桌面版）仍读嵌套的 `spec.request.*`。插件只给嵌套
+形状，rc.2 / rc.3 上 `spec.parent` 为 undefined，每次激活都以「subagent creation requires the exact live
+parent agent」失败（成员、技能评审、技能优化子代理全部不可用）。
+
+- `lib/runtime/activation-spec.js` `activationSpec`：请求字段既平铺在顶层、也保留在 `request` 下；各宿主
+  只读自己的字段、忽略另一份（rc.1 / rc.3 源码核对）。成员激活、技能评审（两处）、技能优化共 5 处调用统一走它；
+- 测试：`node --test` **332 通过 / 1 跳过**；`member-activation` 新增双形状读取 1 条；
+- E2E（全新隔离 DSH_HOME，成员全部 qwen，「用 js 写 2 种排序算法」）：rc.3 / rc.2 / rc.1 三个宿主均在 2 分钟内
+  完成「PMO 建卡 → 成员激活认领 → 提交 → 验收 → wave_done 汇报」，之后静默（rc.3 观察 12 分钟账本不再增长）；
+  rc.3 / rc.2 失败仅启动期 2 条注册表未就绪，rc.1 另有 1 条重复认领的业务拒绝。修复前 rc.2+ 激活 100% 失败。
 ## 0.4.92 - 2026-11-14
 
 **会议并发回帖不再被拒：迟到的回帖照收，并把错过的发言带回去；PMO 叫不醒就不开会**
