@@ -2,16 +2,45 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ensureHostAgent, HostAgentError } from '../lib/runtime/host-agent.js';
 
-test('reuses an existing live root Agent as the member parent', async () => {
-	const root = { id: 'session-human' };
+test('never borrows the Human\'s live root session: each project owns its PMO session', async () => {
+	// Core model: members are children of their project's PMO session in the project
+	// workspace. Borrowing the Human's open chat parented them under that chat (any
+	// workspace, results delivered into it) and left the team "未分组" in the sidebar.
+	const humanRoot = { id: 'session-human', session: { header: { cwd: 'E:/elsewhere' } } };
+	const created = [];
+	const result = await ensureHostAgent({
+		agents: {
+			roots: () => [humanRoot],
+			create: async (options) => { created.push(options); return { agent: { id: options.sessionId }, dispose: async () => {} }; },
+		},
+		agentDefaultModel: { currentSelection: () => ({ provider: 'p', model: 'm' }) },
+		cwd: 'E:/works/il2c',
+		newSessionId: () => 'session-team-host-pmo',
+	});
+	assert.equal(result.agent.id, 'session-team-host-pmo');
+	assert.equal(result.created, true);
+	assert.equal(created.length, 1);
+	assert.equal(created[0].meta.cwd, 'E:/works/il2c');
+});
+
+test('a live persisted PMO session in another project\'s workspace is not reused', async () => {
+	// Two ledgers that once shared one host: project B must not adopt A's live
+	// session, or B's members would be created in A's workspace.
 	let created = 0;
 	const result = await ensureHostAgent({
-		agents: { roots: () => [root], create: async () => { created += 1; } },
-		cwd: 'E:/works/dsh-ai-team',
+		agents: {
+			get: (id) => ({ id, session: { header: { cwd: 'E:/works/project-a' } } }),
+			create: async (options) => { created += 1; return { agent: { id: options.sessionId }, dispose: async () => {} }; },
+			resume: async () => { throw new Error('a live session is never resumed'); },
+		},
+		agentDefaultModel: { currentSelection: () => ({ provider: 'p', model: 'm' }) },
+		resumeSessionId: 'session-host-shared',
+		newSessionId: () => 'session-host-b',
+		cwd: 'E:/works/project-b',
 	});
-	assert.equal(result.agent, root);
-	assert.equal(result.created, false);
-	assert.equal(created, 0);
+	assert.equal(created, 1);
+	assert.equal(result.agent.id, 'session-host-b');
+	assert.equal(result.created, true);
 });
 
 test('creates a Team Host Agent and never archives it', async () => {
