@@ -129,28 +129,6 @@ test('wake re-checks permission before sendMessage', async () => {
 	assert.equal(sessions.get('session-member-1').sandbox, TEAM_PRESET);
 });
 
-test('wake resumes the cold child exactly once and delivers through the resumed agent', async () => {
-	const { runtime, sessions, calls } = makeRuntime();
-	let resumed = null;
-	const followed = [];
-	runtime.agents = {
-		resume: async ({ resumeSessionId }) => {
-			resumed = resumeSessionId;
-			sessions.set(resumeSessionId, { id: resumeSessionId, sandbox: 'workspace-write' });
-			return { agent: { id: resumeSessionId, followup: (message) => { followed.push(message); } }, dispose: async () => {} };
-		},
-	};
-	const result = await runtime.wake({ id: 'mem_1', name: '沈舟', sessionId: 'session-cold' }, { prompt: '继续' });
-	assert.equal(resumed, 'session-cold');
-	assert.equal(result.cold, true);
-	assert.equal(result.resumed, true);
-	assert.equal(sessions.get('session-cold').sandbox, TEAM_PRESET);
-	// 关键回归：resume 之后不得再走 sendMessage 的冷恢复（那会以 NOT_RESUMABLE
-	// 失败并触发上层强制重建、丢掉成员历史）。
-	assert.equal(calls.send.length, 0, 'the resumed agent delivers the message itself');
-	assert.equal(followed.length, 1);
-});
-
 test('wake cold-resumes a member whose session is not live', async () => {
 	const { runtime, calls } = makeRuntime();
 	const result = await runtime.wake({ id: 'mem_1', name: '沈舟', sessionId: 'session-cold' }, { prompt: '继续' });
@@ -158,77 +136,6 @@ test('wake cold-resumes a member whose session is not live', async () => {
 	assert.equal(calls.send.length, 1);
 	assert.equal(calls.send[0].targetId, 'session-cold');
 	assert.equal(calls.set.length, 0, 'no live Session means no pre-delivery permission set');
-});
-
-test('direct cold resume mounts the member preset again', async () => {
-	const session = { id: 'cold-1', sandbox: 'workspace-write' };
-	const agent = { id: 'cold-1', session, followup: () => {} };
-	const mounted = [];
-	let resumeOptions = null;
-	const runtime = new MemberRuntime({
-		agents: {
-			get: () => undefined,
-			resume: async (options) => {
-				resumeOptions = options;
-				await options.setup?.({ id: 'cold-ctx' });
-				return { agent, dispose: async () => {} };
-			},
-		},
-		agentPresets: { mount: async (agentCtx, preset) => { mounted.push([agentCtx.id, preset]); } },
-		preset: 'standard',
-		sessions: { get: () => session, flush: async () => true },
-		permissionPresets: { set: (target, name) => { target.sandbox = name; } },
-		sandboxPolicy: { overrideOf: (target) => target.sandbox },
-		parent: { id: 'session-host' },
-		cwd: 'E:/works/dsh-ai-team',
-		direct: true,
-	});
-	await runtime.wake({ id: 'm1', name: '沈舟', sessionId: 'cold-1', config: { preset: 'standard' } }, { prompt: '继续' });
-	assert.equal(resumeOptions.parentAgent.id, 'session-host');
-	assert.deepEqual(mounted, [['cold-ctx', 'standard']]);
-	assert.equal(session.sandbox, 'danger-full-access');
-});
-
-test('direct mode creates an Agent and starts it with followup', async () => {
-	const sessions = new Map();
-	const followups = [];
-	const agent = {
-		id: 'direct-1',
-		session: { id: 'direct-1', sandbox: 'workspace-write' },
-		followup: (message) => { followups.push(message.content[0].text); },
-	};
-	sessions.set('direct-1', agent.session);
-	const mounted = [];
-	const runtime = new MemberRuntime({
-		agents: {
-			create: async (options) => {
-				assert.equal(options.parentAgent.id, 'session-host');
-				assert.equal(options.meta.agentPreset, 'standard');
-				await options.setup?.({ id: 'agent-ctx' });
-				agent.id = options.sessionId;
-				agent.session.id = options.sessionId;
-				sessions.set(options.sessionId, agent.session);
-				return { agent, dispose: async () => {} };
-			},
-			get: (id) => (id === agent.id ? agent : undefined),
-		},
-		agentPresets: { mount: async (agentCtx, preset) => { mounted.push([agentCtx.id, preset]); } },
-		preset: 'standard',
-		sessions: { get: (id) => sessions.get(id), flush: async () => true },
-		permissionPresets: { set: (session, name) => { session.sandbox = name; } },
-		sandboxPolicy: { overrideOf: (session) => session.sandbox },
-		parent: { id: 'session-host' },
-		cwd: 'E:/works/dsh-ai-team',
-		direct: true,
-	});
-	const result = await runtime.activate({ id: 'm1', name: '沈舟' }, { prompt: '开始' });
-	assert.equal(result.childId, agent.id);
-	assert.equal(result.member.status, 'running');
-	assert.deepEqual(mounted, [['agent-ctx', 'standard']]);
-	assert.equal(agent.session.sandbox, 'danger-full-access');
-	assert.deepEqual(followups, ['开始']);
-	await runtime.wake({ id: 'm1', name: '沈舟', sessionId: agent.id }, { prompt: '继续' });
-	assert.deepEqual(followups, ['开始', '继续']);
 });
 
 test('missing parent/provider or session is rejected explicitly', async () => {
@@ -243,24 +150,52 @@ test('missing parent/provider or session is rejected explicitly', async () => {
 	);
 });
 
-test('a second wake reuses the resumed handle instead of re-entering cold resume', async () => {
+// Issue #1 回归：唤醒只有一条投递路径（subagents.sendMessage）。插件自己 agents.resume
+// 会持有写句柄，使 manager 下一次冷恢复以 NOT_RESUMABLE 失败 → 上层中止回合并重建会话
+// （.ptc/rounds/r01-evidence：同一成员 15ms 内两次唤醒，第二次触发重建）。
+test('wake never resumes the child itself, even when agents.resume is available', async () => {
+	const { runtime, calls } = makeRuntime();
+	let resumeCalls = 0;
+	runtime.agents = { resume: async () => { resumeCalls += 1; throw new Error('must not be called'); } };
+	const result = await runtime.wake({ id: 'mem_1', name: '沈舟', sessionId: 'session-cold' }, { prompt: '继续' });
+	assert.equal(resumeCalls, 0);
+	assert.equal(calls.send.length, 1);
+	assert.equal(result.cold, true);
+	assert.equal(result.messageId, 'msg-wake-1');
+});
+
+test('back-to-back wakes (cold, then live) all go through sendMessage to the same session', async () => {
 	const { runtime, sessions, calls } = makeRuntime();
+	const member = { id: 'mem_1', name: '沈舟', sessionId: 'session-x' };
+	// A working agents.resume is available (as on a real host): the old code took
+	// it for the cold wake and then fell back to sendMessage on the next one.
 	const followed = [];
-	let resumeCount = 0;
 	runtime.agents = {
 		resume: async ({ resumeSessionId }) => {
-			resumeCount += 1;
-			sessions.set(resumeSessionId, { id: resumeSessionId, sandbox: 'workspace-write' });
-			return { agent: { id: resumeSessionId, followup: (message) => { followed.push(message); } }, dispose: async () => {} };
+			sessions.set(resumeSessionId, { id: resumeSessionId, sandbox: 'danger-full-access' });
+			return { agent: { id: resumeSessionId, followup: (message) => followed.push(message) }, dispose: async () => {} };
 		},
 	};
-	const member = { id: 'mem_1', name: '沈舟', sessionId: 'session-cold' };
-	await runtime.wake(member, { prompt: '第一次' });
-	// 第一次之后 session 已 live：第二次若回退到 sendMessage，subagent manager 会
-	// 再做一次冷恢复并以 NOT_RESUMABLE 失败，进而触发上层强制重建丢上下文。
-	const second = await runtime.wake(member, { prompt: '第二次' });
-	assert.equal(resumeCount, 1, 'resume must happen once');
-	assert.equal(calls.send.length, 0, 'no subagent sendMessage after the session is live');
-	assert.equal(second.resumed, true);
-	assert.equal(followed.length, 2, 'both wakes delivered through the resumed agent');
+	// 1st: offline → manager cold-resumes it; model the session becoming live.
+	runtime.subagents.sendMessage = async (parent, targetId, content) => {
+		calls.send.push({ parent, targetId, content });
+		sessions.set(targetId, { id: targetId, sandbox: 'danger-full-access' });
+		return `msg-${calls.send.length}`;
+	};
+	const first = await runtime.wake(member, { prompt: 'task_created' });
+	const second = await runtime.wake(member, { prompt: 'task_assigned' });
+	const third = await runtime.wake(member, { prompt: 'pmo_review' });
+	assert.deepEqual(calls.send.map((call) => call.targetId), ['session-x', 'session-x', 'session-x']);
+	assert.equal(followed.length, 0, 'nothing is delivered around the manager');
+	assert.deepEqual([first.cold, second.cold, third.cold], [true, false, false]);
+	assert.equal(calls.send[0].parent.id, 'session-host', 'delivery is addressed from the Team host parent');
+});
+
+test('wake without a subagent runtime fails explicitly instead of delivering some other way', async () => {
+	const { runtime } = makeRuntime();
+	runtime.subagents = undefined;
+	await assert.rejects(
+		() => runtime.wake({ id: 'm', name: 'x', sessionId: 's' }, { prompt: '继续' }),
+		(error) => error instanceof MemberRuntimeError && error.code === 'E_RUNTIME_UNAVAILABLE',
+	);
 });

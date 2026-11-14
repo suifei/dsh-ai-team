@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.4.88 - 2026-11-14
+
+**成员唤醒只走 `subagents.sendMessage`，根除「唤醒即重建会话」（Issue #1 主因之一）**
+
+旧 `wake()` 对离线成员先由插件自己 `agents.resume()` 冷恢复，再对在线成员走 `sendMessage`。
+插件持有的恢复句柄就是写租约：同一成员第二次唤醒（建卡时 owner=assignee 的双唤醒、PMO 催办撞上运行中回合）
+时 manager 冷恢复报 `NOT_RESUMABLE`，Host 把它当会话损坏，中止回合并重建成员——新会话丢失全部上下文，
+重建出来的会话又被下一次唤醒重建（桌面实机 24h 内 200 次重建，其中 191 次落在重建出来的会话上）。
+`resumedHandles` 是按 runtime 实例创建的 Map，永远为空，清理从未生效。
+
+- `lib/runtime/member-runtime.js`：`wake()` 只有一条投递路径 `subagents.sendMessage`（官方契约：manager
+  负责转向运行中、启动空闲、冷恢复离线子代理）；在线会话投递前复核 danger-full-access；
+  删除 `activateDirect`、插件侧 `agents.resume` 与 `trackHandle`；
+- `index.js`：删除 `resumedHandles` 及其三处 dispose；`NOT_RESUMABLE` 自动重建保留为预算内兜底；
+- 测试：`node --test` **303 通过 / 1 跳过**；新增 3 条回归（有 `agents.resume` 也不调用、冷→热连续唤醒
+  同一会话、无子代理运行时显式报错），在 0.4.87 上失败；
+- E2E（rc.1，隔离 DSH_HOME）：主理人连收 3 条私信，修复前会话被重建且失忆，修复后会话不变并记得前两次回复；
+  6 成员满员 25 分钟：64 次唤醒，autoreseat / NOT_RESUMABLE / 中止回合均为 0，会话数恒为 7
+  （修复前同场景 40 分钟 14 会话、7 次重建）。
+
+未覆盖：PMO 无界自主开卡、rc.2+ `startActivation` 参数形状。
+
 ## 0.4.73 - 2026-11-12
 
 **skillopt_jobs 每执必炸的块级作用域缺陷，与 failed 终态不写 results.tsv 两案同修**
