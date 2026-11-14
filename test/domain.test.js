@@ -168,24 +168,19 @@ test('pre-assignment does not enter claimHistory; only claim does', () => {
 	assert.deepEqual(claimed.claimHistory, ['a2']);
 });
 
-test('thread rejects stale Agent replies with a change list; Human bypasses', () => {
+test('a late Agent reply is accepted and reports what it missed; a reply ahead of the head is rejected', () => {
+	// r09：会议里 5 名成员读同一个 head 后同时回帖，旧规则只放行第一条，其余反复
+	// E_STALE_REPLY（一轮 46 次，「三次回帖均因会议并发被拒」）。迟到不等于错误。
 	let thread = createThread('tsk_1');
 	thread = appendReply(thread, { authorId: 'a1', baseSeq: 0, body: '第一条' }, { at: 1 }).thread;
 	thread = appendReply(thread, { authorId: 'a2', baseSeq: 1, body: '第二条' }, { at: 2 }).thread;
-	const error = (() => {
-		try {
-			appendReply(thread, { authorId: 'a1', baseSeq: 0, body: '旧回复' });
-			return null;
-		} catch (caught) {
-			return caught;
-		}
-	})();
-	assert.ok(error instanceof DomainError);
-	assert.equal(error.code, 'E_STALE_REPLY');
-	assert.equal(error.details.headSeq, 2);
-	assert.equal(error.details.changes.length, 2);
-	const humanReply = appendReply(thread, { authorId: 'h1', actorKind: 'human', baseSeq: 0, body: '我看得到最新' });
-	assert.equal(humanReply.thread.headSeq, 3);
+	const late = appendReply(thread, { authorId: 'a3', baseSeq: 0, body: '旧回复' }, { at: 3 });
+	assert.equal(late.thread.headSeq, 3);
+	assert.equal(late.entry.baseSeq, 0, 'the entry records the head it was written against');
+	assert.deepEqual(late.missed.map((entry) => entry.seq), [1, 2]);
+	const current = appendReply(late.thread, { authorId: 'a1', baseSeq: 3, body: '最新' });
+	assert.deepEqual(current.missed, []);
+	expectCode(() => appendReply(thread, { authorId: 'a1', baseSeq: 9, body: '超前' }), 'E_INVALID_ARGUMENT');
 });
 
 test('inbox decision items cannot be bulk-read or done without a decision', () => {
