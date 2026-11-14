@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.94 - 2026-11-15
+
+**成员会话重建后，旧会话从工作区摘下**
+
+成员会话不可恢复（`NOT_RESUMABLE` 等）时插件会自愈重建一个新会话，但被替换的旧会话仍挂在项目工作区下。
+宿主没有删除会话的 API，于是每次重建都在工作区列表里多留一个永不再用的会话——实机 il2c 在 11-12/13 两天
+自愈重建 322 次，il2c 工作区下累积 323 个死成员会话（`workspace.json` 里 354 个会话只有 25 个在用或属于 Human）。
+
+- `index.js` `activateMember`：force 重建成功、新会话挂上工作区后，对旧会话调用工作区的 `detachSession`；
+  诊断行 `workspace.detach`（`errors` 级可见）/ `workspace.detach.fail`；
+- `member.autoreseat` 诊断行补记触发的 `failureCode` 与唤醒 `reason`，之后能区分重建成因；
+- 测试：`node --test` **332 通过 / 1 跳过**；`host.test` 新增「旧会话摘下、新会话挂上」断言（去掉修复即失败）；
+- E2E（隔离 DSH_HOME，rc.1 与 rc.3）：`member.reseat` 后 `workspace.json` 中旧会话不在、新会话在，诊断有 `workspace.detach` 行。
+
 ## 0.4.93 - 2026-11-14
 
 **rc.2+ 宿主上成员能激活了：`startActivation` 同时给出扁平与嵌套两种 spec**

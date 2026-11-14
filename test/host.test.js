@@ -60,6 +60,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 	// 激活计数：跨 ctx.get('subagents') 调用共享（每次激活 = 新 childId）。
 	let activationCounter = 0;
 	const workspaceAttachments = [];
+	const workspaceDetachments = [];
 	const requestErrorListeners = [];
 	const sessionEventListeners = [];
 	const wakeCalls = [];
@@ -136,7 +137,10 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 			}
 			if (id === 'workspaceRegistry') {
 				return {
-					resolveByPath: async () => ({ attachSession: async (sessionId) => { workspaceAttachments.push(sessionId); } }),
+					resolveByPath: async () => ({
+						attachSession: async (sessionId) => { workspaceAttachments.push(sessionId); },
+						detachSession: async (sessionId) => { workspaceDetachments.push(sessionId); },
+					}),
 					archiveSession: async () => {},
 				};
 			}
@@ -347,6 +351,11 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(reseated.member.status, 'running');
 		assert.notEqual(reseated.member.sessionId, memberSessionId, 'reseat binds a NEW session');
 		assert.ok(disposedHandles.includes(memberSessionId), 'old activation handle disposed before rebuild');
+		// 被替换的旧会话从工作区摘下：否则每次重建都在侧栏/工作区列表里多留一个
+		// 死会话（实机 il2c 两天累积 323 个）。新会话照常挂上。
+		assert.ok(workspaceDetachments.includes(memberSessionId), 'stale session detached from the workspace');
+		assert.ok(workspaceAttachments.includes(reseated.member.sessionId), 'new session attached');
+		assert.ok(!workspaceDetachments.includes(reseated.member.sessionId));
 
 		// reseat 后成员绑定的是新会话：工具可见性随新会话走。
 		const toolTasks = await toolRegistration.definition.execute({ action: 'tasks' }, { agent: { id: reseated.member.sessionId } });
