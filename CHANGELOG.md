@@ -20,16 +20,22 @@
 - 唤醒提示（`lib/host/waker.js`）：Human 消息由 PMO 判断——闲聊直接 say、不建卡；是工作才建卡并
   say 告知；看板最后一张卡验收后唤醒 PMO 汇报（`wave_done`，带路径/验证/卡片，本回合不续开）；
   定时推进先判断目标是否已达成，达成就 say 收尾、不开卡；
+- 目标完成后不再空转（`lib/ledger/fold.js` `pmoNews`，`FOLD_STATE_VERSION` 5→6）：Human 事件或 Task 进入
+  终态才算新进展；PMO 被成功唤醒看过局面（pmo_continue / wave_done / human_message）即消费掉。
+  空看板定时推进只在有新进展时放行，静默期诊断只记一次 `pmo.continue.quiet`。r09 修复前两项目
+  完成后 35 分钟 8 次推进 / 40 次会议唤醒，PMO 反复发「状态不变」，且 wave_done 与 pmo_continue 同秒重复；
 - 改模型只唤醒手上有未完成任务的成员：空闲成员仅记 `routeStale`，下次真实唤醒时重建（r08 初装统一
   改模型空转激活了 6 个会话）；
-- 测试：`node --test` **324 通过 / 1 跳过**；新增 `pmo-session`（4）、`pmo-voice`（4），
+- 测试：`node --test` **328 通过 / 1 跳过**；新增 `pmo-session`（4）、`pmo-voice`（4）、`pmo-quiet`（4），
   `host-agent` 新增 2 条，`waker` 新增 1 条。
 - E2E（rc.1，隔离 DSH_HOME，两项目并行「3 种 / 2 种排序」）：两个 PMO 会话各在自己工作区，
   `workspace.json` 两个工作区各 7 个会话（6 成员 + PMO）、不串；侧边栏无「未分组」；`route_changed` 0 次
   （0.4.89 初装同场景 6 次）；PMO 在主流建卡告知 → 验收后汇报产物与复跑结果 → 声明「暂无后续任务」，
   每项目 1 张卡收口（0.4.89 同目标 PMO 自行续开到 7 张卡）。
+  复跑（含静默修复，25 分钟）：每项目 human_message 1 → 建 1 卡 → wave_done 汇报 1 次，之后 pmo_continue 0、
+  会议唤醒 0、E_STALE_REPLY 0，诊断各记一次 `pmo.continue.quiet`，账本自 10:52 起不再增长。
 
-未覆盖：卡片收口后的复盘会议中成员并发回帖仍被 `E_STALE_REPLY` 拒（本轮 24 次）；rc.2+ `startActivation` 参数形状。
+未覆盖：会议中成员并发回帖仍会被 `E_STALE_REPLY` 拒（静默修复后收口期不再开会，但进行中的会议仍可能触发）；rc.2+ `startActivation` 参数形状。
 
 ## 0.4.89 - 2026-11-14
 

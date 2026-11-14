@@ -9,6 +9,7 @@
  * ledger/domain service is the only writer and the Host never fakes work.
  */
 import { planTaskNudges } from './lib/host/pmo.js';
+import { pmoHasNews } from './lib/ledger/fold.js';
 import { homedir } from 'node:os';
 import { join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -743,6 +744,7 @@ export function apply(ctx, config = {}) {
 			limit: Number.isSafeInteger(config?.autoReseatLimitPer30Min) ? config.autoReseatLimitPer30Min : 6,
 		});
 		const pmoLastKick = new Map();
+		const pmoQuiet = new Set();
 		const pmoLastStall = new Map();
 		const pmoLastHeartbeat = new Map();
 		const pmoLastDispatch = new Map();
@@ -1179,6 +1181,16 @@ export function apply(ctx, config = {}) {
 			// （project.runState=running）即视为指令，解除等待。
 			const hasAnyTaskHistory = Object.keys(state.tasks ?? {}).length > 0;
 			if (!hasAnyTaskHistory && project.explicitStart !== true) return;
+			// PMO 已看过当前局面（汇报 / 推进 / 回复 Human）且之后没有新进展：不再推进，
+			// 否则目标完成后每 10 分钟空转一次会议（见 fold.js pmoNews）。每段静默只记一次。
+			if (!pmoHasNews(state)) {
+				if (!pmoQuiet.has(projectRuntime.id)) {
+					pmoQuiet.add(projectRuntime.id);
+					diag.append({ ev: 'pmo.continue.quiet', projectId: projectRuntime.id, seq: state.lastSeq });
+				}
+				return;
+			}
+			pmoQuiet.delete(projectRuntime.id);
 			const last = pmoLastKick.get(projectRuntime.id) ?? 0;
 			if (now - last < 10 * 60_000) return;
 			pmoLastKick.set(projectRuntime.id, now);
