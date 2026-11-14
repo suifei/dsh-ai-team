@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.92 - 2026-11-14
+
+**会议并发回帖不再被拒：迟到的回帖照收，并把错过的发言带回去；PMO 叫不醒就不开会**
+
+会议/复盘时多名成员读同一个 Thread head 后同时回帖，旧规则（`baseSeq` 必须等于 head，否则
+`E_STALE_REPLY`）只放行第一条，其余重读、重写、再次落败——成员原话「三次回帖均因会议并发被拒」，
+r09 一轮 46 次，失败计数全部来自这里。回帖本身没有错，只是晚了。
+
+- `lib/domain/thread.js` `appendReply`：不再拒绝落后的 `baseSeq`，条目照记自己的 `baseSeq`，并返回
+  `missed`（读取之后新增的条目）；超前的 `baseSeq` 仍是 `E_INVALID_ARGUMENT`。`E_STALE_REPLY` 错误码移除；
+- `lib/host/member-tools.js` `reply`：有错过的他人发言时返回 `missed`（正文截 2000 字）与提示「只有它们
+  改变了你的结论才再补一条」；自己的旧帖不算错过；
+- PMO 叫不醒就不开会（`lib/host/waker.js` `pmo/continue`）：r13 中 PMO 因 AUTH 失败，定时推进仍把其余 5 名
+  成员拉进会议，无人主持、无人收口。现在 owner 不可唤醒（failed / retired / 缺失）时整场会议不规划；
+- 测试：`node --test` **331 通过 / 1 跳过**；`waker` 新增无主持会议 1 条，`domain` 改写 1 条，新增 `thread-meeting`（三人并发全部落帖、
+  迟到者拿到错过的两条）。
+- E2E（隔离 DSH_HOME，项目「排序-B」派一种排序，12 分钟）：线程 7 条回帖中 2 条迟到（seq 4 基于 2、seq 5
+  基于 3）全部落帖，`E_STALE_REPLY` 0、`dispatch.fail` 0（旧规则下这 2 条会被拒并重写）。
+
 ## 0.4.91 - 2026-11-14
 
 **停止即中断成员回合；重启不再惊动已静默的团队；已绑定的 PMO 会话启动即归入工作区**

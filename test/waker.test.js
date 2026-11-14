@@ -304,3 +304,16 @@ test('a route change on an idle member only marks it stale: no wake without unfi
 	}, {});
 	assert.deepEqual(plans, []);
 });
+
+test('no PMO meeting without a wakeable owner', () => {
+	// r13：PMO（owner）AUTH 失败后，定时推进仍把其余成员拉进会议——没人主持、没人收口。
+	const ownerFailed = {
+		...state,
+		tasks: {},
+		members: { ...state.members, a1: { ...state.members.a1, status: 'failed' } },
+	};
+	const plans = planWakes(ownerFailed, { event: { type: 'pmo/continue', seq: 50, payload: { bucket: 1 } } }, {});
+	assert.deepEqual(plans, []);
+	const healthy = planWakes({ ...state, tasks: {} }, { event: { type: 'pmo/continue', seq: 51, payload: { bucket: 2 } } }, {});
+	assert.equal(healthy.find((plan) => plan.memberId === 'a1')?.reason, 'pmo_continue');
+});
