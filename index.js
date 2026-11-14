@@ -738,10 +738,6 @@ export function apply(ctx, config = {}) {
 		const pmoLastDispatch = new Map();
 		const pmoLastEscalate = new Map();
 		const pmoLastReview = new Map();
-		// Members resumed from cold sessions produce AgentHandles nobody stored;
-		// track them by session id so teardown — and session reseat — can
-		// dispose exactly the handle they own.
-		const resumedHandles = new Map();
 		let pmoTimer = null;
 		// 项目工作目录（显式，无兜底）：null 表示尚未设置。历史版本在此处用
 		// runtime.dir（账本目录）兜底，曾把成员会话 cwd 钉进插件数据目录。
@@ -795,13 +791,10 @@ export function apply(ctx, config = {}) {
 					permissionPresets: serviceOf(ctx, 'permissionPresets'),
 					sandboxPolicy: serviceOf(ctx, 'sandboxPolicy'),
 					agents: serviceOf(ctx, 'agents'),
-					agentPresets: serviceOf(ctx, 'agentPresets'),
-					direct: false,
 					parent: parentInfo.agent,
 					provider: resolveSubagentProviderName(subagents, config?.subagentProviderName),
 					preset: 'standard',
 					cwd,
-					trackHandle: (sessionId, handle) => resumedHandles.set(sessionId, handle),
 				});
 				const delivered = await sessionRuntime.wake(member, {
 					prompt: [
@@ -927,13 +920,10 @@ export function apply(ctx, config = {}) {
 						const runtime = new MemberRuntime({
 							subagents, sessions, permissionPresets, sandboxPolicy,
 							agents: serviceOf(ctx, 'agents'),
-							agentPresets: serviceOf(ctx, 'agentPresets'),
-							direct: false,
 							parent: parentInfo.agent,
 							provider: resolveSubagentProviderName(serviceOf(ctx, 'subagents'), config?.subagentProviderName),
 							preset: 'standard',
 							cwd,
-							trackHandle: (sessionId, handle) => resumedHandles.set(sessionId, handle),
 						});
 						const delivered = await runtime.wake(member, {
 							// 冷路径（会话不在线）才附 Thread 尾巴：成员靠它续跑，不必从零回忆；
@@ -1909,7 +1899,7 @@ export function apply(ctx, config = {}) {
 				};
 			}
 			// 会话重建（reseat）：成员已有会话且本次为 force 时，先释放旧会话的
-			// 运行时句柄（activation / resume handle），旧 DSH 会话本体由宿主持
+			// activation（插件只持有 startActivation 的回执，冷恢复归 manager），旧 DSH 会话本体由宿主持
 			// 久管理，插件不再持有或唤醒它；新会话落在当前项目工作目录。这是
 			// 修复历史"账本目录兜底 cwd"游离会话的唯一路径（会话 cwd 创建时
 			// 钉死，resume 不覆盖，DSH 不提供原地改 cwd 的 API）。
@@ -1919,11 +1909,6 @@ export function apply(ctx, config = {}) {
 				if (staleActivation !== undefined) {
 					activations.delete(staleId);
 					try { await staleActivation.dispose?.(); } catch { /* already gone */ }
-				}
-				const staleHandle = resumedHandles.get(staleId);
-				if (staleHandle !== undefined) {
-					resumedHandles.delete(staleId);
-					try { await staleHandle.dispose?.(); } catch { /* already gone */ }
 				}
 				diag?.append({ ev: 'member.reseat', memberId: member.id, oldSessionId: staleId, projectId: projectRuntime.id });
 			}
@@ -1962,13 +1947,10 @@ export function apply(ctx, config = {}) {
 					permissionPresets,
 					sandboxPolicy,
 					agents: serviceOf(ctx, 'agents'),
-					agentPresets: serviceOf(ctx, 'agentPresets'),
-					direct: false,
 					parent: parentInfo.agent,
 					provider: resolveSubagentProviderName(serviceOf(ctx, 'subagents'), config?.subagentProviderName),
 					preset: 'standard',
 					cwd: effectiveDir,
-					trackHandle: (sessionId, handle) => resumedHandles.set(sessionId, handle),
 				});
 				const result = await runtime.activate(activationMember, {
 					prompt: `${memberIdentity(activationMember)}\n\n${typeof body.payload?.prompt === 'string'
@@ -2009,7 +1991,6 @@ export function apply(ctx, config = {}) {
 					member: bound.member,
 					sessionId: result.childId,
 					messageId: result.messageId,
-					debug: result.debug ?? null,
 				};
 			} catch (error) {
 				// 并发场景：激活进行中成员被退役，bind 会以 retired 拒绝。这里若无条件
@@ -2762,14 +2743,6 @@ export function apply(ctx, config = {}) {
 										try { await activation.dispose?.(); } catch { /* already gone */ }
 										diag.append({ ev: 'member.activation.disposed', memberId: retiredId, sessionId: retiredSession, reason: body.type });
 									}
-									// 冷恢复得到的 handle 也要回收：它同样常驻进程，且不会因为
-									// activation 被 dispose 而消失（两套句柄分开登记）。
-									const resumed = resumedHandles.get(retiredSession);
-									if (resumed !== undefined) {
-										resumedHandles.delete(retiredSession);
-										try { await resumed.dispose?.(); } catch { /* already gone */ }
-										diag.append({ ev: 'member.resumed-handle.disposed', memberId: retiredId, sessionId: retiredSession, reason: body.type });
-									}
 								}
 							}
 							send(res, { ok: true, ...result });
@@ -2812,12 +2785,6 @@ export function apply(ctx, config = {}) {
 				}));
 			}
 			activations.clear();
-			for (const handle of resumedHandles.values()) {
-				cleanup.push(Promise.resolve().then(async () => {
-					try { await handle?.dispose?.(); } catch { /* already gone */ }
-				}));
-			}
-			resumedHandles.clear();
 			if (host !== null) cleanup.push(Promise.resolve().then(async () => {
 				try { await host.dispose?.(); } catch { /* already gone */ }
 			}));
