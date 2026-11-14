@@ -61,6 +61,8 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 	let activationCounter = 0;
 	const workspaceAttachments = [];
 	const workspaceDetachments = [];
+	// 下一次 sendMessage 抛出的错误（按序消费）：模拟会话无法续接。
+	const sendFailures = [];
 	const requestErrorListeners = [];
 	const sessionEventListeners = [];
 	const wakeCalls = [];
@@ -162,6 +164,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 						};
 					},
 					sendMessage: async (parent, targetId, content) => {
+						if (sendFailures.length > 0) throw sendFailures.shift();
 						wakeCalls.push({ parent, targetId, content });
 						return 'msg-wake-1';
 					},
@@ -379,6 +382,43 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 		assert.equal(wakeCalls.length, 1);
 		assert.equal(wakeCalls[0].targetId, reseatedSessionId);
 		assert.match(wakeCalls[0].content[0].text, new RegExp(agentTaskBody.task.id));
+
+		// 一个成员一个会话：唤醒时原会话无法续接（NOT_RESUMABLE），插件**不新建**子智能体
+		// （实机 il2c：自愈重建两天建了 322 个），成员记 failed、交给 Human 决策。
+		const activationsBefore = activationCounter;
+		sendFailures.push(Object.assign(new Error(`subagent "${reseatedSessionId}" is unavailable`), { code: 'NOT_RESUMABLE' }));
+		const resumeTask = await (await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ type: 'task.create', payload: { title: '续接任务', resultDefinition: 'x', ownerId: 'a1' } }),
+		})).json();
+		await new Promise((resolve) => setTimeout(resolve, 300));
+		assert.equal(sendFailures.length, 0, 'the wake reached sendMessage');
+		assert.equal(activationCounter, activationsBefore, 'no new subagent is created for an unresumable session');
+		const afterUnresumable = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
+		const failedA1 = afterUnresumable.members.find((member) => member.id === 'a1');
+		assert.equal(failedA1.status, 'failed');
+		assert.equal(failedA1.sessionId, reseatedSessionId, 'the member keeps its one session');
+		// Human 决定复用同一会话：重新绑定后照常投递，仍是同一个会话。
+		const rebind = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ type: 'member.bind', payload: { memberId: 'a1', sessionId: reseatedSessionId } }),
+		});
+		assert.equal(rebind.status, 200, await rebind.clone().text());
+		// 同一会话正常跑完一轮：失败计数归零，后续断言（requestError 等）的前提不变。
+		await sessionEventListeners[0]({ id: reseatedSessionId }, { type: 'turn/end', data: { reason: { kind: 'completed' } } });
+		const afterRebind = await (await fetch(`${base}/ai-team/api/bootstrap`)).json();
+		assert.equal(afterRebind.members.find((member) => member.id === 'a1').status, 'running');
+		assert.equal(activationCounter, activationsBefore, 'still the same subagent');
+		// 收回这张卡：后续看板计数断言按原有卡片数。
+		const removed = await fetch(`${base}/ai-team/api/projects/prj_main/commands`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json' },
+			body: JSON.stringify({ type: 'task.delete', payload: { taskId: resumeTask.task.id, reason: 'test cleanup' } }),
+		});
+		assert.equal(removed.status, 200, await removed.clone().text());
+		wakeCalls.length = 0;
 
 		assert.equal(requestErrorListeners.length, 1);
 		let nextCalls = 0;
