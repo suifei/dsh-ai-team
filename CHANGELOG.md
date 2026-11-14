@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.4.98 - 2026-11-15
+
+**#18 审计复核：确认属实的五处修复**
+
+逐条用 il2c 实账本（7171 事件）与当前源码复核。属实的：
+
+- **已关闭的卡不再因 Thread 回复唤醒成员**：`thread/posted` 唤醒不判终态，il2c 1272 次 `thread_reply` 唤醒里
+  435 次打在 done/cancelled 卡上。现在终态 / 已删除卡上的回复只落 Thread。作者读取改为账本实际的扁平
+  `payload.authorId`（自我唤醒此前已由 actor 拦住，实账本 0 次，本处是去掉死代码）；
+- **pending 补派复活**：补派用账本投影判忙，而投影里成员一旦 session-bound 就永远是 running——il2c 2997 次唤醒里
+  `pmo_dispatch` 为 0。改为按宿主 `turn/start` → `turn/end` 维护的实时回合判忙；每卡最多补派 3 次、间隔 ≥60 秒，
+  之后交给 stall/escalate。判定抽成纯函数 `planDispatch`（`lib/host/pmo.js`）；
+- **不要求 QA 的待验收卡也会催验收**：`planTaskNudges` 的 review 提醒此前只对 `qaRequired` 卡生效；`pmo/review` 对
+  非 QA 卡叫排名第一的合格验收人（与提交时 `review_requested` 同口径，仍不叫执行人与认领过的人）；
+- **失败分类**：`codeOf()` 已转大写，计费正则却是小写，`QUOTA` 等码永远匹配不到；宿主不带 HTTP status 的瞬时码
+  （`SERVER` / `TIMEOUT` / `TRANSPORT` / `STREAM_CLOSED` / `EMPTY_RESPONSE`）此前全部落进 UNKNOWN 判死，现在同路由重试；
+- **改设置不续预算**：编辑成员资料 / 成员模型 / PMO 设置不再算 Human 意图（il2c 里这类编辑占 Human 意图事件的约 1/4，
+  每次都把自主续开预算清零）。`FOLD_STATE_VERSION` 7 → 8，旧 checkpoint 重折。
+
+复核不成立或已在之前版本解决的：`pmoMaxRounds` 并非从未生效（il2c 回放：空看板开新一批计数 23 次）；自动重建链路与
+`autoReseatLimitPer30Min` 已在 0.4.95 整体移除（一个成员一个会话）；`startActivation` 顶层 spec 已在 0.4.93 修复。
+
+- 测试：`node --test` **341 通过 / 1 跳过**；新增 `test/issue18.test.js`（5 例），`waker.test` 增终态 Thread 用例；
+- E2E（隔离 DSH_HOME，rc.1 / rc.3）：成员按卡面要求不认领 → 回合结束后 `pmo_dispatch` 补派 1 次，成员随即认领并走完
+  一轮；已取消卡上的 Thread 回复 `thread_reply` 唤醒 0 次。
+
 ## 0.4.97 - 2026-11-15
 
 **换新团队会话：`project.team.renew`（Human，项目停止时）**
