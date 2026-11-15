@@ -8,7 +8,7 @@
  * The member runtime (real Agent sessions) lands in M2. Until then the
  * ledger/domain service is the only writer and the Host never fakes work.
  */
-import { planTaskNudges } from './lib/host/pmo.js';
+import { planDispatch, planTaskNudges } from './lib/host/pmo.js';
 import { pmoHasNews } from './lib/ledger/fold.js';
 import { homedir } from 'node:os';
 import { join, sep } from 'node:path';
@@ -660,8 +660,16 @@ export function apply(ctx, config = {}) {
 				}
 			})
 			: () => {};
+		// 正在跑回合的会话（宿主 turn/start → turn/end）。账本没有「回合结束」事件，
+		// 成员投影一旦 session-bound 就永远是 running；补派若拿它判忙，就永远不派（#18：
+		// il2c 2997 次唤醒里 pmo_dispatch 为 0）。进程内状态，重启即清空——重启时本就没有回合在跑。
+		const turnsInFlight = new Set();
 		const offSessionEvent = typeof ctx.on === 'function'
 			? ctx.on('session/event', async (session, event) => {
+				if (typeof session?.id === 'string') {
+					if (event?.type === 'turn/start') turnsInFlight.add(session.id);
+					else if (event?.type === 'turn/end') turnsInFlight.delete(session.id);
+				}
 				// 成员输出探针：直接观察成员回合产出了什么（判定「成员是否真的在
 				// 工作 / 是否调用工具」的唯一插件侧可见通道）。
 				try {
@@ -1158,21 +1166,12 @@ export function apply(ctx, config = {}) {
 			const active = Object.values(state.tasks ?? {}).filter((task) =>
 				task.tombstone !== true && ['pending', 'in_progress', 'pending_acceptance'].includes(task.status));
 			const now = Date.now();
-			// R-14 pending 快速补派：task/created 的事件唤醒可能在责任位正忙时
-			// 被投递语义吞掉，而账本没有「回合结束/空闲」事件可挂钩（member.status
-			// 只有 running/failed 写点，idle 是 bootstrap 显示兜底）——所以用
-			// 60s tick + 责任位状态检查兜底：pending 且责任位非 running → 每分钟
-			// 最多一次补派。pending 开工等待从最长 10 分钟压到一个 tick。
+			// R-14 pending 快速补派：task/created 的事件唤醒可能在责任位正忙时被投递语义
+			// 吞掉，60s tick 兜底。判定（实时回合、每卡上限）在 planDispatch（lib/host/pmo.js）。
 			for (const task of active) {
-				if (task.status !== 'pending') continue;
-				const responsibleId = task.assigneeId ?? task.ownerId;
-				const responsible = state.members?.[responsibleId];
-				if (responsible === undefined || responsible.kind !== 'agent') continue;
-				if (responsible.status === 'running') continue; // 正在执行别的回合：不打断
-				if (responsible.status === 'retired' || responsible.status === 'failed') continue; // 不自动唤醒
-				const lastDispatch = pmoLastDispatch.get(task.id) ?? 0;
-				if (now - lastDispatch < 60_000) continue;
-				pmoLastDispatch.set(task.id, now);
+				const last = pmoLastDispatch.get(task.id);
+				if (planDispatch(task, state, { inTurn: (id) => turnsInFlight.has(id), last, now }) === null) continue;
+				pmoLastDispatch.set(task.id, { at: now, count: (last?.count ?? 0) + 1 });
 				await wakeFromResult(projectRuntime, {
 					event: { type: 'pmo/dispatch', payload: { taskId: task.id, bucket: Math.floor(now / 60_000) } },
 				}, {});

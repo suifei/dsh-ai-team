@@ -256,7 +256,21 @@ test('PMO review never wakes the assignee or someone who already claimed the Tas
 		},
 	};
 	const plans = planWakes(reviewState, { event: { type: 'pmo/review', payload: { taskId: 't2', bucket: 42 } } }, {});
-	assert.deepEqual(plans.map((item) => item.memberId), [], 'nobody left to review without self-review');
+	// #18：qaRequired=false 的待验收卡也要催——叫排名第一的合格验收人（与提交时 review_requested 同口径）。
+	assert.deepEqual(plans.map((item) => item.memberId), ['a1'], 'the first eligible reviewer, never the assignee or a past claimer');
+	const qa = { ...reviewState, tasks: { ...reviewState.tasks, t2: { ...reviewState.tasks.t2, qaRequired: true } } };
+	const qaPlans = planWakes(qa, { event: { type: 'pmo/review', payload: { taskId: 't2', bucket: 42 } } }, {});
+	assert.deepEqual(qaPlans.map((item) => item.memberId), [], 'QA card: nobody left to review without self-review');
+});
+
+test('#18 thread replies on a closed card wake nobody; the flat ledger author is not woken by their own reply', () => {
+	const closed = { ...state, tasks: { ...state.tasks, t2: { ...state.tasks.t2, status: 'done' } } };
+	assert.deepEqual(planWakes(closed, { event: { type: 'thread/posted', seq: 30, payload: { taskId: 't2', seq: 9, authorId: 'h1' } } }, {}), []);
+	const cancelled = { ...state, tasks: { ...state.tasks, t2: { ...state.tasks.t2, status: 'cancelled' } } };
+	assert.deepEqual(planWakes(cancelled, { event: { type: 'thread/posted', seq: 31, payload: { taskId: 't2', seq: 9, authorId: 'h1' } } }, {}), []);
+	// 账本形状：扁平 authorId，且没有 actor（例如由 ledger 事件路径回放）。
+	const open = planWakes(state, { event: { type: 'thread/posted', seq: 32, payload: { taskId: 't2', seq: 9, authorId: 'a2' } } }, {});
+	assert.deepEqual(open.map((item) => [item.memberId, item.reason]), [['a1', 'thread_reply']]);
 });
 
 test('an inbox item wakes its member using the flat ledger payload', () => {
