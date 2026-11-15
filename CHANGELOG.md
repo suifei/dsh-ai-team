@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.99 - 2026-11-15
+
+**宿主边界：两处代码审视发现的缺陷**
+
+- **插件路由过 Connection 信任栅栏**：webServer 承载层不做认证与 Host/Origin 校验（官方文档：「载体不拥有认证或
+  Origin 策略」），宿主自带插件（open-in-app、inspector）都在路由入口调用 `ctx.connection.requestRejection(req)`，
+  本插件漏了——未认证、来源不可信的请求能读看板、以 Human 身份执行命令。实测 rc.3 上的 0.4.98：跨站 `text/plain`
+  POST 返回 200，账本 9 → 10 事件。现在所有 `/ai-team` 路由（含 SSE）先过栅栏，被拒按 401/403 返回、不进处理器；
+  栅栏服务缺失则 503，不静默放行。`inject` 声明 `connection`；诊断 `http.rejected.fail`；
+- **boot 落定前卸载不再残留账本锁**：teardown 只按 `booted` 关账本，而 `booted` 要等 boot 落定才赋值——在途 boot
+  打开的账本没人关，落定后还会照常对账、激活成员、起 PMO tick。同进程下一次组合读到 pid=本进程的锁，永久
+  `E_LOCKED`（project ledger is locked by another writer），只能重启宿主。现在 teardown 等待在途 boot；boot
+  落定时若已卸载，关掉它打开的账本、不再接线（诊断 `boot.after-dispose`）；探针期间卸载同样止步；
+- 测试：`node --test` **343 通过 / 1 跳过**；新增 `test/host-boundary.test.js`（2 例，去掉修复即失败：栅栏例 401/403
+  均不进账本、缺栅栏 503；卸载例 3/3 复现 `E_LOCKED`）；
+- E2E（dsh CLI 建独立 profile `aiteam-boundary`，隔离 DSH_HOME，装 `npm pack` 出的包）：
+  - rc.1：无凭据 401、冒充 Host 403、跨站 POST 403 且账本 9 → 9、带会话 cookie 的命令 200；
+  - rc.3：无凭据 401、冒充 Host 403、跨站 POST 403（rc.3 宿主在该环境不打印 token 地址，带凭据路径未测）；
+  - 卸载竞态未能实机触发：这两个宿主不监听 profile 配置文件，运行时开关只有 agent 的 `plugin_manager`，
+    时间窗（约 100 ms）无法从外部卡住；以单测的确定性复现为准。
+
 ## 0.4.98 - 2026-11-15
 
 **#18 审计复核：确认属实的五处修复**

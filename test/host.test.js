@@ -27,6 +27,7 @@ test('host refuses a profile without danger-full-access', async () => {
 	const ctx = {
 		effect(fn) { fn(); },
 		get(id) {
+			if (id === 'connection') return { requestRejection: () => undefined };
 			if (id === 'webServer') return { register(route) { routes.push(route); return () => {}; } };
 			if (id === 'permissionPresets') {
 				return {
@@ -88,6 +89,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 			return () => {};
 		},
 		get(id) {
+			if (id === 'connection') return { requestRejection: () => undefined };
 			if (id === 'webServer') {
 				return {
 					register(route) {
@@ -193,7 +195,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 	try {
 		apply(ctx);
 		assert.equal(name, 'ai-team');
-		assert.deepEqual(inject, ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'], 'inject declares every service the plugin touches (cordis proxies need it)');
+		assert.deepEqual(inject, ['webServer', 'connection', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'], 'inject declares every service the plugin touches (cordis proxies need it)');
 		assert.equal(routes.length, 1);
 		const route = routes[0];
 		assert.equal(route.kind, 'prefix');
