@@ -69,7 +69,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 // cordis 按 inject 保证属性注入；未声明的属性访问会抛错，因此这里列全插件
 // 实际使用的服务（含可选服务：缺失时 serviceOf 回退 ctx.get 并返回 undefined）。
-export const inject = ['webServer', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'];
+export const inject = ['webServer', 'connection', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'];
 
 // 版本号只有一处真源：package.json。硬编码字面量曾让 /health 在升版后仍报旧版本，
 // 误导「运行实例是否加载了新代码」的判断。
@@ -463,12 +463,21 @@ export function apply(ctx, config = {}) {
 		const ready = access.ok
 			? Promise.resolve().then(() => boot(diag, config))
 				.then(async (value) => {
+					// 卸载先于 boot 落定：teardown 当时看不到 booted，账本没人关；同进程下一次
+					// 组合会读到 pid=本进程的锁而永久 E_LOCKED。这里补关，且不再接线。
+					if (disposed) {
+						await Promise.allSettled([...value.runtimes.values()].map((runtime) => runtime.close()));
+						diag.append({ ev: 'boot.after-dispose', projects: value.runtimes.size });
+						return null;
+					}
 					booted = value;
 					// 决定性探针：真实读一次已知会话。冷恢复失败的两种表现
 					// （`agents.resume` 报 persistence 未配置、`coldResume` 报 notFound）
 					// 都会在这里露出原始错误码——不再靠日志里那句
 					// 「subagent X is unavailable」猜。
 					await probePersistence(value.sessionIds);
+					// 探针期间被卸载：teardown 已按 booted 关了账本，后面的对账/唤醒/巡检不得再跑。
+					if (disposed) return null;
 					// 路由过期对账：账本重新折叠时，凡是「上次失败的路由 ≠ 当前配置」的成员
 					// 都会带上 routeStale（老数据无需迁移脚本），但那条标记只有**新配置事件**
 					// 才会触发唤醒计划，失败成员又被排除在自动唤醒之外。所以 boot 后补一次
@@ -2162,6 +2171,19 @@ export function apply(ctx, config = {}) {
 			path: '/ai-team',
 			handler: async (req, res) => {
 				try {
+					// 信任栅栏：webServer 承载层不做认证与 Host/Origin 校验，路由各自过 Connection 的
+					// 栅栏（宿主 open-in-app / inspector 同一做法）。缺了它，任何网页都能以 Human 身份
+					// 跨站 POST 命令（实测桌面版：Origin: https://evil.example 的 text/plain POST 直达处理器）。
+					// 栅栏缺失即拒绝，不静默放行。
+					const connection = serviceOf(ctx, 'connection');
+					if (typeof connection?.requestRejection !== 'function') {
+						return send(res, { error: { code: 'E_TRUST_FENCE_UNAVAILABLE', message: 'connection service is unavailable' } }, 503);
+					}
+					const rejection = connection.requestRejection(req);
+					if (rejection !== undefined) {
+						diag.append({ ev: 'http.rejected.fail', status: rejection, method: req.method, path: String(req.url ?? '').split('?')[0], origin: req.headers?.origin ?? null });
+						return send(res, { error: { code: rejection === 401 ? 'E_UNAUTHENTICATED' : 'E_FORBIDDEN', message: 'request rejected by the connection trust fence' } }, rejection);
+					}
 					const url = new URL(req.url, 'http://local');
 					await ready;
 					if (booted === null) {
@@ -2856,7 +2878,9 @@ export function apply(ctx, config = {}) {
 			try { removeDiagSink(); } catch { /* sink already replaced */ }
 			try { disposeShellGuard(); } catch { /* already disposed */ }
 			try { disposeStopGuard(); } catch { /* already disposed */ }
-			const cleanup = [];
+			// 在途的 boot 也算本组合的资源：等它落定（落定时见 disposed 会自行关账本），
+			// 否则下一组合抢在关锁之前打开同一账本。
+			const cleanup = [ready.then(() => undefined, () => undefined)];
 			for (const client of sseClients) {
 				try { client.res.end(); } catch { /* socket already gone */ }
 			}

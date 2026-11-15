@@ -40,6 +40,7 @@ test('a corrupt projects.json lands in the diagnostic log as registry.corrupt.fa
 		effect(fn) { disposeEffect = fn(); },
 		on() { return () => {}; },
 		get(id) {
+			if (id === 'connection') return { requestRejection: () => undefined };
 			if (id === 'webServer') return { register(route) { routes.push(route); return () => {}; } };
 			if (id === 'permissionPresets') {
 				return {
