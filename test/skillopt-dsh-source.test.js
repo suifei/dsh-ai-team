@@ -68,8 +68,25 @@ test('dsh source skips the SkillOpt subagents that answer, judge or generate in 
 		child('answer-1', 'skillopt-reviewer-handoff-846de7a7f7d2943d');
 		child('judge-1', 'skillopt-judge-job1-1');
 		child('wave-1', 'moyuan-tail267');
+		// il2c night 8：PMO 被作答子代理逐个唤醒，自己又派了 23 个子代理去答题（label 是 agent-N）。
+		writeSession(home, '--ws-il2c--', [
+			header('pmo-answer-1', workspace, { parentSession: 'session-team-host-x', origin: 'subagent' }),
+			descriptor('agent-71'),
+			user(2, `读文件 ${workspace}\\.skillopt-sleep-handoff\\PROMPTS.md 中 id 2722860529e1 的题面并作答`),
+			assistant(3, [{ type: 'text', text: '[]' }]),
+			user(4, '继续'),
+			assistant(5, [{ type: 'text', text: 'ok' }]),
+		]);
+		// 正常团队会话里后来顺带提到 handoff 目录：不因此丢掉整段团队工作。
+		writeSession(home, '--ws-il2c--', [
+			header('lead-1', workspace),
+			user(1, '给 csvstat 补齐 GBK 边界用例，verify.ps1 -Only csvstat 必须通过'),
+			assistant(2, [{ type: 'text', text: '已补齐。' }]),
+			user(3, '顺便看下 .skillopt-sleep-handoff 里还有没有待答题'),
+			assistant(4, [{ type: 'text', text: '没有。' }]),
+		]);
 		const digests = harvest(home, workspace);
-		assert.deepEqual(digests.map((d) => d.session_id), ['wave-1'], 'a team subagent still counts');
+		assert.deepEqual(digests.map((d) => d.session_id).sort(), ['lead-1', 'wave-1'], 'team work still counts; engine work does not, whoever spawned it');
 	} finally {
 		rmSync(home, { recursive: true, force: true });
 	}

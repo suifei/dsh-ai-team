@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.113 - 2026-11-16
+
+**dsh 来源也跳过「替引擎答题」的会话，不论谁派的**
+
+- il2c night 8（0.4.109，作答子代理仍逐个唤醒 PMO）：PMO 被唤醒后自己派了 23 个子代理去答 handoff 题
+  （「读文件 …\.skillopt-sleep-handoff\PROMPTS.md 中 id …」），label 是 `agent-N`，0.4.109 按 `skillopt-*` label
+  的过滤挡不住；night 9 因此钉入 33 个会话，其中 23 个是这类引擎工作；
+- `harvest_dsh`：会话的**第一条**意图指向 `.skillopt-sleep-handoff` 即整段跳过；团队会话里后来顺带提到不受影响。
+  实机同一 72 小时窗口：33 → 10（与作答子代理出现前一致）；
+- 根因（PMO 被逐个唤醒）已由 0.4.111 的 caller 投递消除：night 9 触发后 PMO 宿主会话的「子智能体已完成」通知
+  保持 382 条不变；
+- 测试：`test/skillopt-dsh-source.test.js` 扩充 1 例（去掉修复即失败）；
+
 ## 0.4.112 - 2026-11-16
 
 **任务记录同样打开即在最新回帖（#33 后续）**
