@@ -50,6 +50,31 @@ function harvest(home, project, since = '') {
 	return JSON.parse(run.stdout);
 }
 
+test('dsh source skips the SkillOpt subagents that answer, judge or generate in the project directory', { skip }, () => {
+	// il2c 实机：一个 handoff 夜间之后 39 个新会话里 38 个是 skillopt-* 一次性子代理，题面以
+	// user 消息投递；不跳过就会把「回答 SkillOpt 题目」挖成团队的任务。
+	const home = mkdtempSync(join(tmpdir(), 'skillopt-dsh-'));
+	const workspace = join(home, 'ws', 'il2c');
+	try {
+		const descriptor = (label) => ev('subagent/descriptor', 0, { version: 3, mode: 'continuable', provider: 'spawn', label });
+		const child = (id, label) => writeSession(home, '--ws-il2c--', [
+			header(id, workspace, { parentSession: 'session-team-host-x', origin: 'subagent' }),
+			descriptor(label),
+			user(2, "You are mining a user's past AI-assistant sessions to find RECURRING tasks"),
+			assistant(3, [{ type: 'text', text: '[]' }]),
+			user(4, 'and score it again'),
+			assistant(5, [{ type: 'text', text: '{"score": 0.5}' }]),
+		]);
+		child('answer-1', 'skillopt-reviewer-handoff-846de7a7f7d2943d');
+		child('judge-1', 'skillopt-judge-job1-1');
+		child('wave-1', 'moyuan-tail267');
+		const digests = harvest(home, workspace);
+		assert.deepEqual(digests.map((d) => d.session_id), ['wave-1'], 'a team subagent still counts');
+	} finally {
+		rmSync(home, { recursive: true, force: true });
+	}
+});
+
 test('dsh source digests the sessions opened in the project, member sessions included', { skip }, () => {
 	const home = mkdtempSync(join(tmpdir(), 'skillopt-dsh-'));
 	const workspace = join(home, 'ws', 'il2c');
