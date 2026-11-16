@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.106 - 2026-11-16
+
+**handoff 自动作答实机两处缺陷**
+
+- **推进纪律误伤一次性子代理**：作答子代理是 PMO 宿主的子会话，0.4.101 的纪律段与纠偏按父会话认它为团队会话。
+  il2c 实机：题面引用会话原文「tonight or tomorrow」，纠偏插入后子代理转去调 `skillopt_status`，答案作废。
+  现在按 `subagent/descriptor` 的 label（`skillopt-*`：判官、生成、handoff 作答）排除，宿主启动时也直接登记；
+- **已结束的子代理一直判「在跑」**：回合 16:39:59 已结束，`observeChild` 在 agents/sessions 里都查不到它，
+  兜底返回 running。作答改走评审子代理实测可用的 `activation.result`（`awaitActivationText`），文本按 childId
+  收在内存；插件重启丢失的按 15 分钟 TTL 重问；
+- 测试：`test/team-discipline.test.js` 新增 1 例（去掉修复即失败）；
+
 ## 0.4.105 - 2026-11-16
 
 **夜间 SkillOpt 环（handoff 后端）由评审官自动作答，不再停在「有待回答」**
