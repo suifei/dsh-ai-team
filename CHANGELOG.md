@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.109 - 2026-11-16
+
+**dsh 来源不再采 SkillOpt 自己的子代理会话**
+
+- handoff 作答、判官、生成子代理都在项目工作区里运行，`dsh` 来源按 `cwd` 认项目，会把它们当成团队会话：
+  题面以 `user` 消息投递，被挖成「回答 SkillOpt 题目」的任务。il2c 实机：一个 handoff 夜间后 17:00 起 39 个
+  新会话里 38 个是 `skillopt-*` 子代理，采集得到 33 个摘要；
+- `harvest_dsh` 遇到 label 以 `skillopt-` 开头的 `subagent/descriptor` 即跳过该会话（团队派生的其它子代理照采）。
+  实机：17:00 起只剩团队宿主会话 1 个，72 小时窗口 10 个（与作答子代理出现前一致）；
+- 测试：`test/skillopt-dsh-source.test.js` 新增 1 例（去掉修复即失败）；
+
 ## 0.4.108 - 2026-11-16
 
 **handoff 作答题面原样转交**

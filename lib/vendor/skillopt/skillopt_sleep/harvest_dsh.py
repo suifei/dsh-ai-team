@@ -55,6 +55,8 @@ DECODER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dsh_decode.m
 # Host bookkeeping (``time-context``, ``runtime-context``, ``skill-catalog``,
 # ``agent-instructions``, ``subagent-settled``, ``tool-jobs``, …) is not intent.
 _INTENT_SOURCES = {"", "user", "agent-message", "ai-team"}
+# Label prefix of the AI-team plugin's SkillOpt subagents (subagent/descriptor).
+_ENGINE_LABEL_PREFIX = "skillopt-"
 _RELAY_PREFIX = re.compile(r"^Agent \S+ sent a message:\s*")
 # AI-team activation prompts start with the member's identity block
 # (``memberIdentity`` in lib/domain/member-profile.js: "你是 <名>（<角色>）。"
@@ -178,6 +180,13 @@ def digest_dsh_session(path: str, *, node: str, project: str = "") -> Optional[S
                 ended = stamp
             rtype = rec.get("type")
             data = rec.get("data") if isinstance(rec.get("data"), dict) else {}
+            if rtype == "subagent/descriptor" and str(data.get("label") or "").startswith(_ENGINE_LABEL_PREFIX):
+                # The engine's own one-shot children (handoff answers, judges,
+                # generators) run in the project directory too; their prompt is
+                # a SkillOpt task, not the team's work. Mining them teaches the
+                # loop to answer SkillOpt prompts (il2c: 38 of 39 sessions in one
+                # handoff night).
+                return None
             if rtype == "user/message":
                 source = data.get("source") if isinstance(data.get("source"), dict) else {}
                 kind = str(source.get("kind") or "")
