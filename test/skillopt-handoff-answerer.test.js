@@ -81,7 +81,7 @@ test('each pending call is answered by its own one-shot child, then the schedule
 		assert.equal(host.started.length, 3, 'concurrency cap');
 		assert.ok(host.started.every((row) => row.label.startsWith('skillopt-reviewer-handoff-')));
 		assert.ok(host.started.every((row) => row.request.cwd === ws));
-		assert.match(host.started[0].request.prompt, /不要调用工具[\s\S]*\n\nPROMPT a1$/, 'the engine prompt is passed whole, after the answer rule');
+		assert.equal(host.started[0].request.prompt, 'PROMPT a1', 'the engine prompt is passed verbatim, with no preamble');
 
 		host.settleAll();
 		step = await stepHandoff({ workspace: ws, deps: { ...host.deps, concurrency: 3 } });
