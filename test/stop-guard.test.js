@@ -65,3 +65,17 @@ test('SkillOpt one-shot children may not call any tool; other sessions are untou
 	assert.equal(guard({ name: 'pwsh', agent: { id: 'answer-1' } }), undefined, 'a guard error never breaks a call');
 	dispose();
 });
+
+test('SkillOpt one-shot children return their result to the caller only, so the PMO is not woken per child', async () => {
+	// il2c 11-16：作答/判官子代理用 parent 投递，PMO 宿主 16:30 起收到 104 条「子智能体已完成」，开了 51 个回合。
+	const { readFileSync } = await import('node:fs');
+	const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+	for (const path of ['lib/skillopt/job-runner.js', 'lib/skillopt/judge-runner.js', 'lib/skillopt/optimize-wiring.js']) {
+		assert.doesNotMatch(read(path), /delivery: 'parent'/, path);
+		assert.match(read(path), /delivery: 'caller'/, path);
+	}
+	const index = read('index.js');
+	const handoff = index.slice(index.indexOf('const answerHandoff'), index.indexOf('const pmoTick'));
+	assert.match(handoff, /delivery: 'caller'/, 'handoff answers');
+	assert.match(read('lib/runtime/member-runtime.js'), /delivery: 'parent'/, 'members still report to the PMO');
+});

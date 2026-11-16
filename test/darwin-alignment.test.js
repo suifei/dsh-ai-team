@@ -139,7 +139,8 @@ test('judge-runner: spawns N independent subagents and aggregates majority', asy
 	const result = await judgePair({ before: 'OLD', after: 'NEW', subagents, parent: { id: 'p' }, provider: 'local', cwd: 'E:/works/probe', votes: 3, random });
 	assert.equal(activations.length, 3, 'three independent judge activations');
 	assert.equal(activations[0].label, 'skillopt-judge-1');
-	assert.equal(activations[0].delivery, 'parent');
+	// 判官结果只交回调用方：parent 投递会给 PMO 发「子智能体已完成」并唤醒它（il2c 11-16：16:30 起 104 条通知、51 个 PMO 回合）。
+	assert.equal(activations[0].delivery, 'caller');
 	assert.equal(result.verdict, 'keep');
 	assert.equal(result.better, 2);
 	assert.equal(result.worse, 1);

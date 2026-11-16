@@ -1168,7 +1168,7 @@ export function apply(ctx, config = {}) {
 							provider: resolveSubagentProviderName(serviceOf(ctx, 'subagents'), config?.subagentProviderName),
 							label,
 							request: { cwd: answerCwd, prompt: [{ type: 'text', text: request.prompt }], parent: parentInfo?.agent },
-							delivery: 'parent',
+							delivery: 'caller',
 							signal: new AbortController().signal,
 						}));
 						const childId = activation.childId;
