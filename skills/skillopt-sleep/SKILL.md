@@ -71,6 +71,13 @@ result — to verify a fix, unblock a card, or answer "did the loop work?" — r
 task's last result and the `cron.log` timestamp: a trigger that fires every
 night can still fail every night.
 
+With `backend=handoff` the engine stops with exit 3 whenever model calls need
+answers (`<project>/.skillopt-sleep-handoff/pending.json`). The AI team answers
+them automatically: on each PMO tick, one fresh one-shot reviewer subagent per
+call writes `answers/<id>.md`, then the scheduled `run.ps1` is rerun to resume.
+Do not answer these prompts from a member session — its history contaminates the
+held-out gate. Exit 3 in the task result means "waiting for answers", not failure.
+
 ## Parameters
 
 | Parameter | Default | Meaning |

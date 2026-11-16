@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.105 - 2026-11-16
+
+**夜间 SkillOpt 环（handoff 后端）由评审官自动作答，不再停在「有待回答」**
+
+- handoff 后端每轮把需要模型回答的调用写进 `<workspace>/.skillopt-sleep-handoff/pending.json` 后以退出码 3 停下，
+  此前插件里没有人作答——il2c 实机切到 `dsh` 来源后第一晚就停在 10 题待答，计划任务结果码一直是 3；
+- 新增 `lib/skillopt/handoff-answerer.js`，由 PMO tick 驱动（与 job 收割一样不受 pmoAuto/停止门约束）：
+  每题起一个评审官身份的**一次性**子代理作答（引擎要求每题新上下文，长驻成员会话的历史会污染留出验证门），
+  最多 3 个并行；空答或 15 分钟未答重问一次，仍失败记 `skillopt.handoff.blocked`、不重跑；
+- 收齐后重跑计划任务写下的 `<workspace>/.skillopt-sleep/run.ps1`（与 03:17 触发同一条命令，输出进 cron.log），
+  引擎从答案目录续跑；换一批题就再答再跑，同一批只重跑一次（未推进记 `skillopt.handoff.stalled`）；
+- 日志：`skillopt.handoff.ask/answered/empty/timeout/blocked/rerun/rerun.done/stalled`；
+- 测试：`test/skillopt-handoff-answerer.test.js` 4 例；
+
 ## 0.4.104 - 2026-11-16
 
 **切到 dsh 来源后的两处实机缺陷**
