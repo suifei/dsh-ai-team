@@ -109,21 +109,29 @@ def _delete_win_task(task_name: str) -> bool:
         return False
 
 
+def _parse_win_task_names(csv_text: str) -> List[str]:
+    """SkillOpt task names from ``schtasks /query /fo csv`` output.
+
+    schtasks reports task paths (``"\\SkillOpt-Sleep-…"`` for a root-folder
+    task); matching the bare prefix against the path never found one, so the
+    listing was always empty even with tasks installed.
+    """
+    tasks: List[str] = []
+    for line in csv_text.splitlines():
+        if not line.startswith('"'):
+            continue
+        name = line.split(",", 1)[0].strip('"').lstrip("\\")
+        if name.startswith("SkillOpt-Sleep-") and name not in tasks:
+            tasks.append(name)
+    return tasks
+
+
 def _list_win_tasks() -> List[str]:
     try:
         proc = _run_schtasks(["/query", "/fo", "csv"])
         if proc.returncode != 0:
             return []
-        tasks = []
-        for line in proc.stdout.splitlines():
-            if not line.startswith('"'):
-                continue
-            parts = line.split(",")
-            if len(parts) > 0:
-                name = parts[0].strip('"')
-                if name.startswith("SkillOpt-Sleep-"):
-                    tasks.append(name)
-        return tasks
+        return _parse_win_task_names(proc.stdout or "")
     except Exception:
         return []
 
