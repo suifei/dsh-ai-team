@@ -11,6 +11,7 @@
 import { planDispatch, planTaskNudges } from './lib/host/pmo.js';
 import { pmoHasNews } from './lib/ledger/fold.js';
 import { homedir } from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
@@ -55,6 +56,7 @@ import { describeCauseChain } from './lib/runtime/error-chain.js';
 import { classifyWakeFailure, isMalformedTurnError } from './lib/runtime/wake-failure.js';
 import { registerShellGuard } from './lib/runtime/shell-guard.js';
 import { registerStopGuard } from './lib/runtime/stop-guard.js';
+import { registerTeamDiscipline } from './lib/runtime/deferral-guard.js';
 import { createActivationBudget } from './lib/runtime/activation-budget.js';
 import { blocksActivation, probeProviderRegistration } from './lib/runtime/subagent-probe.js';
 import { isRuntimeUnavailableFailure, resolveSubagentProviderName } from './lib/runtime/subagent-provider.js';
@@ -69,7 +71,7 @@ export const name = 'ai-team';
 /** The workbench only makes sense where the Web carrier exists. */
 // cordis 按 inject 保证属性注入；未声明的属性访问会抛错，因此这里列全插件
 // 实际使用的服务（含可选服务：缺失时 serviceOf 回退 ctx.get 并返回 undefined）。
-export const inject = ['webServer', 'connection', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'];
+export const inject = ['webServer', 'connection', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions', 'systemPrompt'];
 
 // 版本号只有一处真源：package.json。硬编码字面量曾让 /health 在升版后仍报旧版本，
 // 误导「运行实例是否加载了新代码」的判断。
@@ -354,6 +356,18 @@ export function apply(ctx, config = {}) {
 				const member = Object.values(runtime.service.state.members ?? {})
 					.find((entry) => entry.sessionId === sessionId);
 				if (member !== undefined) return runtime;
+			}
+			return null;
+		};
+		/** 会话属于哪个团队（PMO 宿主会话或成员会话）：停止守卫与推进纪律共用这一份判定。 */
+		const teamProjectOf = (sessionId) => {
+			for (const runtime of booted?.runtimes?.values() ?? []) {
+				const state = runtime.service.state;
+				const inTeam = state.hostSessionId === sessionId
+					|| Object.values(state.members ?? {}).some((member) => member?.sessionId === sessionId);
+				if (!inTeam) continue;
+				const project = state.projects?.[runtime.id];
+				return { projectId: runtime.id, projectName: project?.name ?? '', stopped: project?.runState === 'stopped' };
 			}
 			return null;
 		};
@@ -673,8 +687,22 @@ export function apply(ctx, config = {}) {
 		// 成员投影一旦 session-bound 就永远是 running；补派若拿它判忙，就永远不派（#18：
 		// il2c 2997 次唤醒里 pmo_dispatch 为 0）。进程内状态，重启即清空——重启时本就没有回合在跑。
 		const turnsInFlight = new Set();
+		// 团队推进纪律：系统提示词段 + 回合收尾时纠偏「把行动挂在钟点上」（il2c：「今夜 03:17 自然相裁决点」）。
+		let teamDiscipline = { observe: () => {}, dispose: () => {} };
+		try {
+			teamDiscipline = registerTeamDiscipline({
+				systemPrompt: serviceOf(ctx, 'systemPrompt'),
+				on: typeof ctx.on === 'function' ? (name, listener) => ctx.on(name, listener) : undefined,
+				teamProjectOf,
+				diag,
+				newId: randomUUID,
+			});
+		} catch (error) {
+			diag.append({ ev: 'team.discipline.fail', message: error?.message ?? String(error) });
+		}
 		const offSessionEvent = typeof ctx.on === 'function'
 			? ctx.on('session/event', async (session, event) => {
+				try { teamDiscipline.observe(session, event); } catch { /* 观察失败不影响事件流 */ }
 				if (typeof session?.id === 'string') {
 					if (event?.type === 'turn/start') turnsInFlight.add(session.id);
 					else if (event?.type === 'turn/end') turnsInFlight.delete(session.id);
@@ -1777,17 +1805,6 @@ export function apply(ctx, config = {}) {
 		// 子智能体——实机停止后 PMO 收到「成员被停」通知，又用 send_message 把成员续跑了 25 分钟。
 		let disposeStopGuard = () => {};
 		try {
-			const teamProjectOf = (sessionId) => {
-				for (const runtime of booted?.runtimes?.values() ?? []) {
-					const state = runtime.service.state;
-					const inTeam = state.hostSessionId === sessionId
-						|| Object.values(state.members ?? {}).some((member) => member?.sessionId === sessionId);
-					if (!inTeam) continue;
-					const project = state.projects?.[runtime.id];
-					return { projectId: runtime.id, projectName: project?.name ?? '', stopped: project?.runState === 'stopped' };
-				}
-				return null;
-			};
 			disposeStopGuard = registerStopGuard({ tools: tools ?? serviceOf(ctx, 'tools'), projectOf: teamProjectOf, diag });
 		} catch (error) {
 			diag.append({ ev: 'stop.guard.fail', message: error?.message ?? String(error) });
@@ -2878,6 +2895,7 @@ export function apply(ctx, config = {}) {
 			try { removeDiagSink(); } catch { /* sink already replaced */ }
 			try { disposeShellGuard(); } catch { /* already disposed */ }
 			try { disposeStopGuard(); } catch { /* already disposed */ }
+			try { teamDiscipline.dispose(); } catch { /* already disposed */ }
 			// 在途的 boot 也算本组合的资源：等它落定（落定时见 disposed 会自行关账本），
 			// 否则下一组合抢在关锁之前打开同一账本。
 			const cleanup = [ready.then(() => undefined, () => undefined)];

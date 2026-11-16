@@ -195,7 +195,7 @@ test('host mounts the workbench routes on a real default-project ledger', async 
 	try {
 		apply(ctx);
 		assert.equal(name, 'ai-team');
-		assert.deepEqual(inject, ['webServer', 'connection', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'], 'inject declares every service the plugin touches (cordis proxies need it)');
+		assert.deepEqual(inject, ['webServer', 'connection', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions', 'systemPrompt'], 'inject declares every service the plugin touches (cordis proxies need it)');
 		assert.equal(routes.length, 1);
 		const route = routes[0];
 		assert.equal(route.kind, 'prefix');

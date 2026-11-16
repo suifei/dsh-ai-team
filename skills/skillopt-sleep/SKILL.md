@@ -60,9 +60,16 @@ skillopt_run project=<dir> backend=<codex|claude|…> preferences="Prefer pytest
 # 4. review the report, then adopt
 skillopt_adopt project=<dir>
 
-# 5. schedule nightly at 03:17
+# 5. (optional) schedule nightly at 03:17 as a background safety net
 skillopt_schedule project=<dir> hour=3 minute=17 backend=<codex>
 ```
+
+**A schedule is a safety net, never a plan.** When the team needs a cycle's
+result — to verify a fix, unblock a card, or answer "did the loop work?" — run
+`skillopt_run` now and read its exit code and report. Do not wait for the next
+03:17 trigger, and do not declare a scheduled loop healthy without reading the
+task's last result and the `cron.log` timestamp: a trigger that fires every
+night can still fail every night.
 
 ## Parameters
 
