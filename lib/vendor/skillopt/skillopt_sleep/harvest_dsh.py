@@ -57,6 +57,10 @@ DECODER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "dsh_decode.m
 _INTENT_SOURCES = {"", "user", "agent-message", "ai-team"}
 # Label prefix of the AI-team plugin's SkillOpt subagents (subagent/descriptor).
 _ENGINE_LABEL_PREFIX = "skillopt-"
+# A session whose opening request works on the engine's handoff files is engine
+# work too, whoever spawned it: il2c night 8 had the PMO, woken by every answer
+# child, dispatch 23 subagents of its own ("read PROMPTS.md, id …").
+_ENGINE_WORK = re.compile(r"\.skillopt-sleep-handoff")
 _RELAY_PREFIX = re.compile(r"^Agent \S+ sent a message:\s*")
 # AI-team activation prompts start with the member's identity block
 # (``memberIdentity`` in lib/domain/member-profile.js: "你是 <名>（<角色>）。"
@@ -199,6 +203,8 @@ def digest_dsh_session(path: str, *, node: str, project: str = "") -> Optional[S
                 if not text or _HOST_NOISE.match(text) or _is_meta_prompt(text):
                     continue
                 n_user += 1
+                if n_user == 1 and _ENGINE_WORK.search(text):
+                    return None
                 user_prompts.append(text)
                 feedback.extend(_detect_feedback(text))
                 if kind == "ai-team":
