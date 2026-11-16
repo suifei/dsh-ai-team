@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.104 - 2026-11-16
+
+**切到 dsh 来源后的两处实机缺陷**
+
+- **handoff 夜间空钉永久复用**：handoff 后端把一轮采集到的会话钉在 `.skillopt-sleep-handoff/digests.json`，
+  下一轮直接复用以保护已有回答。「没挖出任务」分支只推进采集窗、不撤钉——il2c 14:26 一次 `auto` 来源的运行
+  留下空钉（0 个会话），之后每晚都复用它，切到 `dsh` 后 10 个在册会话照样 `no tasks mined`。现在无任务即撤钉
+  （此时没有待回答的调用，撤钉不丢任何东西）；
+- **「列出已排程的项目」仍为空**：0.4.103 修了解码，但 schtasks 报的是任务路径 `"\SkillOpt-Sleep-…"`，按裸前缀
+  匹配永远不中。解析抽成 `_parse_win_task_names` 并去掉前导 `\`；实机 A/B：修复前 `[]`，修复后列出
+  `SkillOpt-Sleep-12d591e63a2d03aa9d7f`；
+- 测试：`test/skillopt-dsh-source.test.js` 新增 2 例（隔离 HOME 跑两晚 `run --backend handoff --source dsh`，去掉修复即
+  失败；用实机 schtasks 输出样本解析任务名）；
+
 ## 0.4.103 - 2026-11-16
 
 **夜间 SkillOpt 环能从 DSH 会话里学习**

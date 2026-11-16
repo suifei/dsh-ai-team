@@ -480,6 +480,14 @@ def _handoff_mine_and_pin(cfg, args, backend, snapshot: str, dry: bool):
             # branch, or every later run re-scans the same stale window.
             state.set_last_harvest(project, started, source)
             state.save()
+            # The digest pin only protects answers of an unfinished round; with
+            # no tasks there are none. A kept pin is replayed every later night
+            # instead of harvesting (il2c: an empty pin from one `auto` run made
+            # every `dsh` night report "no tasks mined" over 10 live sessions).
+            try:
+                os.remove(digests_path)
+            except OSError:
+                pass
         return 0, None
     payload = make_tasks_payload(
         tasks,

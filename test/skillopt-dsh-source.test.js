@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -134,6 +134,52 @@ test('dsh is a supported transcript source; the CLI accepts it', { skip }, () =>
 	].join('\n')], { encoding: 'utf8' });
 	assert.equal(run.status, 0, run.stderr);
 	assert.equal(run.stdout.trim(), 'dsh');
+});
+
+test('a handoff night with no tasks drops its digest pin, so the next night harvests again', { skip }, () => {
+	// il2c 实机：一次 auto 来源的运行留下空的 .skillopt-sleep-handoff/digests.json，之后每晚都复用这个
+	// 空钉而不采集——10 个在册 DSH 会话照样「no tasks mined」。
+	const home = mkdtempSync(join(tmpdir(), 'skillopt-dsh-'));
+	const workspace = join(home, 'ws', 'p');
+	const pin = join(workspace, '.skillopt-sleep-handoff', 'digests.json');
+	try {
+		mkdirSync(join(workspace, '.skillopt-sleep-handoff'), { recursive: true });
+		writeFileSync(pin, '[]');
+		writeSession(join(home, '.dsh'), '--p--', [
+			header('lead-1', workspace),
+			user(1, '给 csvstat 补齐 GBK 与 UTF-16 的边界用例，verify.ps1 -Only csvstat 必须通过'),
+			assistant(2, [{ type: 'text', text: '已补齐，门禁通过。' }]),
+			user(3, '再把 encodingall 的用例覆盖到 Latin-1'),
+			assistant(4, [{ type: 'text', text: '已覆盖。' }]),
+		]);
+		const env = { ...process.env, USERPROFILE: home, HOME: home, DSH_HOME: join(home, '.dsh'), DSH_NODE: process.execPath };
+		const night = () => spawnSync(python, ['-X', 'utf8', '-m', 'skillopt_sleep', 'run', '--project', workspace, '--backend', 'handoff', '--source', 'dsh', '--lookback-hours', '0'], { cwd: vendor, env, encoding: 'utf8' });
+
+		const first = night();
+		assert.match(first.stdout + first.stderr, /no tasks mined/, 'the stale empty pin is replayed once');
+		assert.equal(existsSync(pin), false, 'and then dropped');
+
+		rmSync(join(home, '.skillopt-sleep'), { recursive: true, force: true }); // 只为让第二晚重扫同一会话
+		const second = night();
+		assert.doesNotMatch(second.stdout + second.stderr, /no tasks mined/);
+		const pinned = JSON.parse(readFileSync(pin, 'utf8'));
+		assert.deepEqual(pinned.map((d) => d.session_id), ['lead-1'], 'the DSH session is harvested and pinned for the round');
+	} finally {
+		rmSync(home, { recursive: true, force: true });
+	}
+});
+
+test('installed SkillOpt tasks are listed: schtasks reports task paths with a leading backslash', { skip }, () => {
+	// 实机 schtasks /query /fo csv（CP936 解码后）：表头是中文，任务名是带 \ 的路径。
+	const sample = ['"任务名","下次运行时间","模式"', '"\\aidrama-pass","N/A","就绪"', '"\\SkillOpt-Sleep-12d591e63a2d03aa9d7f","2026/11/17 3:17:00","就绪"', '', '文件夹: \\Microsoft'].join('\r\n');
+	const run = spawnSync(python, ['-X', 'utf8', '-c', [
+		'import json, sys',
+		`sys.path.insert(0, ${JSON.stringify(vendor)})`,
+		'from skillopt_sleep import scheduler',
+		`print(json.dumps(scheduler._parse_win_task_names(${JSON.stringify(sample)})))`,
+	].join('\n')], { encoding: 'utf8' });
+	assert.equal(run.status, 0, run.stderr);
+	assert.deepEqual(JSON.parse(run.stdout), ['SkillOpt-Sleep-12d591e63a2d03aa9d7f']);
 });
 
 test('schtasks output is decoded in the console code page, so UTF-8 mode still lists tasks', { skip: process.platform !== 'win32' ? 'Windows only' : skip }, () => {
