@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.4.103 - 2026-11-16
+
+**夜间 SkillOpt 环能从 DSH 会话里学习**
+
+- **新增 `dsh` 会话来源**：引擎此前只认 claude/codex/copilot/cursor/pi/opencode，DeepSeek Harness 的会话
+  （含文渊阁成员）一条也读不到——il2c 里 agent 写进 `~/.skillopt-sleep/config.json` 的
+  `transcript_source: "dsh_team"` 让引擎每晚报 `Unknown transcript source`，删掉后又只扫到 0 个会话。
+  `harvest_dsh.py` 读 `<DSH_HOME>/sessions/*/*/session.v4.jsonl.zstd`：按会话头的 `cwd` 匹配项目（只解码
+  首行即可排除别的项目）。`user/message` 按 `source.kind` 取意图：`user`（人）、`agent-message`（文渊阁的
+  任务唤醒以 relay 投递，il2c 成员会话 37 条 relay 对 1 条 user）、`ai-team`（插件纠偏，同时记为负反馈
+  `neg:ai-team-correction`）；`time-context` / `runtime-context` / `skill-catalog` / `subagent-settled` 等宿主
+  记账不算意图。激活提示词开头的成员身份段（「你是 X（角色）。你的个性与工作方式：…」）剥掉再挖——未剥时
+  il2c 16 个任务里 6 个是个性描述。助手只收 `text`（`reasoning` 不进摘要），工具只记名字不抄参数；上次
+  采集之后未写过的日志不解码；正在写的会话末尾半帧安全跳过（逐帧解码，整流解码会连带丢掉同块已解出的帧）。
+  zstd 由 Node 解码（`dsh_decode.mjs`；Python 3.11 标准库无 zstd），Node 取 `dsh_node` 配置 / `DSH_NODE` /
+  PATH（DSH 自带 `resources/runtime/primary-runtime/dependencies/node/bin/node.exe`）；会话目录取 `dsh_home` /
+  `DSH_HOME` / `~/.dsh`。实测 il2c 最近 72 小时：只读 `harvest --source dsh` 18 秒挖出 13 个任务；
+- **schtasks 输出按控制台代码页解码**：UTF-8 模式下（`-X utf8`）`text=True` 把 CP936 输出按 UTF-8 解，
+  读线程抛 `UnicodeDecodeError`、`stdout` 为 `None`，「列出已排程的项目」静默返回空。三处调用改走
+  `_run_schtasks`（OEM 代码页 + `errors="replace"`）；
+- 打包：`files` 补 `lib/vendor/skillopt/skillopt_sleep/**/*.mjs`（`lib/**/*.js` 不含 `.mjs`）；
+- 测试：新增 `test/skillopt-dsh-source.test.js`（多帧 zstd + 半帧尾、项目匹配、注入与推理过滤、身份段剥离、
+  按修改时间跳过、CLI 接受 `dsh`、schtasks UTF-8 模式）；
+
 ## 0.4.102 - 2026-11-16
 
 **DSH Desktop 侧边栏缺「文渊阁」入口（#26）**

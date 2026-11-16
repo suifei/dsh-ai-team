@@ -77,7 +77,7 @@ night can still fail every night.
 |---|---|---|
 | `project` | config or cwd | project directory to evolve |
 | `backend` | `mock` | `mock\|claude\|codex\|copilot\|cursor\|pi\|opencode\|handoff\|azure_openai` (mock = no model calls) |
-| `source` | config | transcript source: `claude\|codex\|copilot\|cursor\|pi\|opencode\|auto` |
+| `source` | config | transcript source: `claude\|codex\|copilot\|cursor\|pi\|opencode\|dsh\|auto` — `dsh` reads DeepSeek Harness sessions (AI-team members included) whose working directory is the project; schedule it with `project=<workspace>` |
 | `model` | backend default | replay model override |
 | `maxTasks` | 40 | mined-task cap |
 | `preferences` | empty | house rules for the reflection prior (e.g. "always use async/await") |

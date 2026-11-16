@@ -65,11 +65,37 @@ def _win_task_name(project: str) -> str:
     return f"SkillOpt-Sleep-{digest}"
 
 
+def _console_encoding() -> str:
+    """The code page schtasks.exe writes its output in.
+
+    schtasks prints in the console OEM code page (CP936 on a Chinese system),
+    not in Python's preferred encoding. Under UTF-8 mode (``-X utf8`` /
+    ``PYTHONUTF8=1``) ``text=True`` decoded that output as UTF-8: the reader
+    thread raised UnicodeDecodeError and ``proc.stdout`` came back ``None``, so
+    ``_list_win_tasks`` silently listed nothing.
+    """
+    try:
+        import ctypes
+
+        return f"cp{ctypes.windll.kernel32.GetOEMCP()}"
+    except Exception:
+        return "mbcs" if sys.platform == "win32" else "utf-8"
+
+
+def _run_schtasks(args: List[str]) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["schtasks", *args],
+        capture_output=True,
+        text=True,
+        encoding=_console_encoding(),
+        errors="replace",
+    )
+
+
 def _create_win_task(task_name: str, command: str, hour: int, minute: int) -> bool:
     try:
         st = f"{hour:02d}:{minute:02d}"
-        cmd = ["schtasks", "/create", "/tn", task_name, "/tr", command, "/sc", "daily", "/st", st, "/f"]
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = _run_schtasks(["/create", "/tn", task_name, "/tr", command, "/sc", "daily", "/st", st, "/f"])
         return proc.returncode == 0
     except Exception:
         return False
@@ -77,8 +103,7 @@ def _create_win_task(task_name: str, command: str, hour: int, minute: int) -> bo
 
 def _delete_win_task(task_name: str) -> bool:
     try:
-        cmd = ["schtasks", "/delete", "/tn", task_name, "/f"]
-        proc = subprocess.run(cmd, capture_output=True, text=True)
+        proc = _run_schtasks(["/delete", "/tn", task_name, "/f"])
         return proc.returncode == 0
     except Exception:
         return False
@@ -86,7 +111,7 @@ def _delete_win_task(task_name: str) -> bool:
 
 def _list_win_tasks() -> List[str]:
     try:
-        proc = subprocess.run(["schtasks", "/query", "/fo", "csv"], capture_output=True, text=True)
+        proc = _run_schtasks(["/query", "/fo", "csv"])
         if proc.returncode != 0:
             return []
         tasks = []
