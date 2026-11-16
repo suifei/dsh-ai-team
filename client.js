@@ -244,6 +244,7 @@ window.__ModuleLoader__.load({
 			notifyInbox: '新的待办已进入收件箱',
 			notifyWake: 'Agent 已唤醒',
 			notifyStream: '主对话有新消息',
+			streamUnseen: '{count} 条新消息',
 			notifyClose: '关闭通知',
 			workspaceRequired: '请先设置项目工作目录。',
 			workspaceSaved: '项目工作目录已保存。',
@@ -662,6 +663,7 @@ window.__ModuleLoader__.load({
 			notifyInbox: 'New inbox item',
 			notifyWake: 'Agent woken',
 			notifyStream: 'New main-stream message',
+			streamUnseen: '{count} new messages',
 			notifyClose: 'Dismiss notification',
 			workspaceRequired: 'Set the Project workspace first.',
 			workspaceSaved: 'Project workspace saved.',
@@ -1120,6 +1122,9 @@ window.__ModuleLoader__.load({
 			.at-banner b { color: var(--dsw-alias-state-warn-label); font-weight: 500; }
 			.at-stream { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 16px 18px 8px; scrollbar-width: thin; scrollbar-color: var(--dsw-alias-scrollbar-bg-l1) transparent; }
 			.at-streaminner { width: 100%; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+			.at-streamjumpanchor { position: relative; height: 0; }
+			.at-streamjump { position: absolute; left: 50%; bottom: 8px; z-index: 5; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; background: var(--dsw-alias-bg-layer-1); color: var(--dsw-alias-label-secondary); font: inherit; font-size: 12px; line-height: 18px; white-space: nowrap; cursor: pointer; box-shadow: var(--dsw-elevation-panel, 0 4px 12px var(--dsw-alias-bg-mask-2)); }
+			.at-streamjump:hover { color: var(--dsw-alias-label-primary); }
 			.at-msg { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
 			.at-avatar { flex: 0 0 auto; width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; background: var(--dsw-alias-bg-layer-3); color: var(--dsw-alias-label-secondary); font-size: 10px; font-weight: 500; }
 			.at-avatar-human { border-color: transparent; background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-inverted); }
@@ -1428,6 +1433,7 @@ window.__ModuleLoader__.load({
 			if (name === 'dot') return h('svg', common, h('circle', { cx: 8, cy: 8, r: 3.5, fill: 'currentColor', stroke: 'none' }));
 			if (name === 'layers') return h('svg', common, h('path', { d: 'M8 2.5 14 6 8 9.5 2 6Z' }), h('path', { d: 'M2 9.5 8 13l6-3.5' }));
 			if (name === 'chevron') return h('svg', common, h('path', { d: 'M6 3.5 10.5 8 6 12.5' }));
+			if (name === 'down') return h('svg', common, h('path', { d: 'M8 3v10M3.5 8.5 8 13l4.5-4.5' }));
 			if (name === 'loop') return h('svg', { width: 18, height: 18, viewBox: '0 0 32 32', fill: 'none', 'aria-hidden': 'true', focusable: 'false' }, h('rect', { x: 2.5, y: 5.5, width: 21, height: 21, rx: 6.5, stroke: 'currentColor', strokeWidth: 2.6 }), h('circle', { cx: 23.5, cy: 16, r: 4.8, fill: 'var(--dsw-alias-state-business-primary)' }));
 			return null;
 		}
@@ -2622,6 +2628,44 @@ window.__ModuleLoader__.load({
 				effortHint ? h('div', { className: 'at-fieldhint' }, effortHint) : null);
 		}
 
+		// <stream-follow>
+		/**
+		 * 主对话的「跟随最新」判定（#33：打开主对话总停在最早的消息，要手动拖到底）。
+		 * 只读写传入元素的 scrollTop/scrollHeight/clientHeight，不碰 DOM 结构，便于单测。
+		 *   - 打开主对话 / 切项目（reset）后贴底，内容晚到或变高时继续贴底；
+		 *   - 用户停在底部附近（≤ threshold）即视为跟随，新消息到达自动贴底；
+		 *   - 用户上翻后不动其位置（数据刷新不得改变用户滚动位置），只累计未读数，
+		 *     由「↓ N 条新消息」按钮（jump）回到底部。
+		 */
+		function createStreamFollower({ threshold = 48 } = {}) {
+			let pinned = true;
+			let unseen = 0;
+			let count = null;
+			const distance = (el) => el.scrollHeight - el.scrollTop - el.clientHeight;
+			const bottom = (el) => Math.max(0, el.scrollHeight - el.clientHeight);
+			return {
+				reset() { pinned = true; unseen = 0; count = null; },
+				onScroll(el) {
+					pinned = distance(el) <= threshold;
+					if (pinned) unseen = 0;
+					return unseen;
+				},
+				/** 消息数或内容变化后调用；返回 { scrollTo: number|null, unseen }。 */
+				onContent(el, nextCount) {
+					const grown = count === null ? 0 : Math.max(0, nextCount - count);
+					count = nextCount;
+					if (pinned) { unseen = 0; return { scrollTo: bottom(el), unseen }; }
+					unseen += grown;
+					return { scrollTo: null, unseen };
+				},
+				/** 布局变高（卡片展开、字体晚到）时调用：跟随中才贴底。 */
+				onResize(el) { return pinned ? bottom(el) : null; },
+				jump(el) { pinned = true; unseen = 0; return bottom(el); },
+				get pinned() { return pinned; },
+			};
+		}
+		// </stream-follow>
+
 		function Workbench({ t, ctx }) {
 			const [phase, setPhase] = React.useState('loading');
 			const [data, setData] = React.useState(null);
@@ -2776,6 +2820,42 @@ window.__ModuleLoader__.load({
 			const replyRef = React.useRef(null);
 			const triggerRef = React.useRef(null);
 			const mobileRef = React.useRef(null);
+			// #33 主对话跟随最新（算法见 createStreamFollower）。
+			const streamRef = React.useRef(null);
+			const followerRef = React.useRef(null);
+			if (followerRef.current === null) followerRef.current = createStreamFollower();
+			const [streamUnseen, setStreamUnseen] = React.useState(0);
+			const streamItems = Array.isArray(data?.stream) ? data.stream : [];
+			const streamTail = streamItems.length > 0 ? streamItems[streamItems.length - 1]?.id ?? '' : '';
+			const streamShown = scope === 'project' && tab === 'main';
+			React.useLayoutEffect(() => {
+				followerRef.current.reset();
+				setStreamUnseen(0);
+			}, [projectId, scope, tab]);
+			React.useLayoutEffect(() => {
+				const el = streamRef.current;
+				if (!streamShown || el === null || el === undefined) return;
+				const step = followerRef.current.onContent(el, streamItems.length);
+				if (step.scrollTo !== null) el.scrollTop = step.scrollTo;
+				setStreamUnseen(step.unseen);
+			}, [projectId, streamShown, streamItems.length, streamTail]);
+			React.useLayoutEffect(() => {
+				const el = streamRef.current;
+				const inner = el?.firstElementChild;
+				if (!streamShown || inner === null || inner === undefined || typeof ResizeObserver !== 'function') return undefined;
+				const observer = new ResizeObserver(() => {
+					const to = followerRef.current.onResize(el);
+					if (to !== null) el.scrollTop = to;
+				});
+				observer.observe(inner);
+				return () => observer.disconnect();
+			}, [projectId, streamShown, data !== null]);
+			const onStreamScroll = (event) => setStreamUnseen(followerRef.current.onScroll(event.currentTarget));
+			const jumpToLatest = () => {
+				const el = streamRef.current;
+				if (el !== null && el !== undefined) el.scrollTop = followerRef.current.jump(el);
+				setStreamUnseen(0);
+			};
 			// R-08 快捷键：composer 聚焦句柄 + `?` 帮助浮层开关。
 			const composerInputRef = React.useRef(null);
 			const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
@@ -4209,7 +4289,7 @@ window.__ModuleLoader__.load({
 					})
 					: tab === 'situation'
 						? h(Situation, { t, quadrants, tasks, onItem: openQuadrantItem, onViewAll: viewQuadrant })
-						: h('div', { className: 'at-stream', role: 'tabpanel', id: 'at-panel-main', 'aria-labelledby': 'at-tab-main' },
+						: h(React.Fragment, null, h('div', { className: 'at-stream', role: 'tabpanel', id: 'at-panel-main', 'aria-labelledby': 'at-tab-main', ref: streamRef, onScroll: onStreamScroll },
 							h('div', { className: 'at-streaminner', role: 'log', 'aria-live': 'polite', 'aria-label': t('streamAria') },
 								h(TeamPulse, { t, agents: data.agents, tasks, onOpen: openTask, onCancelAllPending: cancelAllPending, cancelBusy: cancelAllBusy }),
 								data.stream.length
@@ -4233,7 +4313,13 @@ window.__ModuleLoader__.load({
 										agents: data.agents,
 										onSetWorkspace: openWorkspaceEditor,
 										onExample: () => setDraft(t('emptyStreamExample')),
-									})));
+									}))),
+							// 零高度锚点 + 绝对定位按钮：不进文档流，不改变任何滚动位置。
+							streamUnseen > 0
+								? h('div', { className: 'at-streamjumpanchor' },
+									h('button', { className: 'at-streamjump', type: 'button', onClick: jumpToLatest },
+										h(Ico, { name: 'down', size: 12 }), tf(t, 'streamUnseen', { count: streamUnseen })))
+								: null);
 
 			return h('div', { className: 'at-root', role: 'region', 'aria-label': t('panel') },
 				h('div', { className: 'at-top' },
