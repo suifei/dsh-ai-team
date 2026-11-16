@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.110 - 2026-11-16
+
+**SkillOpt 一次性子代理只凭题面作答，不在真实工作区动手**
+
+- il2c night 8 实机：handoff 作答子代理继承 PMO 宿主的 `danger-full-access`，工作目录就是 il2c 工作区；
+  回放题里它真的去读仓库与账本「取证」后作答。这次挖出的任务恰好都是只读对账，若挖出「修复 csvstat 门禁」
+  这类任务，回放就会真改代码、写账本；
+- 宿主没有可编程的只读预设（默认只有 `workspace-write`+ask 与 `danger-full-access`），在工具层拦：新增
+  `registerOneShotToolGuard`（`tools.guard`），`skillopt-*` 一次性子代理（作答、判官、生成）的任何工具调用一律
+  拒绝，理由回给模型「只凭题面文字回答」；拦截行 `skillopt.oneshot.tool.blocked` 在发布默认 `errors` 级别可见；
+- 作答子代理的工作目录改为工作区之外的空目录（系统临时目录下 `dsh-ai-team-skillopt-answer`），项目 AGENTS.md
+  与仓库不进作答上下文；
+- 测试：`test/stop-guard.test.js` 新增 1 例；
+
 ## 0.4.109 - 2026-11-16
 
 **dsh 来源不再采 SkillOpt 自己的子代理会话**

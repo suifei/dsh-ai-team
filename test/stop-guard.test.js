@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AGENT_WAKE_TOOLS, registerStopGuard, stoppedTeamDenial } from '../lib/runtime/stop-guard.js';
+import { AGENT_WAKE_TOOLS, oneShotToolDenial, registerOneShotToolGuard, registerStopGuard, stoppedTeamDenial } from '../lib/runtime/stop-guard.js';
+import { registerTeamDiscipline } from '../lib/runtime/deferral-guard.js';
 import { isErrorEvent } from '../lib/diaglog.js';
 
 // 实机（il2c 11-14 20:14）：停止后成员回合被中断（生效），但 PMO 收到「成员被停」通知后
@@ -41,4 +42,26 @@ test('the guard registers on tools.guard, logs a visible row, and never breaks a
 	broken();
 	dispose();
 	assert.equal(typeof registerStopGuard({ tools: {} , projectOf }), 'function', 'no guard API: no-op disposer');
+});
+
+// il2c night 8：作答子代理继承 danger-full-access、工作目录即 il2c，回放题里真去读仓库与账本「取证」。
+test('SkillOpt one-shot children may not call any tool; other sessions are untouched', () => {
+	let guard = null;
+	const rows = [];
+	const discipline = registerTeamDiscipline({ teamProjectOf: (id) => (id === 'pmo-1' ? { projectId: 'prj_a', stopped: false } : null), newId: () => 'x' });
+	discipline.observe({ id: 'answer-1', header: { parentSession: 'pmo-1' } }, { type: 'subagent/descriptor', data: { label: 'skillopt-reviewer-handoff-846de7a7f7d2943d' } });
+	discipline.exempt('judge-1');
+	const dispose = registerOneShotToolGuard({ tools: { guard: (fn) => { guard = fn; return () => { guard = null; }; } }, isOneShot: discipline.isOneShot, diag: { append: (row) => rows.push(row) } });
+	for (const name of ['read_file', 'pwsh', 'write_file', 'team', 'skillopt_status']) {
+		assert.match(guard({ name, agent: { id: 'answer-1' } }), /只凭题面文字回答/, name);
+	}
+	assert.match(guard({ name: 'bash', agent: { id: 'judge-1' } }), /不得调用任何工具（bash）/);
+	assert.equal(guard({ name: 'pwsh', agent: { id: 'pmo-1' } }), undefined, 'the PMO itself keeps its tools');
+	assert.equal(guard({ name: 'pwsh', agent: { id: 'mem-9' } }), undefined);
+	assert.equal(oneShotToolDenial({ name: 'pwsh', agent: {} }, () => true), null, 'agentless calls are not judged');
+	assert.deepEqual(rows[0], { ev: 'skillopt.oneshot.tool.blocked', sessionId: 'answer-1', tool: 'read_file' });
+	assert.equal(isErrorEvent('skillopt.oneshot.tool.blocked'), true, 'visible at the shipped errors level');
+	registerOneShotToolGuard({ tools: { guard: (fn) => { guard = fn; return () => {}; } }, isOneShot: () => { throw new Error('boom'); } });
+	assert.equal(guard({ name: 'pwsh', agent: { id: 'answer-1' } }), undefined, 'a guard error never breaks a call');
+	dispose();
 });

@@ -10,7 +10,7 @@
  */
 import { planDispatch, planTaskNudges } from './lib/host/pmo.js';
 import { pmoHasNews } from './lib/ledger/fold.js';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -58,7 +58,7 @@ import { describeTaskContext, describeWake, planWakes } from './lib/host/waker.j
 import { describeCauseChain } from './lib/runtime/error-chain.js';
 import { classifyWakeFailure, isMalformedTurnError } from './lib/runtime/wake-failure.js';
 import { registerShellGuard } from './lib/runtime/shell-guard.js';
-import { registerStopGuard } from './lib/runtime/stop-guard.js';
+import { registerOneShotToolGuard, registerStopGuard } from './lib/runtime/stop-guard.js';
 import { registerTeamDiscipline } from './lib/runtime/deferral-guard.js';
 import { createActivationBudget } from './lib/runtime/activation-budget.js';
 import { blocksActivation, probeProviderRegistration } from './lib/runtime/subagent-probe.js';
@@ -691,7 +691,7 @@ export function apply(ctx, config = {}) {
 		// il2c 2997 次唤醒里 pmo_dispatch 为 0）。进程内状态，重启即清空——重启时本就没有回合在跑。
 		const turnsInFlight = new Set();
 		// 团队推进纪律：系统提示词段 + 回合收尾时纠偏「把行动挂在钟点上」（il2c：「今夜 03:17 自然相裁决点」）。
-		let teamDiscipline = { observe: () => {}, exempt: () => {}, dispose: () => {} };
+		let teamDiscipline = { observe: () => {}, exempt: () => {}, isOneShot: () => false, dispose: () => {} };
 		try {
 			teamDiscipline = registerTeamDiscipline({
 				systemPrompt: serviceOf(ctx, 'systemPrompt'),
@@ -1160,10 +1160,14 @@ export function apply(ctx, config = {}) {
 					diag: (row) => diag.append(row),
 					startChild: async (label, request) => {
 						const parentInfo = await ensureParent(projectRuntime);
+						// 作答在工作区之外的空目录里进行：项目 AGENTS.md / 仓库不进作答上下文，
+						// 工具调用另由 registerOneShotToolGuard 一律拒绝。
+						const answerCwd = join(tmpdir(), 'dsh-ai-team-skillopt-answer');
+						mkdirSync(answerCwd, { recursive: true });
 						const activation = await serviceOf(ctx, 'subagents').startActivation(activationSpec({
 							provider: resolveSubagentProviderName(serviceOf(ctx, 'subagents'), config?.subagentProviderName),
 							label,
-							request: { cwd: request.cwd, prompt: [{ type: 'text', text: request.prompt }], parent: parentInfo?.agent },
+							request: { cwd: answerCwd, prompt: [{ type: 'text', text: request.prompt }], parent: parentInfo?.agent },
 							delivery: 'parent',
 							signal: new AbortController().signal,
 						}));
@@ -1862,8 +1866,10 @@ export function apply(ctx, config = {}) {
 		// 停止即停：停止期间 PMO 与成员不得用宿主内置工具（send_message 等）互相唤醒或派生
 		// 子智能体——实机停止后 PMO 收到「成员被停」通知，又用 send_message 把成员续跑了 25 分钟。
 		let disposeStopGuard = () => {};
+		let disposeOneShotToolGuard = () => {};
 		try {
 			disposeStopGuard = registerStopGuard({ tools: tools ?? serviceOf(ctx, 'tools'), projectOf: teamProjectOf, diag });
+			disposeOneShotToolGuard = registerOneShotToolGuard({ tools: tools ?? serviceOf(ctx, 'tools'), isOneShot: (sessionId) => teamDiscipline.isOneShot?.(sessionId) === true, diag });
 		} catch (error) {
 			diag.append({ ev: 'stop.guard.fail', message: error?.message ?? String(error) });
 		}
@@ -2953,6 +2959,7 @@ export function apply(ctx, config = {}) {
 			try { removeDiagSink(); } catch { /* sink already replaced */ }
 			try { disposeShellGuard(); } catch { /* already disposed */ }
 			try { disposeStopGuard(); } catch { /* already disposed */ }
+			try { disposeOneShotToolGuard(); } catch { /* already disposed */ }
 			try { teamDiscipline.dispose(); } catch { /* already disposed */ }
 			// 在途的 boot 也算本组合的资源：等它落定（落定时见 disposed 会自行关账本），
 			// 否则下一组合抢在关锁之前打开同一账本。
