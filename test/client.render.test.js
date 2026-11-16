@@ -279,4 +279,31 @@ test('headless render: workbench main path evaluates every component without ref
 	walkStrings(tree3);
 	assert.deepEqual(oversize, [], 'no UI string may exceed 200 chars — long diagnostics belong in title attributes');
 	assert.deepEqual(stringified, [], 'no object may be stringified into UI text ([object Object]) — read .id/.name from catalog rows');
+
+	// #33 打开一条任务：Thread 面板（含 useFollowLatest）必须能渲染，滚动容器带上跟随接线。
+	let onOpen = null;
+	const findOpen = (node) => {
+		if (onOpen !== null || node === null || typeof node !== 'object') return;
+		if (Array.isArray(node)) { node.forEach(findOpen); return; }
+		if (typeof node.props?.onOpen === 'function') { onOpen = node.props.onOpen; return; }
+		if (Array.isArray(node.children)) node.children.forEach(findOpen);
+		else if (node.children !== undefined) findOpen(node.children);
+	};
+	findOpen(tree3);
+	assert.equal(typeof onOpen, 'function', 'a task card exposes onOpen');
+	onOpen({ id: 't1' });
+	mainRender();
+	const tree4 = mainRender();
+	let rbody = null;
+	const findBody = (node) => {
+		if (rbody !== null || node === null || typeof node !== 'object') return;
+		if (Array.isArray(node)) { node.forEach(findBody); return; }
+		if (node.props?.className === 'at-rbody') { rbody = node; return; }
+		if (Array.isArray(node.children)) node.children.forEach(findBody);
+		else if (node.children !== undefined) findBody(node.children);
+	};
+	findBody(tree4);
+	assert.ok(rbody, 'the thread panel renders after opening a task');
+	assert.equal(typeof rbody.props.onScroll, 'function', 'the thread body tracks the reader position');
+	assert.ok(rbody.props.ref && 'current' in rbody.props.ref, 'the thread body is measured through the follow hook');
 });
