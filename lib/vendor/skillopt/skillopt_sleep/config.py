@@ -34,6 +34,8 @@ DEFAULTS: Dict[str, Any] = {
     "vscode_workspace_storage": "",  # "" => auto-detect platform defaults
     "copilot_cli_session_store": "",  # "" => ~/.copilot/session-store.db
     "opencode_db": "",  # "" => OPENCODE_DB or the OpenCode XDG data path
+    "dsh_home": "",     # "" => DSH_HOME or ~/.dsh (DeepSeek Harness sessions)
+    "dsh_node": "",     # "" => DSH_NODE or `node` on PATH (decodes zstd session logs)
     # Explicit sources also include copilot, copilot_cli, cursor, pi, and opencode.
     # ``auto`` keeps the established Codex-then-Claude precedence.
     "transcript_source": "claude",
@@ -149,6 +151,11 @@ class SleepConfig:
     def cursor_projects_dir(self) -> str:
         cursor_home = os.path.abspath(os.path.expanduser(str(self.data["cursor_home"])))
         return os.path.join(cursor_home, "projects")
+
+    @property
+    def dsh_sessions_dir(self) -> str:
+        home = self.data.get("dsh_home", "") or os.environ.get("DSH_HOME", "") or "~/.dsh"
+        return os.path.join(os.path.abspath(os.path.expanduser(str(home))), "sessions")
 
     @property
     def copilot_cli_session_store(self) -> str:
