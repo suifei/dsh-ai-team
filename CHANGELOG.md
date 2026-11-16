@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.102 - 2026-11-16
+
+**DSH Desktop 侧边栏缺「文渊阁」入口（#26）**
+
+- `package.json` 的 `exports` 补上 `"./package.json"`。DSH Desktop 宿主没有 `loader.internal` 时，
+  `dsh-client-modules` 的 `locatePkgJson` 走 CJS 回退 `createRequire(baseUrl).resolve('<pkg>/package.json')`；
+  本包未导出该子路径 → `ERR_PACKAGE_PATH_NOT_EXPORTED` 被 `catch {}` 吞掉 → 客户端行静默丢弃，宿主半边照常，
+  只是侧边栏没有入口。CLI 宿主走 `loader.internal.resolveSync`，不受影响。
+- 测试：`test/manifest-locate.test.js` 用同一回退调用解析 manifest 与 `./client`（修复前 `ERR_PACKAGE_PATH_NOT_EXPORTED`）。
+  `node --test` 345 pass / 1 skip。
+- E2E（独立 `DSH_HOME`，dsh CLI 新建 profile 装包）：rc.1 / rc.2 / rc.3 上照搬回退分支判定，0.4.99 全部 `dropped`、
+  0.4.100 全部 `kept`；三个宿主带会话 cookie 启动，health 回读 0.4.100，页面清单含 `dsh-ai-team/client.js`，无 client-modules 报错。
+
 ## 0.4.101 - 2026-11-16
 
 **团队推进：不等钟点、不提前收兵、个性不膨胀、夜间环真跑**
