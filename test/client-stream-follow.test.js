@@ -80,3 +80,12 @@ test('the main stream panel is wired to the follower and the jump button stays o
 	assert.match(source, /\.at-streamjump \{ position: absolute;/);
 	assert.match(source, /streamUnseen: '\{count\} 条新消息'/);
 });
+
+test('#33 the task thread panel follows the latest entry through the same hook as the main stream', () => {
+	// 实机：主对话已贴底，任务记录（右侧 Thread 面板）打开仍停在顶部的完成信息。
+	assert.match(source, /className: 'at-rbody', ref: threadFollow\.ref, onScroll: threadFollow\.onScroll/);
+	assert.match(source, /const threadFollow = useFollowLatest\(\{\s*key: task\.id,/);
+	assert.match(source, /const mainFollow = useFollowLatest\(\{/);
+	assert.equal(source.match(/createStreamFollower\(\)/g)?.length, 1, 'one follower factory call site: inside useFollowLatest');
+	assert.match(source, /h\(JumpToLatest, \{ t, unseen: threadFollow\.unseen, onJump: threadFollow\.jump \}\)[^\n]*\r?\n\s*!converting \? h\('div', \{ className: 'at-rfoot' \}/, 'jump button sits between the thread and the reply box');
+});

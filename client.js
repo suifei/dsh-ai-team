@@ -2250,6 +2250,13 @@ window.__ModuleLoader__.load({
 			const headSeq = thread?.headSeq ?? thread?.entries?.length ?? 0;
 			const stale = replyBase !== null && replyBase !== undefined && headSeq > replyBase;
 			const entries = Array.isArray(thread?.entries) ? thread.entries : [];
+			// #33 任务记录同样打开即在最新回帖：换任务重置，新回帖到达时按是否停在底部决定跟随。
+			const threadFollow = useFollowLatest({
+				key: task.id,
+				shown: !converting,
+				count: entries.length,
+				tail: entries.length > 0 ? String(entries[entries.length - 1]?.seq ?? '') + '|' + task.status : task.status,
+			});
 			return h('aside', { className: 'at-right', role: 'complementary', 'aria-label': t('threadAria'), tabIndex: -1, ref: panelRef },
 				h('div', { className: 'at-rhead' },
 					h('div', { className: 'at-rh' },
@@ -2264,7 +2271,7 @@ window.__ModuleLoader__.load({
 					h('button', { className: 'at-noteclose', type: 'button', 'aria-label': t('dismiss'), title: t('dismiss'), onClick: onDismissNote }, h(Ico, { name: 'close', size: 12 }))) : null,
 				converting
 					? h(ConvertForm, { t, project, task, thread, title: convert.title, dod: convert.dod, onTitle: convert.onTitle, onDod: convert.onDod, onCancel: convert.onCancel, onSubmit: convert.onSubmit })
-					: h('div', { className: 'at-rbody' },
+					: h('div', { className: 'at-rbody', ref: threadFollow.ref, onScroll: threadFollow.onScroll },
 						stale ? h(ConflictBanner, { t, thread, baseSeq: replyBase, headSeq, onContinue }) : null,
 						task.status === 'done' ? h(DoneSummary, { t, task }) : h(TaskDetail, { t, task }),
 						entries.length
@@ -2311,6 +2318,7 @@ window.__ModuleLoader__.load({
 								h('span', { className: 'at-peopleprojectname' }, '#' + event.seq),
 								h('span', { className: 'at-peoplestate' }, event.type),
 								h('span', { className: 'at-peopletasks' }, fmtTime(event.at) + actorSuffix(event.actor)))))) : null,
+				!converting ? h(JumpToLatest, { t, unseen: threadFollow.unseen, onJump: threadFollow.jump }) : null,
 				!converting ? h('div', { className: 'at-rfoot' },
 					h('div', { className: 'at-box at-rbox' },
 						h('textarea', {
@@ -2666,6 +2674,60 @@ window.__ModuleLoader__.load({
 		}
 		// </stream-follow>
 
+		/**
+		 * 滚动容器「跟随最新」的 React 接线（主对话、任务记录共用这一份）。
+		 *   key   变化即重置并贴底（切项目/标签/任务）；
+		 *   shown 容器在场时才量尺寸；
+		 *   count/tail 条目数与最后一条的标识，变化即按 follower 判定贴底或累计未读。
+		 * 只用 useLayoutEffect：尺寸读写要在绘制前完成，避免先闪到顶部再跳到底。
+		 */
+		function useFollowLatest({ key, shown, count, tail }) {
+			const ref = React.useRef(null);
+			const followerRef = React.useRef(null);
+			if (followerRef.current === null) followerRef.current = createStreamFollower();
+			const [unseen, setUnseen] = React.useState(0);
+			React.useLayoutEffect(() => {
+				followerRef.current.reset();
+				setUnseen(0);
+			}, [key]);
+			React.useLayoutEffect(() => {
+				const el = ref.current;
+				if (!shown || el === null || el === undefined) return;
+				const step = followerRef.current.onContent(el, count);
+				if (step.scrollTo !== null) el.scrollTop = step.scrollTo;
+				setUnseen(step.unseen);
+			}, [key, shown, count, tail]);
+			React.useLayoutEffect(() => {
+				const el = ref.current;
+				if (!shown || el === null || el === undefined || typeof ResizeObserver !== 'function') return undefined;
+				// 观察每个直接子块：容器自身高度固定，内容变高（卡片展开、字体晚到）只体现在子块上。
+				const observer = new ResizeObserver(() => {
+					const to = followerRef.current.onResize(el);
+					if (to !== null) el.scrollTop = to;
+				});
+				for (const child of Array.from(el.children ?? [])) observer.observe(child);
+				return () => observer.disconnect();
+			}, [key, shown, count]);
+			return {
+				ref,
+				unseen,
+				onScroll: (event) => setUnseen(followerRef.current.onScroll(event.currentTarget)),
+				jump: () => {
+					const el = ref.current;
+					if (el !== null && el !== undefined) el.scrollTop = followerRef.current.jump(el);
+					setUnseen(0);
+				},
+			};
+		}
+
+		/** 「↓ N 条新消息」：零高度锚点 + 绝对定位按钮，不进文档流，不改变任何滚动位置。 */
+		function JumpToLatest({ t, unseen, onJump }) {
+			if (!(unseen > 0)) return null;
+			return h('div', { className: 'at-streamjumpanchor' },
+				h('button', { className: 'at-streamjump', type: 'button', onClick: onJump },
+					h(Ico, { name: 'down', size: 12 }), tf(t, 'streamUnseen', { count: unseen })));
+		}
+
 		function Workbench({ t, ctx }) {
 			const [phase, setPhase] = React.useState('loading');
 			const [data, setData] = React.useState(null);
@@ -2820,42 +2882,18 @@ window.__ModuleLoader__.load({
 			const replyRef = React.useRef(null);
 			const triggerRef = React.useRef(null);
 			const mobileRef = React.useRef(null);
-			// #33 主对话跟随最新（算法见 createStreamFollower）。
-			const streamRef = React.useRef(null);
-			const followerRef = React.useRef(null);
-			if (followerRef.current === null) followerRef.current = createStreamFollower();
-			const [streamUnseen, setStreamUnseen] = React.useState(0);
+			// #33 主对话跟随最新（useFollowLatest / createStreamFollower）。
 			const streamItems = Array.isArray(data?.stream) ? data.stream : [];
-			const streamTail = streamItems.length > 0 ? streamItems[streamItems.length - 1]?.id ?? '' : '';
-			const streamShown = scope === 'project' && tab === 'main';
-			React.useLayoutEffect(() => {
-				followerRef.current.reset();
-				setStreamUnseen(0);
-			}, [projectId, scope, tab]);
-			React.useLayoutEffect(() => {
-				const el = streamRef.current;
-				if (!streamShown || el === null || el === undefined) return;
-				const step = followerRef.current.onContent(el, streamItems.length);
-				if (step.scrollTo !== null) el.scrollTop = step.scrollTo;
-				setStreamUnseen(step.unseen);
-			}, [projectId, streamShown, streamItems.length, streamTail]);
-			React.useLayoutEffect(() => {
-				const el = streamRef.current;
-				const inner = el?.firstElementChild;
-				if (!streamShown || inner === null || inner === undefined || typeof ResizeObserver !== 'function') return undefined;
-				const observer = new ResizeObserver(() => {
-					const to = followerRef.current.onResize(el);
-					if (to !== null) el.scrollTop = to;
-				});
-				observer.observe(inner);
-				return () => observer.disconnect();
-			}, [projectId, streamShown, data !== null]);
-			const onStreamScroll = (event) => setStreamUnseen(followerRef.current.onScroll(event.currentTarget));
-			const jumpToLatest = () => {
-				const el = streamRef.current;
-				if (el !== null && el !== undefined) el.scrollTop = followerRef.current.jump(el);
-				setStreamUnseen(0);
-			};
+			const mainFollow = useFollowLatest({
+				key: projectId + '|' + scope + '|' + tab,
+				shown: scope === 'project' && tab === 'main' && data !== null,
+				count: streamItems.length,
+				tail: streamItems.length > 0 ? streamItems[streamItems.length - 1]?.id ?? '' : '',
+			});
+			const streamRef = mainFollow.ref;
+			const streamUnseen = mainFollow.unseen;
+			const onStreamScroll = mainFollow.onScroll;
+			const jumpToLatest = mainFollow.jump;
 			// R-08 快捷键：composer 聚焦句柄 + `?` 帮助浮层开关。
 			const composerInputRef = React.useRef(null);
 			const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
@@ -4314,12 +4352,7 @@ window.__ModuleLoader__.load({
 										onSetWorkspace: openWorkspaceEditor,
 										onExample: () => setDraft(t('emptyStreamExample')),
 									}))),
-							// 零高度锚点 + 绝对定位按钮：不进文档流，不改变任何滚动位置。
-							streamUnseen > 0
-								? h('div', { className: 'at-streamjumpanchor' },
-									h('button', { className: 'at-streamjump', type: 'button', onClick: jumpToLatest },
-										h(Ico, { name: 'down', size: 12 }), tf(t, 'streamUnseen', { count: streamUnseen })))
-								: null);
+							h(JumpToLatest, { t, unseen: streamUnseen, onJump: jumpToLatest }));
 
 			return h('div', { className: 'at-root', role: 'region', 'aria-label': t('panel') },
 				h('div', { className: 'at-top' },
