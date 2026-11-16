@@ -81,7 +81,17 @@ test('the last acceptance on the board wakes the PMO to report back; earlier one
 		assert.equal(report?.memberId, 'lead');
 		const prompt = describeWake(report, service.state);
 		assert.match(prompt, /action=say/);
-		assert.match(prompt, /不要在本回合续开新任务/);
+		// il2c 11-16：旧提示词「只汇报，不要在本回合续开新任务」+ wave_done 消耗新进展 = 看板空转 7 小时。
+		// 自动推进开启时，汇报完在同一回合判断下一步（预算由建卡门禁把关）。
+		assert.match(prompt, /同一回合里接着判断下一步/);
+		assert.match(prompt, /不要把下一步推迟到某个时间点或等 Human 说「继续」/);
+		assert.doesNotMatch(prompt, /不要在本回合续开新任务/);
+		// 自动推进关闭：只汇报并写明建议，由 Human 决定。
+		await service.dispatch({ type: 'project.pmo.update', actor: human, projectId: 'prj_v', payload: { projectId: 'prj_v', pmoAuto: false } });
+		const replanned = planWakes(service.state, { event: { type: 'task/accepted', payload: { taskId: second.task.id }, seq: service.state.lastSeq } }, {});
+		const manual = describeWake(replanned.find((plan) => plan.reason === 'wave_done'), service.state);
+		assert.match(manual, /PMO 自动推进已关闭/);
+		assert.doesNotMatch(manual, /同一回合里接着判断下一步/);
 	});
 });
 

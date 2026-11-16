@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.101 - 2026-11-16
+
+**团队推进：不等钟点、不提前收兵、个性不膨胀、夜间环真跑**
+
+- **不把行动挂在钟点上**：il2c 实机 PMO 回复「评审官并已立约今夜 03:17 自然相裁决点……明早盯一眼结果」，
+  把一件当场就能跑的事推迟 16 小时。新增 `lib/runtime/deferral-guard.js`：
+  - 纪律段 `ai-team:team-discipline` 经 `systemPrompt.section` 注入每个团队会话（PMO 宿主、成员、由它们派生
+    的子智能体；按父会话识别，覆盖成员激活首回合）：立即行动、等待要有边界、不提前收兵、先核实再宣称、平实中文；
+  - `agent/turn-stopping` 上识别「今夜/明早/等到 22:00/03:17 自然相」类推迟，`agent.steer` 递一条纠偏让同一回合
+    继续（每回合最多一次，留「真实时钟依赖」出口；已停止的项目不推）；诊断 `team.deferral.steered`；
+  - 识别规则用 il2c 7413 条助手回复校准：4 条命中全部属实，过去时刻叙述、「不用盯」、有截止的持续盯均不命中；
+- **看板空了不再停摆**：`wave_done` 旧提示词「只汇报，不要在本回合续开新任务」，且 wave_done 计为 PMO 已看过
+  局面，定时推进不再触发——il2c 11-16 看板空转 7 小时。现在自动推进开启时，汇报完同一回合判断下一步（与
+  `pmo_continue` 共用一份规则，批次上限仍由建卡门禁把关）；自动推进关闭时只汇报并写明建议；
+- **个性长度上限 600 字**：il2c 成员个性只增不减（玄策 58 → 2386 字，堆满单卡教训与「候验窗冻树不写」类等待
+  规则）。`checkPersonality` 为 evolve / distill 唯一校验，超限拒绝并要求整段重写；复盘提示词改为整段重写、
+  删等待/冻结规则，已超长的成员会被点明当前字数；
+- **夜间 skillopt 环每晚失败**：vendored `scheduler.py` 生成的 run.ps1 用 `$ErrorActionPreference='Stop'` 加
+  `*>>`，PS 5.1 下引擎第一行 stderr 即中止，`cron.log` 一字不写、任务结果恒为 1。改为调用期间 `Continue`、
+  `2>&1` 逐行写日志、`exit $LASTEXITCODE`；skill 写明「排程只是兜底，要结果就现在 `skillopt_run` 并读退出码」；
+- 测试：新增 `test/team-discipline.test.js`（7 例）、`test/skillopt-scheduler.test.js`（Windows，去掉修复即失败）；
+  `test/pmo-voice.test.js` 覆盖 wave_done 自动推进开 / 关两种提示词；
+
 ## 0.4.99 - 2026-11-15
 
 **宿主边界：两处代码审视发现的缺陷**

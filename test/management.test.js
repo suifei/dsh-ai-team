@@ -61,7 +61,7 @@ test('workspace-less projects, activation gate and the global people pool', asyn
 	try {
 		apply(ctx);
 		assert.equal(pluginName, 'ai-team');
-		assert.deepEqual(inject, ['webServer', 'connection', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions'], 'inject declares every service the plugin touches (cordis proxies need it)');
+		assert.deepEqual(inject, ['webServer', 'connection', 'permissionPresets', 'sandboxPolicy', 'tools', 'shell', 'agents', 'subagents', 'sessions', 'systemPrompt'], 'inject declares every service the plugin touches (cordis proxies need it)');
 		const route = routes[0];
 		server = createServer((req, res) => route.handler(req, res));
 		await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));

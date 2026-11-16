@@ -129,14 +129,29 @@ def _runner_cmd(project: str, backend: str, extra: str, python: str) -> str:
         helper_script = os.path.join(logdir, "run.ps1")
         try:
             os.makedirs(logdir, exist_ok=True)
-            quoted = " ".join(_powershell_literal(value) for value in args[1:])
+            # `-X utf8`: the engine's output is decoded as UTF-8 below, whatever the
+            # system code page is (CP936 here garbled every Chinese log line).
+            quoted = " ".join(_powershell_literal(value) for value in ["-X", "utf8", *args[1:]])
+            # Windows PowerShell 5.1 turns every native stderr line into an
+            # ErrorRecord; under `Stop` the first one aborts the script with exit 1
+            # before it is even logged. The engine reports progress on stderr
+            # (`[sleep] ...`), so the old `Stop` + `*>>` helper failed every night
+            # (Task Scheduler LastTaskResult=1, cron.log never written). `Stop`
+            # only guards Set-Location; the engine runs under `Continue`, both
+            # streams land in the log as plain lines, and the task reports the
+            # engine's own exit code.
             content = (
                 "$ErrorActionPreference = 'Stop'\n"
+                "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
                 f"Set-Location -LiteralPath {_powershell_literal(_repo_root())}\n"
-                f"& {_powershell_literal(python)} {quoted} "
-                f"*>> {_powershell_literal(log)}\n"
+                "$ErrorActionPreference = 'Continue'\n"
+                f"& {_powershell_literal(python)} {quoted} 2>&1 "
+                f"| ForEach-Object {{ \"$_\" }} >> {_powershell_literal(log)}\n"
+                "exit $LASTEXITCODE\n"
             )
-            with open(helper_script, "w", encoding="utf-8") as f:
+            # BOM: Windows PowerShell 5.1 reads a BOM-less script in the ANSI code
+            # page, which breaks non-ASCII project paths.
+            with open(helper_script, "w", encoding="utf-8-sig") as f:
                 f.write(content)
         except OSError as exc:
             raise ValueError(f"could not create the Windows scheduler helper: {exc}") from exc
