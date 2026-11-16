@@ -75,6 +75,8 @@ With `backend=handoff` the engine stops with exit 3 whenever model calls need
 answers (`<project>/.skillopt-sleep-handoff/pending.json`). The AI team answers
 them automatically: on each PMO tick, one fresh one-shot reviewer subagent per
 call writes `answers/<id>.md`, then the scheduled `run.ps1` is rerun to resume.
+The answering subagent runs outside the workspace and every tool call it makes
+is refused, so a replayed task is answered in text, never carried out for real.
 Do not answer these prompts from a member session — its history contaminates the
 held-out gate. Exit 3 in the task result means "waiting for answers", not failure.
 
