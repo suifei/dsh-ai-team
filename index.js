@@ -44,7 +44,9 @@ import { isJobExpired, listJobs, readJob, writeJob } from './lib/skillopt/jobs.j
 
 /** 评审通道 job 的兜底 TTL：与子代理通道（jobs.js JOB_TTL_MS）保持一致。 */
 const REVIEW_JOB_TTL_MS = 30 * 60 * 1000;
-import { reconcileJobs } from './lib/skillopt/job-runner.js';
+import { observeChild, reconcileJobs } from './lib/skillopt/job-runner.js';
+import { HANDOFF_DIR, stepHandoff } from './lib/skillopt/handoff-answerer.js';
+import { execFile } from 'node:child_process';
 import { collectReview, startReview } from './lib/skillopt/review-runner.js';
 import { REVIEWER_NAME } from './lib/skillopt/reviewer.js';
 import { createMemberPermissionGuard } from './lib/host/permission-guard.js';
@@ -1137,6 +1139,43 @@ export function apply(ctx, config = {}) {
 				}
 			}
 		};
+		// 夜间 SkillOpt 环（handoff 后端）停在「有待回答的调用」时，由评审官身份的一次性
+		// 子代理逐题作答并重跑计划任务（lib/skillopt/handoff-answerer.js）。与 job 收割
+		// 一样不受 pmoAuto/停止门约束：夜间环是 Human 排的，与 PMO 派发无关。
+		// 不 await：重跑引擎可能耗时，不能拖住 tick；同一工作区同时只推进一步。
+		const handoffBusy = new Set();
+		const answerHandoff = (projectRuntime) => {
+			const workspace = String(projectRuntime?.service?.state?.projects?.[projectRuntime.id]?.workspacePath ?? '').trim();
+			if (workspace === '' || handoffBusy.has(workspace) || !existsSync(join(workspace, HANDOFF_DIR, 'pending.json'))) return;
+			handoffBusy.add(workspace);
+			stepHandoff({
+				workspace,
+				deps: {
+					now: () => Date.now(),
+					diag: (row) => diag.append(row),
+					startChild: async (label, request) => {
+						const parentInfo = await ensureParent(projectRuntime);
+						const child = await serviceOf(ctx, 'subagents').startActivation(activationSpec({
+							provider: resolveSubagentProviderName(serviceOf(ctx, 'subagents'), config?.subagentProviderName),
+							label,
+							request: { cwd: request.cwd, prompt: [{ type: 'text', text: request.prompt }], parent: parentInfo?.agent },
+							delivery: 'parent',
+							signal: new AbortController().signal,
+						}));
+						return { childId: child.childId, outputStart: child.outputStart ?? null };
+					},
+					observe: (childId, outputStart) => observeChild(ctx, childId, outputStart),
+					rerun: (runScript) => new Promise((resolve) => {
+						execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', runScript], { windowsHide: true, timeout: 30 * 60 * 1000 }, (error) => {
+							resolve({ exitCode: error ? (typeof error.code === 'number' ? error.code : null) : 0 });
+						});
+					}),
+				},
+			}).catch((error) => {
+				diag.append({ ev: 'skillopt.handoff.tick.fail', workspace, message: error?.message ?? String(error) });
+			}).finally(() => handoffBusy.delete(workspace));
+		};
+
 		const pmoTick = async (projectRuntime) => {
 			if (projectRuntime === null || projectRuntime === undefined) return;
 			// 归档修复重试点：boot 时 workspaceRegistry 往往还没 active，等 tick
@@ -1179,6 +1218,7 @@ export function apply(ctx, config = {}) {
 				diag.append({ ev: 'skillopt.job.tick.fail', message: error?.message ?? String(error) });
 			}
 			if (reconciled === false) diag.append({ ev: 'skillopt.reconcile.skip', projectId: projectRuntime.id, reason: 'in-flight' });
+			answerHandoff(projectRuntime);
 			// 门禁必须在 await 之后重新取：reconcileJobs 可能耗时数秒，期间 Human
 			// 可能已经停用 PMO / 归档 / 停止项目，用 await 之前的快照会继续写账本。
 			const project = projectRuntime.service.state.projects?.[projectRuntime.id];
