@@ -136,6 +136,29 @@ test('no steering without a deferral, outside the team, after turn/start resets,
 	assert.equal(host.steers.length, 0, 'a stopped project is not pushed to act');
 });
 
+test('SkillOpt one-shot children of the PMO get neither the discipline section nor a correction', async () => {
+	// il2c 实机：handoff 作答子代理的题面引用了会话原文「tonight or tomorrow」，纠偏插进去后
+	// 它转去调 skillopt_status，答案作废。
+	const { guard, sections, listeners, agent, say } = harness();
+	const stopping = listeners.get('agent/turn-stopping');
+	const [section] = sections;
+	guard.observe({ id: 's-answer', header: { parentSession: 's-host' } }, { type: 'subagent/descriptor', data: { label: 'skillopt-reviewer-handoff-846de7a7f7d2943d' } });
+	assert.equal(section.text({ agent: { id: 's-answer', session: { header: { parentSession: 's-host' } } } }), '');
+	const answerer = agent('s-answer', 's-host');
+	say('s-answer', DEFERRALS[0], 's-host');
+	await stopping({ agent: answerer, turn: 1 });
+	assert.equal(answerer.steers.length, 0);
+	// 宿主侧在启动时直接登记（descriptor 事件没被观察到时的保险）。
+	guard.exempt('s-judge');
+	const judge = agent('s-judge', 's-host');
+	say('s-judge', DEFERRALS[0], 's-host');
+	await stopping({ agent: judge, turn: 1 });
+	assert.equal(judge.steers.length, 0);
+	// 其它 PMO 子代理照旧受约束。
+	guard.observe({ id: 's-wave', header: { parentSession: 's-host' } }, { type: 'subagent/descriptor', data: { label: 'moyuan-tail267' } });
+	assert.equal(section.text({ agent: { id: 's-wave', session: { header: { parentSession: 's-host' } } } }), TEAM_DISCIPLINE_TEXT);
+});
+
 test('a host without systemPrompt still gets the turn-stopping guard and records the gap', () => {
 	const diag = [];
 	const listeners = new Map();

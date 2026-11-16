@@ -44,7 +44,8 @@ import { isJobExpired, listJobs, readJob, writeJob } from './lib/skillopt/jobs.j
 
 /** 评审通道 job 的兜底 TTL：与子代理通道（jobs.js JOB_TTL_MS）保持一致。 */
 const REVIEW_JOB_TTL_MS = 30 * 60 * 1000;
-import { observeChild, reconcileJobs } from './lib/skillopt/job-runner.js';
+import { reconcileJobs } from './lib/skillopt/job-runner.js';
+import { awaitActivationText } from './lib/skillopt/subagent-text.js';
 import { HANDOFF_DIR, stepHandoff } from './lib/skillopt/handoff-answerer.js';
 import { execFile } from 'node:child_process';
 import { collectReview, startReview } from './lib/skillopt/review-runner.js';
@@ -690,7 +691,7 @@ export function apply(ctx, config = {}) {
 		// il2c 2997 次唤醒里 pmo_dispatch 为 0）。进程内状态，重启即清空——重启时本就没有回合在跑。
 		const turnsInFlight = new Set();
 		// 团队推进纪律：系统提示词段 + 回合收尾时纠偏「把行动挂在钟点上」（il2c：「今夜 03:17 自然相裁决点」）。
-		let teamDiscipline = { observe: () => {}, dispose: () => {} };
+		let teamDiscipline = { observe: () => {}, exempt: () => {}, dispose: () => {} };
 		try {
 			teamDiscipline = registerTeamDiscipline({
 				systemPrompt: serviceOf(ctx, 'systemPrompt'),
@@ -1144,6 +1145,10 @@ export function apply(ctx, config = {}) {
 		// 一样不受 pmoAuto/停止门约束：夜间环是 Human 排的，与 PMO 派发无关。
 		// 不 await：重跑引擎可能耗时，不能拖住 tick；同一工作区同时只推进一步。
 		const handoffBusy = new Set();
+		// 作答子代理的最终文本按 childId 收在内存里：activation.result 是评审子代理实测可用的
+		// 取数路径；已结束的子代理在 agents/sessions 里查不到，observeChild 会一直报 running
+		// （il2c 实机：16:39:59 回合已结束，15 分钟仍判在跑）。插件重启后内存丢失，按 TTL 重问。
+		const handoffAnswers = new Map();
 		const answerHandoff = (projectRuntime) => {
 			const workspace = String(projectRuntime?.service?.state?.projects?.[projectRuntime.id]?.workspacePath ?? '').trim();
 			if (workspace === '' || handoffBusy.has(workspace) || !existsSync(join(workspace, HANDOFF_DIR, 'pending.json'))) return;
@@ -1155,16 +1160,29 @@ export function apply(ctx, config = {}) {
 					diag: (row) => diag.append(row),
 					startChild: async (label, request) => {
 						const parentInfo = await ensureParent(projectRuntime);
-						const child = await serviceOf(ctx, 'subagents').startActivation(activationSpec({
+						const activation = await serviceOf(ctx, 'subagents').startActivation(activationSpec({
 							provider: resolveSubagentProviderName(serviceOf(ctx, 'subagents'), config?.subagentProviderName),
 							label,
 							request: { cwd: request.cwd, prompt: [{ type: 'text', text: request.prompt }], parent: parentInfo?.agent },
 							delivery: 'parent',
 							signal: new AbortController().signal,
 						}));
-						return { childId: child.childId, outputStart: child.outputStart ?? null };
+						const childId = activation.childId;
+						teamDiscipline.exempt(childId);
+						awaitActivationText(activation, { timeoutMs: 14 * 60 * 1000 })
+							.catch(() => '')
+							.then(async (text) => {
+								handoffAnswers.set(childId, typeof text === 'string' ? text : '');
+								try { await activation?.dispose?.(); } catch { /* already gone */ }
+							});
+						return { childId, outputStart: activation.outputStart ?? null };
 					},
-					observe: (childId, outputStart) => observeChild(ctx, childId, outputStart),
+					observe: (childId) => {
+						if (!handoffAnswers.has(childId)) return { status: 'running', events: [] };
+						const text = handoffAnswers.get(childId);
+						handoffAnswers.delete(childId);
+						return { status: 'idle', events: [], text };
+					},
 					rerun: (runScript) => new Promise((resolve) => {
 						execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', runScript], { windowsHide: true, timeout: 30 * 60 * 1000 }, (error) => {
 							resolve({ exitCode: error ? (typeof error.code === 'number' ? error.code : null) : 0 });
