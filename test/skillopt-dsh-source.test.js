@@ -241,3 +241,38 @@ test('schtasks output is decoded in the console code page, so UTF-8 mode still l
 	assert.equal(query, '0 True', 'schtasks /query output reaches Python');
 	assert.equal(listed, 'list');
 });
+
+test('a chatty judge reply that restates the JSON format before its answer is still scored', { skip }, () => {
+	// il2c night 11：每条判分都被记成 judge-parse-failed，尽管答复末尾都有合法的 {"score": …}——
+	// 开头复述了题面格式「return only JSON {"score": <0..1>, …}」，贪婪匹配从那里吃到末尾，解析失败。
+	const run = spawnSync(python, ['-X', 'utf8', '-c', [
+		'import json',
+		'from skillopt_sleep.backend import _extract_json',
+		'from skillopt_sleep.handoff_backend import HandoffBackend',
+		'from skillopt_sleep.types import TaskRecord',
+		'chatty = \'This task is to grade the response and return only JSON in the form {"score": <0..1>, "reason": "..."}. The rubric asks for A and B.\\n\\n{"score": 0.85, "reason": "covers A and B"}\'',
+		'unclosed = \'I need to evaluate it.\\n\\n{"score": 0.78, "reason": "strong structure, generic evidence."\'',
+		'class Fixed(HandoffBackend):',
+		'    def __init__(self, reply): self.reply = reply',
+		'    def _cached_call(self, key, prompt, max_tokens=0): return self.reply',
+		'task = TaskRecord(id="t", project="p", intent="i", reference="rubric", reference_kind="rubric")',
+		'print(json.dumps({',
+		'  "chatty": _extract_json(chatty, "object"),',
+		'  "array": _extract_json(\'see [x] then [{"op": "add"}]\', "array"),',
+		'  "plain": _extract_json(\'{"score": 0.5}\', "object"),',
+		'  "none": _extract_json("no json here", "object"),',
+		'  "judge_chatty": list(Fixed(chatty).judge(task, "r")),',
+		'  "judge_unclosed": list(Fixed(unclosed).judge(task, "r")),',
+		'  "judge_none": list(Fixed("no score").judge(task, "r")),',
+		'}))',
+	].join('\n')], { cwd: vendor, encoding: 'utf8' });
+	assert.equal(run.status, 0, run.stderr);
+	const out = JSON.parse(run.stdout);
+	assert.deepEqual(out.chatty, { score: 0.85, reason: 'covers A and B' });
+	assert.deepEqual(out.array, [{ op: 'add' }]);
+	assert.deepEqual(out.plain, { score: 0.5 });
+	assert.equal(out.none, null);
+	assert.deepEqual(out.judge_chatty, [1, 0.85, 'covers A and B']);
+	assert.deepEqual(out.judge_unclosed, [0, 0.78, 'judge-score-only']);
+	assert.deepEqual(out.judge_none, [0, 0, 'judge-parse-failed']);
+});

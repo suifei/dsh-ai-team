@@ -292,15 +292,36 @@ class MockBackend(Backend):
 # ── Shared real-CLI backend (prompts + parsing + cache; subclasses do _call) ──
 
 def _extract_json(raw: str, kind: str):
-    """Pull the first JSON object/array out of a possibly chatty CLI reply."""
-    pat = r"\{.*\}" if kind == "object" else r"\[.*\]"
-    m = re.search(pat, raw or "", re.DOTALL)
-    if not m:
+    """Pull the JSON object/array out of a possibly chatty CLI reply.
+
+    The widest span (first opener .. last closer) is tried first, as before.
+    When it does not parse -- a reply that restates the requested format, e.g.
+    'return only JSON {"score": <0..1>, ...}', before the real answer -- the
+    last value of the requested kind that does parse is taken: chatty replies
+    put the answer at the end (il2c night 11: every judge reply was scored
+    judge-parse-failed although each ended with a valid {"score": ...}).
+    """
+    text = raw or ""
+    opener, closer, want = ("{", "}", dict) if kind == "object" else ("[", "]", list)
+    first, last = text.find(opener), text.rfind(closer)
+    if first < 0 or last < first:
         return None
     try:
-        return json.loads(m.group(0))
+        return json.loads(text[first:last + 1])
     except Exception:
-        return None
+        pass
+    decoder = json.JSONDecoder()
+    found = None
+    pos = first
+    while pos >= 0:
+        try:
+            value, _ = decoder.raw_decode(text, pos)
+        except ValueError:
+            value = None
+        if isinstance(value, want):
+            found = value
+        pos = text.find(opener, pos + 1)
+    return found
 
 
 def _task_guardrail(pairs) -> str:
@@ -519,6 +540,12 @@ class CliBackend(Backend):
                 return (1.0 if soft >= 0.8 else 0.0), soft, str(obj.get("reason", ""))[:200]
             except (ValueError, TypeError):
                 pass
+        # A reply whose JSON lost its closing brace still carries the score
+        # (il2c night 11: 1 of 11 judge replies ended '..."' without '}').
+        scores = re.findall(r'"score"\s*:\s*([0-9]+(?:\.[0-9]+)?)', raw or "")
+        if scores:
+            soft = min(1.0, max(0.0, float(scores[-1])))
+            return (1.0 if soft >= 0.8 else 0.0), soft, "judge-score-only"
         return 0.0, 0.0, "judge-parse-failed"
 
     def reflect(
