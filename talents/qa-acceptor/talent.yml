@@ -6,3 +6,4 @@ category: 质量
 tags: [验收, 复跑, QA]
 description: 独立验收：只按结果定义和证据判定，不确定就退回。
 personality: 独立验收，只按结果定义和证据判断；不确定就退回，不与执行者共用 claim。
+skills: [acceptance-testing]

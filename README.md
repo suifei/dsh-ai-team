@@ -166,12 +166,17 @@ POST /ai-team/api/projects/<id>/commands
 
 ## 技能与 SkillOpt
 
+一个智能体 = 岗位 + 职责 + 性格 + 装上的若干技能（`skills` 数组）。内置人才里每个干活角色（执行 / 验收）都带一份看家技能；负责人只靠岗位规程 + 性格。
+
 - 成员资料可追加 notes / skills，activation / wake prompt 会注入有界技能目录；
 - 完整技能正文由成员自己的 `skill` 工具加载；
-- `ai-team-files` provider 会读取：
-  - `<DSH_HOME>/skills`
-  - `<cwd>/.dsh/skills`
-  - `<cwd>/.agents/skills`
+- **技能从四个根按优先级读，低序号覆盖高序号**，所以"安装一份技能"= 把 `SKILL.md` 落到可写根，再在成员 `skills` 里写上它的名字：
+  - `<cwd>/.dsh/skills`（项目，100，最高）
+  - `<cwd>/.agents/skills`（项目，200）
+  - `<DSH_HOME>/skills`（用户，400）
+  - 插件内置（600，**只读**）
+- **自定义智能体**：在 `~/.dsh/ai-team/catalog/user/talents/<人才>/` 写一份 `talent.yml`（职责 + 性格 + `skills: [...]`），技能来源可以是自己写的、从别处装的、或从现成人才拆出来的；同名覆盖内置，即可加进团队。
+- **自我进化两条链**：性格靠成员 `evolve` / `distill` 自长自压（写账本，开箱即用）；技能靠内置 SkillOpt 过门禁优化 `SKILL.md`。注意内置技能在包内**只读**，要就地进化需先把它复制（fork）到可写根再改。
 - **Microsoft SkillOpt 已内置**：7 个 `skillopt_*` 工具、Python engine bootstrap、`skillopt-sleep` 技能随插件分发，不需要单独安装 `dsh-skillopt`。
 
 ---

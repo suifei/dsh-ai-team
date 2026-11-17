@@ -18,6 +18,8 @@
 - 写坏的文件跳过并记 `catalog.load.fail` / `catalog.team.fail`；新依赖 `yaml`（~2.9.1，无传递依赖）；
 - 预置**逆向工程队**（`teams/reverse/`）：把二进制拆开、还原算法、复刻功能。7 位人才进入人才市场——逆向负责人、二进制分析、动态调试、去混淆（OLLVM）、移动端逆向、算法复刻、逆向验收；各带 IDA/Ghidra 静态分析、x64dbg/frida 动态调试与内存 dump、符号执行去混淆、Android/iOS 逆向、算法复刻测试向量、沙箱行为对账等技能；插件设置 `teamPreset: reverse` 启用；
 - 预置**多领域团队**：文档（`docs`）、视频（`video`）、游戏（`game`）、自媒体写作（`content`）、深度研究（`research`）、科学研究（`science`）、中小学教育软件（`education`）。共 34 位人才进入人才市场，编辑、事实核查、工程、UX、验收等角色跨团队复用；各团队 `teamPreset` 启用
+- **每个干活角色都带一份看家技能**（`talents/<人才>/skills/<技能>/SKILL.md`）：执行 / 验收类人才各配一份本职方法论（如文案、玩法设计、论文写作、同行评审、命题与解析、代码评审、安全审计等 24 份），负责人（lead）仍只靠岗位规程 + 性格。44 位人才里 35 位干活角色全部带技能，也给 SkillOpt 留下可进化的目标；
+- **技能可自定义、可进化**（README「技能与 SkillOpt」）：用户把 SKILL.md 丢进 `<cwd>/.dsh/skills`、`<cwd>/.agents/skills` 或 `~/.dsh/skills` 即按优先级覆盖内置（低序号胜出），成员 `team action=skill` 可自挂；性格靠 `evolve` / `distill` 自长自压，技能靠内置 SkillOpt 过门禁优化；内置技能在包内只读，要就地进化需先 fork 到可写根；
 - 测试：`test/catalog.test.js`、`test/client-talent-market.test.js`；实机 E2E（rc.1 / rc.3）：用户目录的「课题组」
   （导师 / 助研 / 质检）替换默认团队并按人才建成员、导师成为负责人；人才市场接口列出 12 位（2 位自建 + 10 位内置）；
   经 member.add 招聘的「助研」记下 talent@1.1.0，激活时带上它自带的 paper-review 技能。
