@@ -94,3 +94,79 @@ test('a corrupt projects.json lands in the diagnostic log as registry.corrupt.fa
 		try { disposeEffect?.(); } catch { /* already disposed */ }
 	}
 });
+
+async function bootRows(t, preset) {
+	const root = await mkdtemp(join(tmpdir(), 'ai-team-refused-'));
+	t.after(async () => {
+		for (let attempt = 0; attempt < 5; attempt += 1) {
+			try { await rm(root, { recursive: true, force: true }); return; } catch { await new Promise((resolve) => setTimeout(resolve, 50)); }
+		}
+	});
+	const previousHome = process.env.DSH_HOME;
+	const previousProfile = process.env.DSH_PROFILE;
+	process.env.DSH_HOME = root;
+	process.env.DSH_PROFILE = 'refusedtest';
+	const realWarn = console.warn;
+	const realError = console.error;
+	console.warn = () => {};
+	console.error = () => {};
+	t.after(() => {
+		process.env.DSH_HOME = previousHome;
+		process.env.DSH_PROFILE = previousProfile;
+		console.warn = realWarn;
+		console.error = realError;
+	});
+	let disposeEffect = null;
+	// 只有权限与 webServer：没有 tools / systemPrompt / sessions / subagents——受限宿主的形状。
+	const ctx = {
+		effect(fn) { disposeEffect = fn(); },
+		on() { return () => {}; },
+		get(id) {
+			if (id === 'connection') return { requestRejection: () => undefined };
+			if (id === 'webServer') return { register() { return () => {}; } };
+			if (id === 'permissionPresets') {
+				return {
+					catalog: () => ({ defaultPreset: preset, options: [], defaultOptions: [] }),
+					resolve: () => (preset === 'danger-full-access' ? { sandbox: 'danger-full-access', approval: 'never' } : { sandbox: 'workspace-write', approval: 'on-request' }),
+					set: () => {},
+				};
+			}
+			if (id === 'sandboxPolicy') return { defaultMode: preset, overrideOf: () => preset };
+			return undefined;
+		},
+	};
+	const diagDir = join(root, 'diag');
+	try {
+		apply(ctx, { diagLogDir: diagDir, diagLevel: 'full' });
+		let rows = [];
+		for (let attempt = 0; attempt < 40; attempt += 1) {
+			const files = await readdir(diagDir).catch(() => []);
+			const jsonl = files.filter((name) => name.endsWith('.jsonl'));
+			if (jsonl.length > 0) {
+				const text = await readFile(join(diagDir, jsonl[0]), 'utf8');
+				rows = text.split('\n').filter(Boolean).map((line) => { try { return JSON.parse(line); } catch { return null; } }).filter(Boolean);
+				if (rows.some((row) => row.ev === 'skillopt.skip.fail' || row.ev === 'boot.refused') && attempt >= 6) break;
+			}
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		}
+		return rows.map((row) => row.ev);
+	} finally {
+		try { disposeEffect?.(); } catch { /* already disposed */ }
+	}
+}
+
+test('a refused host logs boot.refused once, not the capability gaps that follow from it', async (t) => {
+	// il2c 11-16：受限宿主每次加载都记 boot.refused + team.discipline.section.unavailable.fail
+	// + skillopt.skip.fail，后两行是同一原因的派生（42 次/天）。
+	const events = await bootRows(t, 'workspace-write');
+	assert.ok(events.includes('boot.refused'), JSON.stringify(events));
+	assert.equal(events.includes('skillopt.skip.fail'), false, JSON.stringify(events));
+	assert.equal(events.includes('team.discipline.section.unavailable.fail'), false, JSON.stringify(events));
+});
+
+test('a full-access host that lacks the tool registry or prompt sections still reports it', async (t) => {
+	const events = await bootRows(t, 'danger-full-access');
+	assert.equal(events.includes('boot.refused'), false, JSON.stringify(events));
+	assert.ok(events.includes('skillopt.skip.fail'), JSON.stringify(events));
+	assert.ok(events.includes('team.discipline.section.unavailable.fail'), JSON.stringify(events));
+});
