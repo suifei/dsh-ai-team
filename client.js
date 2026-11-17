@@ -296,6 +296,11 @@ window.__ModuleLoader__.load({
 			talentSearch: '搜索名字、岗位、技能…',
 			talentAll: '全部',
 			talentHire: '招聘',
+			talentCreate: '新建人才',
+			tcHint: '填好职责与性格，按需装几份技能，存成可复用的人才。',
+			tcName: '名号', tcRole: '岗位', tcDuty: '职责', tcCategory: '分类', tcTags: '标签', tcTagsHint: '逗号分隔', tcPersonality: '性格', tcPersonalityHint: '它怎么做事、什么风格',
+			tcSkills: '技能', tcEmpty: '还没装技能（可选）', tcAddExisting: '从已有装', tcWriteOwn: '自写一份', tcImport: '导入 .md', tcPick: '选一个已有技能…', tcAdd: '加入', tcRemove: '移除',
+			tcSkillName: '技能名（英文/数字/-）', tcSkillBody: '技能正文（SKILL.md）', tcSkillDup: '已经装了同名技能', tcSave: '存为我的人才', tcSaving: '保存中…',
 			talentEmpty: '没有符合条件的人才。',
 			talentLoading: '正在读取人才市场…',
 			talentLoadFailed: '人才市场读取失败：{error}',
@@ -739,6 +744,11 @@ window.__ModuleLoader__.load({
 			talentSearch: 'Search name, role, skill…',
 			talentAll: 'All',
 			talentHire: 'Hire',
+			talentCreate: 'New talent',
+			tcHint: 'Set the duty and personality, install a few skills, save a reusable talent.',
+			tcName: 'Name', tcRole: 'Role', tcDuty: 'Duty', tcCategory: 'Category', tcTags: 'Tags', tcTagsHint: 'comma-separated', tcPersonality: 'Personality', tcPersonalityHint: 'how it works, its style',
+			tcSkills: 'Skills', tcEmpty: 'No skills yet (optional)', tcAddExisting: 'From existing', tcWriteOwn: 'Write one', tcImport: 'Import .md', tcPick: 'Pick an existing skill…', tcAdd: 'Add', tcRemove: 'Remove',
+			tcSkillName: 'Skill name (a-z, 0-9, -)', tcSkillBody: 'Skill body (SKILL.md)', tcSkillDup: 'That skill name is already staged', tcSave: 'Save as my talent', tcSaving: 'Saving…',
 			talentEmpty: 'No talent matches.',
 			talentLoading: 'Loading the talent market…',
 			talentLoadFailed: 'Could not load the talent market: {error}',
@@ -1378,6 +1388,11 @@ window.__ModuleLoader__.load({
 			.at-modaltitle { margin: 0 0 2px; font-size: 15px; font-weight: 600; color: var(--dsw-alias-label-primary); }
 			.at-modal.at-modal-wide { width: min(640px, 100%); }
 			.at-addtabs { align-self: flex-start; }
+			.at-tcskills { display: flex; flex-wrap: wrap; gap: 6px; }
+			.at-tcskill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: rgba(127,127,127,0.15); font-size: 12px; }
+			.at-tcskill button { border: 0; background: transparent; cursor: pointer; font-size: 14px; line-height: 1; color: inherit; padding: 0; }
+			.at-tcpick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+			.at-tcpanel { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 			.at-market { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 			.at-marketsearch { width: 100%; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; }
 			.at-marketcats { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -2723,6 +2738,88 @@ window.__ModuleLoader__.load({
 				h('div', { className: 'at-modalactions' },
 					h('button', { className: 'at-btn', type: 'button', onClick: onCancel }, t('cancel'))));
 		}
+		function TalentCreator({ t, onSaved, onCancel }) {
+			const [form, setForm] = React.useState(blankTalentForm);
+			const [pending, setPending] = React.useState([]);
+			const [installable, setInstallable] = React.useState([]);
+			const [pick, setPick] = React.useState('');
+			const [pickFrom, setPickFrom] = React.useState('');
+			const [skName, setSkName] = React.useState('');
+			const [skBody, setSkBody] = React.useState('');
+			const [busy, setBusy] = React.useState(false);
+			const [error, setError] = React.useState('');
+			const set = (key) => (event) => setForm((f) => ({ ...f, [key]: event.target.value }));
+			React.useEffect(() => {
+				let live = true;
+				fetch('/ai-team/api/skills-install', { headers: { accept: 'application/json' } })
+					.then((r) => r.json()).then((b) => { if (live) setInstallable(Array.isArray(b && b.skills) ? b.skills : []); })
+					.catch(() => {});
+				return () => { live = false; };
+			}, []);
+			function stage(skill) {
+				if (pending.some((x) => x.name === skill.name)) { setError(t('tcSkillDup')); return false; }
+				setPending((pp) => [...pp, skill]); setError(''); return true;
+			}
+			function addExisting() {
+				const sep = String(pickFrom).indexOf('::'); if (sep < 0) return;
+				const talent = pickFrom.slice(0, sep); const name = pickFrom.slice(sep + 2);
+				if (stage({ name, kind: 'fork', fromTalent: talent, fromSkill: name })) { setPick(''); setPickFrom(''); }
+			}
+			function addWritten() {
+				const name = skName.trim(); if (!name) return;
+				if (stage({ name, kind: 'write', markdown: skBody })) { setPick(''); setSkName(''); setSkBody(''); }
+			}
+			function importFile(event) {
+				const file = event.target.files && event.target.files[0]; if (!file) return;
+				const reader = new FileReader();
+				reader.onload = () => {
+					const name = (file.name.replace(/\.md$/i, '').replace(/[^A-Za-z0-9._-]/g, '-').slice(0, 64)) || 'skill';
+					stage({ name, kind: 'write', markdown: String(reader.result || '') });
+				};
+				reader.readAsText(file); event.target.value = '';
+			}
+			async function save() {
+				if (!form.name.trim() || busy) return;
+				setBusy(true); setError('');
+				try {
+					const res = await fetch('/ai-team/api/talents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(talentFormToBody(form)) });
+					const body = await res.json().catch(() => null);
+					if (!res.ok) throw new Error((body && body.error && body.error.message) || ('HTTP ' + res.status));
+					const id = body && body.talent && body.talent.id;
+					for (const sk of pending) {
+						const payload = sk.kind === 'fork' ? { name: sk.name, fromTalent: sk.fromTalent, fromSkill: sk.fromSkill } : { name: sk.name, markdown: sk.markdown };
+						const r2 = await fetch('/ai-team/api/talents/' + encodeURIComponent(id) + '/skills', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+						const b2 = await r2.json().catch(() => null);
+						if (!r2.ok) throw new Error(((b2 && b2.error && b2.error.message) || ('HTTP ' + r2.status)) + '（' + sk.name + '）');
+					}
+					onSaved();
+				} catch (err) {
+					setError((err && err.message) || String(err));
+				} finally {
+					setBusy(false);
+				}
+			}
+			return h('div', { className: 'at-market' },
+				h('div', { className: 'at-modalmeta' }, t('tcHint')),
+				h('label', { className: 'at-field' }, h('span', null, t('tcName')), h('input', { value: form.name, onChange: set('name'), autoFocus: true })),
+				h('label', { className: 'at-field' }, h('span', null, t('tcRole')), h('input', { value: form.role, onChange: set('role') })),
+				h('label', { className: 'at-field' }, h('span', null, t('tcDuty')), h('select', { value: form.duty, onChange: set('duty') }, ['executor', 'qa', 'lead'].map((d) => h('option', { key: d, value: d }, t(DUTY_LABEL[d]))))),
+				h('label', { className: 'at-field' }, h('span', null, t('tcCategory')), h('input', { value: form.category, onChange: set('category') })),
+				h('label', { className: 'at-field' }, h('span', null, t('tcTags')), h('input', { value: form.tags, onChange: set('tags'), placeholder: t('tcTagsHint') })),
+				h('label', { className: 'at-field' }, h('span', null, t('tcPersonality')), h('textarea', { value: form.personality, onChange: set('personality'), placeholder: t('tcPersonalityHint') })),
+				h('div', { className: 'at-field' }, h('span', null, t('tcSkills')),
+					pending.length === 0 ? h('div', { className: 'at-modalmeta' }, t('tcEmpty')) : h('div', { className: 'at-tcskills' }, pending.map((sk) => h('span', { key: sk.name, className: 'at-tcskill' }, sk.name, h('button', { type: 'button', 'aria-label': t('tcRemove'), onClick: () => setPending((pp) => pp.filter((x) => x.name !== sk.name)) }, '×')))),
+					h('div', { className: 'at-tcpick' },
+						h('button', { type: 'button', className: 'at-btn', onClick: () => setPick(pick === 'existing' ? '' : 'existing') }, t('tcAddExisting')),
+						h('button', { type: 'button', className: 'at-btn', onClick: () => setPick(pick === 'write' ? '' : 'write') }, t('tcWriteOwn')),
+						h('label', { className: 'at-btn' }, t('tcImport'), h('input', { type: 'file', accept: '.md,text/markdown,text/plain', style: { display: 'none' }, onChange: importFile }))),
+					pick === 'existing' ? h('div', { className: 'at-tcpanel' }, h('select', { value: pickFrom, onChange: (e) => setPickFrom(e.target.value) }, h('option', { value: '' }, t('tcPick')), installable.map((sk) => h('option', { key: sk.talent + '::' + sk.name, value: sk.talent + '::' + sk.name }, sk.name + ' — ' + sk.talentName))), h('button', { type: 'button', className: 'at-btn at-btn-primary', onClick: addExisting }, t('tcAdd'))) : null,
+					pick === 'write' ? h('div', { className: 'at-tcpanel' }, h('input', { value: skName, placeholder: t('tcSkillName'), onChange: (e) => setSkName(e.target.value) }), h('textarea', { value: skBody, placeholder: t('tcSkillBody'), onChange: (e) => setSkBody(e.target.value) }), h('button', { type: 'button', className: 'at-btn at-btn-primary', onClick: addWritten }, t('tcAdd'))) : null),
+				error ? h('div', { className: 'at-modalerror', role: 'alert' }, error) : null,
+				h('div', { className: 'at-modalactions' },
+					h('button', { type: 'button', className: 'at-btn', onClick: onCancel }, t('cancel')),
+					h('button', { type: 'button', className: 'at-btn at-btn-primary', disabled: !form.name.trim() || busy, onClick: save }, busy ? t('tcSaving') : t('tcSave'))));
+		}
 		function ModelFields({ t, catalog, provider, model, effort, onEffort, onProvider, onModel, error }) {
 			const providers = Array.isArray(catalog?.providers) ? catalog.providers.slice() : [];
 			// 推理等级按「提供商 + 模型」按需解析：不同模型支持的档位不同，宿主也随时可能
@@ -2976,6 +3073,21 @@ window.__ModuleLoader__.load({
 				return [talent.name, talent.role, talent.category, talent.description, ...(talent.tags ?? []), ...(talent.skills ?? [])]
 					.some((field) => String(field ?? '').toLowerCase().includes(q));
 			});
+		}
+		function blankTalentForm() {
+			return { name: '', role: '', duty: 'executor', category: '', tags: '', personality: '' };
+		}
+		/** 新建人才表单 → POST /api/talents 的请求体：标签按逗号/顿号/空白拆开，职责只认三种。 */
+		function talentFormToBody(form) {
+			const tags = String((form && form.tags) || '').split(/[,，、\s]+/).map((x) => x.trim()).filter(Boolean);
+			return {
+				name: String((form && form.name) || '').trim(),
+				role: String((form && form.role) || '').trim(),
+				duty: ['lead', 'qa', 'executor'].includes(form && form.duty) ? form.duty : 'executor',
+				category: String((form && form.category) || '').trim(),
+				tags,
+				personality: String((form && form.personality) || '').trim(),
+			};
 		}
 		// </member-copy>
 
@@ -4951,7 +5063,8 @@ window.__ModuleLoader__.load({
 							h('h2', { className: 'at-modaltitle' }, mCopy && !mCopy.talent ? t('memberCopy') : t('addAgentTitle')),
 							mCopy && !mCopy.talent ? null : h('div', { className: 'at-mode at-addtabs', role: 'group', 'aria-label': t('addAgentTitle') },
 								h('button', { type: 'button', 'aria-pressed': mTab === 'market' ? 'true' : 'false', onClick: () => setMTab('market') }, t('talentMarket')),
-								h('button', { type: 'button', 'aria-pressed': mTab === 'custom' ? 'true' : 'false', onClick: () => setMTab('custom') }, t('talentCustom'))),
+								h('button', { type: 'button', 'aria-pressed': mTab === 'custom' ? 'true' : 'false', onClick: () => setMTab('custom') }, t('talentCustom')),
+								h('button', { type: 'button', 'aria-pressed': mTab === 'create' ? 'true' : 'false', onClick: () => setMTab('create') }, t('talentCreate'))),
 							mTab === 'market' && !(mCopy && !mCopy.talent) ? h(TalentMarket, {
 								t,
 								talents,
@@ -4962,7 +5075,7 @@ window.__ModuleLoader__.load({
 								onCategory: setTalentCategory,
 								onHire: hireTalent,
 								onCancel: () => setAddOpen(false),
-							}) : [
+							}) : mTab === 'create' && !(mCopy && !mCopy.talent) ? h(TalentCreator, { t, onSaved: () => { loadTalents(); setMTab('market'); }, onCancel: () => setAddOpen(false) }) : [
 							mCopy?.talent ? h('div', { key: 'from', className: 'at-modalmeta' }, tf(t, 'memberHireFrom', { name: mCopy.sourceName, version: mCopy.talent.version })) : null,
 							mCopy && !mCopy.talent ? h('div', { key: 'from', className: 'at-modalmeta' }, tf(t, 'memberCopyFrom', { name: mCopy.sourceName })) : null,
 							h('label', { key: 'name', className: 'at-field' }, h('span', null, t('memberName')),
