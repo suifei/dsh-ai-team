@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.121 - 2026-11-17
+
+**主对话支持图片、文件与 @成员；文渊阁对话框与 DSH 标准会话同一套**（#65）
+
+- #65：文渊阁对话框不能贴图、拖文件，@ 也点不到具体成员；DSH 标准会话（「文渊阁·PMO」）输入框能贴图，
+  但 0.4.119 转发时只取文字，图片和文件丢了；
+- 一份实现 `lib/domain/rich-message.js`：附件只收 DSH 附件存储的持久引用（与官方 ImageBlock / FileBlock 同形），
+  @成员按花名册长名优先识别；
+- 账本：`stream.post` 可带 `attachments`，只有附件没有文字也能发；Human 消息记下 `mentions`；
+- 唤醒：Human 的话照常交给项目负责人，被 @ 的成员另行唤醒（`human_mention`）；两边都把图片/文件块带进成员会话；
+- DSH 标准会话：Human 在宿主会话里贴的图片、文件随文字一起转进主对话；
+- 文渊阁对话框：粘贴、拖入或点回形针添加图片/文件，选中即上传进 DSH 附件存储（`POST /ai-team/api/attachments`，
+  图片走宿主的格式与尺寸校验，文件原样保存）；输入 @ 弹出成员列表（方向键选择，Enter/Tab 插入）；
+  主对话里显示缩略图（点开看原图）与可下载的文件条（`GET /ai-team/api/attachments/content`，只按账本里记下的引用读）；
+- 测试：`test/rich-message.test.js`、`test/client-composer-rich.test.js`，`test/host-session-gate.test.js` 补附件转发。
+
 ## 0.4.120 - 2026-11-17
 
 **输入框随内容长高、可拖大；成员可一键复制**（#65 的前两项）
