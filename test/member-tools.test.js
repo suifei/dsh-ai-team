@@ -75,7 +75,8 @@ test('the team tool reads, claims, submits, threads and accepts through real Tea
 			action: 'requestChanges', taskId: created.task.id, expectedRevision: accept.task.revision, note: 'x',
 		}, exec('s1'));
 		assert.equal(selfReview.ok, false);
-		assert.equal(selfReview.error.code, 'E_INVALID_STATE');
+		// s1 是主理人：主理人不验收/退回别人的产出，先于状态校验被拒。
+		assert.equal(selfReview.error.code, 'E_REVIEWER_NOT_ELIGIBLE');
 
 		const info = await tool.execute({ action: 'member', memberId: 'a2' }, exec('s1'));
 		assert.equal(info.ok, true);

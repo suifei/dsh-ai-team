@@ -41,8 +41,8 @@ test('the bundled default team picks six talents from the market and keeps the s
 		['mem_ux', '知微', 'UX 设计', 'executor', 'ux-designer'],
 		['mem_biz', '观澜', '业务', 'executor', 'biz-analyst'],
 	]);
-	assert.ok(preset.team.members.every((m) => m.personality.length > 10 && m.talent.version === '1.0.0'));
-	assert.match(procedureText(preset, 'lead'), /审查与导航/);
+	assert.ok(preset.team.members.every((m) => m.personality.length > 10 && /^\d+\.\d+\.\d+$/.test(m.talent.version)));
+	assert.match(procedureText(preset, 'lead'), /交付调度/);
 	assert.match(procedureText(preset, 'qa'), /验收成员/);
 	assert.match(procedureText(preset, 'executor'), /执行成员/);
 	// 人才市场里还有不在默认团队的角色可招。
@@ -66,7 +66,7 @@ test('the bundled reverse-engineering team seeds seven RE talents, each with its
 		['re-verifier', 'qa', ['behavior-diff']],
 	]);
 	// 没带自己的岗位规程 → 退回内置默认团队的三份。
-	assert.match(procedureText(rev, 'lead'), /审查与导航/);
+	assert.match(procedureText(rev, 'lead'), /交付调度/);
 	assert.match(procedureText(rev, 'executor'), /执行成员/);
 	// RE 人才都在人才市场里，分类为「逆向」。
 	const re = listTalents(c).filter((t) => t.category === '逆向');
@@ -122,7 +122,7 @@ test("a member gets its team's procedure for its duty and finds skills in its ta
 		assert.match(text, /课题组的研究助理/);
 		assert.match(text, /### paper-review\n[\s\S]*审稿要点/);
 		// 团队没带的规程退回内置；duty 写明的职责胜过岗位文字。
-		assert.match(await loadSkillContext({ id: 'mem_pi', role: '导师', duty: 'lead' }, [], { vars: {}, preset }), /审查与导航/);
+		assert.match(await loadSkillContext({ id: 'mem_pi', role: '导师', duty: 'lead' }, [], { vars: {}, preset }), /交付调度/);
 		assert.match(await loadSkillContext({ id: 'mem_x', role: '质检', duty: 'qa' }, [], { vars: {}, preset }), /验收成员/);
 	});
 });

@@ -28,7 +28,8 @@ test('assignment and submission wake the responsible Agent', () => {
 	const assigned = planWakes(state, { event: { type: 'task/assigned', seq: 4, payload: { taskId: 't1', assigneeId: 'a2' } } }, {});
 	assert.deepEqual(assigned.map((item) => [item.memberId, item.reason]), [['a2', 'task_assigned']]);
 	const submitted = planWakes(state, { event: { type: 'task/submitted', seq: 5, payload: { taskId: 't2' } } }, {});
-	assert.deepEqual(submitted.map((item) => [item.memberId, item.reason]), [['a1', 'review_requested']]);
+	// a1 是主理人：只调度、不看产出，提交后不叫它验收；队里没有别的合格验收人就留给 Human。
+	assert.deepEqual(submitted.map((item) => [item.memberId, item.reason]), []);
 	const changes = planWakes(state, { event: { type: 'task/changes-requested', seq: 6, payload: { taskId: 't2' } } }, {});
 	assert.deepEqual(changes.map((item) => [item.memberId, item.reason]), [['a2', 'changes_requested']]);
 });
@@ -257,7 +258,7 @@ test('PMO review never wakes the assignee or someone who already claimed the Tas
 	};
 	const plans = planWakes(reviewState, { event: { type: 'pmo/review', payload: { taskId: 't2', bucket: 42 } } }, {});
 	// #18：qaRequired=false 的待验收卡也要催——叫排名第一的合格验收人（与提交时 review_requested 同口径）。
-	assert.deepEqual(plans.map((item) => item.memberId), ['a1'], 'the first eligible reviewer, never the assignee or a past claimer');
+	assert.deepEqual(plans.map((item) => item.memberId), ['a2'], 'the first eligible reviewer, never the assignee, a past claimer or the lead (a1)');
 	const qa = { ...reviewState, tasks: { ...reviewState.tasks, t2: { ...reviewState.tasks.t2, qaRequired: true } } };
 	const qaPlans = planWakes(qa, { event: { type: 'pmo/review', payload: { taskId: 't2', bucket: 42 } } }, {});
 	assert.deepEqual(qaPlans.map((item) => item.memberId), [], 'QA card: nobody left to review without self-review');
