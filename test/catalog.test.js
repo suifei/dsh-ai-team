@@ -172,6 +172,25 @@ test('an existing Project is left alone by a user team; only the bundled team ba
 	});
 });
 
+test('2d: back-fill only runs for the bundled default team on default-team projects; another bundled team never stuffs existing projects', async () => {
+	// 0.4.124 起内置团队不止 default：设置换成 science 后重启，旧逻辑（只看 source === 'bundled'）
+	// 会把启元、立验…塞进每个已有项目。
+	await withProject(async (service) => {
+		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'mem_lead', name: '墨渊', role: '主理人', kind: 'agent' } });
+		const science = resolveTeam(loadCatalog(), 'science');
+		assert.equal(science.source, 'bundled');
+		assert.deepEqual(await seedDefaultRoster(service, 'prj_s', { preset: science }), { seeded: false, members: [], renamed: [] });
+		assert.equal(Object.values(service.state.members).filter((m) => m.kind === 'agent').length, 1, '科研团队的人没被塞进老项目');
+	});
+	// 用 science 建的项目，重启时按默认团队打开：不补默认团队的岗位。
+	await withProject(async (service) => {
+		assert.equal((await seedDefaultRoster(service, 'prj_s', { preset: resolveTeam(loadCatalog(), 'science') })).seeded, true);
+		const before = Object.keys(service.state.members).length;
+		assert.deepEqual((await seedDefaultRoster(service, 'prj_s')).members, [], '科研项目不被补进 UX/业务');
+		assert.equal(Object.keys(service.state.members).length, before);
+	});
+});
+
 test('hiring from the market through member.add records the talent and duty; a bad duty is refused', async () => {
 	await withProject(async (service) => {
 		const { member } = await service.dispatch({ type: 'member.add', actor: human, payload: { name: '评审官', role: '评审', kind: 'agent', talent: 'code-reviewer', talentVersion: '1.0.0', duty: 'qa' } });

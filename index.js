@@ -72,7 +72,7 @@ import { isInformationalThreadMention } from './lib/domain/inbox.js';
 import { messageContent, normalizeAttachments } from './lib/domain/rich-message.js';
 import { readAttachment, uploadAttachment } from './lib/host/attachment-routes.js';
 import { createDiagLogger, defaultDiagDir, installDiagSink } from './lib/diaglog.js';
-import { DEFAULT_TEAM, catalogRoots, deleteTalent, installSkill, listInstallableSkills, listTalents, loadCatalog, readSkillText, resolveTeam, talentFromMember, talentIdFrom, uniqueTalentId, userCatalogDir, writeTalent } from './lib/domain/catalog.js';
+import { DEFAULT_TEAM, catalogRoots, deleteTalent, deleteTeam, installSkill, listInstallableSkills, listTalents, listTeams, loadCatalog, readSkillText, resolveTeam, talentFromMember, talentIdFrom, uniqueTalentId, uniqueTeamId, userCatalogDir, writeTalent, writeTeam } from './lib/domain/catalog.js';
 
 export const name = 'ai-team';
 
@@ -149,9 +149,9 @@ function memberSkillRoots(member, runtime, diag) {
 	return [...memberCatalogDirs(member, diag), ...(dir ? [join(dir, '.dsh')] : []), dshHome(), runtime?.dir].filter((root) => typeof root === 'string' && root !== '');
 }
 
-/** 新项目用哪个团队。 */
-function teamPresetFor(config, diag) {
-	const preset = resolveTeam(talentCatalog(diag), config?.teamPreset || DEFAULT_TEAM, { diag });
+/** 新项目用哪个团队：新建时选的优先，其次插件设置 `teamPreset`，最后内置默认团队。 */
+function teamPresetFor(config, diag, chosen = '') {
+	const preset = resolveTeam(talentCatalog(diag), chosen || config?.teamPreset || DEFAULT_TEAM, { diag });
 	diag?.append?.({ ev: 'catalog.team', name: preset.id, source: preset.source, dir: preset.dir, members: preset.team.members.length });
 	return preset;
 }
@@ -2294,7 +2294,7 @@ export function apply(ctx, config = {}) {
 			entry.timer.unref?.();
 		};
 
-		async function activateProject(nextProjectId, projectName, projectGoal, workspacePath = '') {
+		async function activateProject(nextProjectId, projectName, projectGoal, workspacePath = '', team = '') {
 			await ready;
 			if (booted === null) throw new Error('team ledger is unavailable');
 			let next = projectRuntime(nextProjectId);
@@ -2307,7 +2307,7 @@ export function apply(ctx, config = {}) {
 					workspacePath,
 					diag,
 					pmoMaxRounds: config.pmoMaxRounds,
-					teamPreset: teamPresetFor(config, diag),
+					teamPreset: teamPresetFor(config, diag, team),
 				});
 				booted.runtimes.set(nextProjectId, next);
 				attachRuntime(next);
@@ -2376,6 +2376,35 @@ export function apply(ctx, config = {}) {
 					// 人才市场：「添加成员」弹窗里可招聘的人才（用户自建优先于内置）。
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/talents') {
 						return send(res, { talents: listTalents(talentCatalog(diag)) });
+					}
+					// 团队列表（新建项目选团队、组队面板）；defaultTeam 是插件设置里的默认团队。
+					if (req.method === 'GET' && url.pathname === '/ai-team/api/teams') {
+						return send(res, { teams: listTeams(talentCatalog(diag)), defaultTeam: config?.teamPreset || DEFAULT_TEAM });
+					}
+					// 组队：从人才里挑人建一个用户团队（只写用户根；新建撞名加序号，改写需 overwrite）。
+					if (req.method === 'POST' && url.pathname === '/ai-team/api/teams') {
+						const body = await readJson(req);
+						const cat = talentCatalog(diag);
+						let id = talentIdFrom(body?.id) || talentIdFrom(body?.name);
+						if (id === '' && typeof body?.name === 'string' && body.name.trim() !== '') id = 'team-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+						if (id === '') return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: '团队需要一个名字' } }, 400);
+						if (body?.overwrite !== true) id = uniqueTeamId(cat, id);
+						try {
+							const saved = writeTeam(userCatalogDir(dshHome()), id, body ?? {}, cat);
+							diag?.append({ ev: 'team.write', id, members: saved.members.length });
+							return send(res, { ok: true, team: listTeams(talentCatalog(diag)).find((entry) => entry.id === id) });
+						} catch (error) {
+							return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: error.message } }, 400);
+						}
+					}
+					if (req.method === 'POST' && url.pathname === '/ai-team/api/teams/delete') {
+						const body = await readJson(req);
+						const entry = talentCatalog(diag).teams.get(talentIdFrom(body?.id ?? ''));
+						if (entry === undefined) return send(res, { error: { code: 'NOT_FOUND', message: 'team not found' } }, 404);
+						if (entry.source !== 'user') return send(res, { error: { code: 'E_READONLY', message: '内置团队只读，不能删除' } }, 409);
+						deleteTeam(userCatalogDir(dshHome()), entry.id);
+						diag?.append({ ev: 'team.delete', id: entry.id });
+						return send(res, { ok: true });
 					}
 					// 「存为人才」草稿：按成员此刻的岗位、职责（与激活同一判定）、性格、模型与技能生成；标出每份技能找不找得到。
 					const talentDraftRoute = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/members\/([^/]+)\/talent-draft$/);
@@ -2949,12 +2978,20 @@ export function apply(ctx, config = {}) {
 									return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: `工作目录不存在或不是目录：${workspacePath}` } }, 400);
 								}
 							}
+							// 新建时选的团队：必须在目录里且引用的人才都在（否则种成员会悄悄退回默认团队）。
+							const team = typeof body.payload?.team === 'string' ? body.payload.team.trim() : '';
+							if (team !== '') {
+								const chosen = listTeams(talentCatalog(diag)).find((entry) => entry.id === team);
+								if (chosen === undefined) return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: `团队不存在：${team}` } }, 400);
+								if (chosen.broken) return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: `团队「${chosen.name}」引用了不存在的人才，先修好再用` } }, 400);
+							}
 							const id = ids.project();
 							// 先校验工作目录（上面已做），再写 registry、最后开 runtime：
 							// activateProject 内部会调用 registry.setActive(id)，因此该行必须已
 							// 存在。校验前置后，不会再把一个打不开的项目写进 projects.json。
 							booted.registry.add({ id, name, goal, workspacePath });
-							const next = await activateProject(id, name, goal, workspacePath);
+							const next = await activateProject(id, name, goal, workspacePath, team);
+							diag?.append({ ev: 'project.create', id, team: team || null });
 							return send(res, { ok: true, project: next.service.state.projects[id] ?? { id, name } });
 						}
 						if (body.type === 'project.activate') {

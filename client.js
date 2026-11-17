@@ -302,6 +302,7 @@ window.__ModuleLoader__.load({
 			tcSkills: '技能', tcEmpty: '还没装技能（可选）', tcAddExisting: '从已有装', tcWriteOwn: '自写一份', tcImport: '导入 .md', tcPick: '选一个已有技能…', tcAdd: '加入', tcRemove: '移除',
 			tcSkillName: '技能名（英文/数字/-）', tcSkillBody: '技能正文（SKILL.md）', tcSkillDup: '已经装了同名技能', tcSave: '存为我的人才', tcSaving: '保存中…',
 			memberSaveAsTalent: '存为人才', tcFromMember: '从成员「{name}」存出：沿用它此刻的岗位、职责、性格与技能，可先修改再保存。', tcModelKept: '沿用模型：{model}', tcMissing: '这些技能找不到正文，没有带上：{skills}', tcDraftFailed: '读取成员草稿失败：{error}',
+			projectTeam: '团队', teamCompose: '组一个新团队', teamComposeTitle: '组队', teamComposeHint: '从人才里挑人组队：同一人才可以招多位，给其中一位定为负责人（新项目的主理人）。', teamName: '团队名', teamDesc: '说明', teamMembers: '成员', teamPick: '从人才里挑人', teamAdd: '加入', teamLead: '负责人', teamEmptyPick: '还没挑人', teamSave: '保存团队', teamBack: '返回', teamDelete: '删除这个团队', teamDeleteConfirm: '删除自建团队「{name}」？团队文件会被删除，已用它建的项目和其中成员不受影响。', teamLoadFailed: '团队列表读取失败：{error}',
 			talentEmpty: '没有符合条件的人才。',
 			talentLoading: '正在读取人才市场…',
 			talentLoadFailed: '人才市场读取失败：{error}',
@@ -751,6 +752,7 @@ window.__ModuleLoader__.load({
 			tcSkills: 'Skills', tcEmpty: 'No skills yet (optional)', tcAddExisting: 'From existing', tcWriteOwn: 'Write one', tcImport: 'Import .md', tcPick: 'Pick an existing skill…', tcAdd: 'Add', tcRemove: 'Remove',
 			tcSkillName: 'Skill name (a-z, 0-9, -)', tcSkillBody: 'Skill body (SKILL.md)', tcSkillDup: 'That skill name is already staged', tcSave: 'Save as my talent', tcSaving: 'Saving…',
 			memberSaveAsTalent: 'Save as talent', tcFromMember: 'Saved from member “{name}”: its current role, duty, personality and skills are filled in; edit before saving.', tcModelKept: 'Keeps the model: {model}', tcMissing: 'These skills have no readable body and were left out: {skills}', tcDraftFailed: 'Could not read the member draft: {error}',
+			projectTeam: 'Team', teamCompose: 'Compose a new team', teamComposeTitle: 'Compose a team', teamComposeHint: 'Pick talents into a team: the same talent can be hired more than once; mark one as the lead (the new project owner).', teamName: 'Team name', teamDesc: 'Description', teamMembers: 'Members', teamPick: 'Pick from talents', teamAdd: 'Add', teamLead: 'Lead', teamEmptyPick: 'Nobody picked yet', teamSave: 'Save team', teamBack: 'Back', teamDelete: 'Delete this team', teamDeleteConfirm: 'Delete your team “{name}”? Its file is removed; projects already created from it and their members are unaffected.', teamLoadFailed: 'Could not load teams: {error}',
 			talentEmpty: 'No talent matches.',
 			talentLoading: 'Loading the talent market…',
 			talentLoadFailed: 'Could not load the talent market: {error}',
@@ -1395,6 +1397,12 @@ window.__ModuleLoader__.load({
 			.at-tcskill button { border: 0; background: transparent; cursor: pointer; font-size: 14px; line-height: 1; color: inherit; padding: 0; }
 			.at-tcpick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 			.at-tcpanel { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+			.at-teamrows { display: flex; flex-direction: column; gap: 6px; }
+			.at-teamrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center; }
+			.at-teamlead { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
+			.at-teampick { display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; }
+			.at-teampickrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
+			.at-teampickrow > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.at-market { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 			.at-marketsearch { width: 100%; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; }
 			.at-marketcats { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -2827,6 +2835,54 @@ window.__ModuleLoader__.load({
 					h('button', { type: 'button', className: 'at-btn', onClick: onCancel }, t('cancel')),
 					h('button', { type: 'button', className: 'at-btn at-btn-primary', disabled: !form.name.trim() || busy, onClick: save }, busy ? t('tcSaving') : t('tcSave'))));
 		}
+		function TeamComposer({ t, talents, onSaved, onCancel }) {
+			const [draft, setDraft] = React.useState({ name: '', description: '', members: [], lead: 0 });
+			const [query, setQuery] = React.useState('');
+			const [busy, setBusy] = React.useState(false);
+			const [error, setError] = React.useState('');
+			const shown = filterTalents(talents, query, '').slice(0, 40);
+			const byId = (id) => (talents || []).find((x) => x.id === id);
+			function add(talent) { setDraft((d) => ({ ...d, members: [...d.members, { talent: talent.id, name: '' }] })); }
+			function remove(index) { setDraft((d) => ({ ...d, members: d.members.filter((_, i) => i !== index), lead: d.lead === index ? 0 : d.lead > index ? d.lead - 1 : d.lead })); }
+			function rename(index, name) { setDraft((d) => ({ ...d, members: d.members.map((m, i) => (i === index ? { ...m, name } : m)) })); }
+			async function save() {
+				const body = teamDraftToBody(draft);
+				if (!body.name || body.members.length === 0 || busy) return;
+				setBusy(true); setError('');
+				try {
+					const res = await fetch('/ai-team/api/teams', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+					const out = await res.json().catch(() => null);
+					if (!res.ok) throw new Error((out && out.error && out.error.message) || ('HTTP ' + res.status));
+					onSaved(out.team);
+				} catch (err) {
+					setError((err && err.message) || String(err));
+				} finally {
+					setBusy(false);
+				}
+			}
+			return h('div', { className: 'at-market' },
+				h('div', { className: 'at-modalmeta' }, t('teamComposeHint')),
+				h('label', { className: 'at-field' }, h('span', null, t('teamName')), h('input', { value: draft.name, onChange: (e) => setDraft({ ...draft, name: e.target.value }), autoFocus: true })),
+				h('label', { className: 'at-field' }, h('span', null, t('teamDesc')), h('input', { value: draft.description, onChange: (e) => setDraft({ ...draft, description: e.target.value }) })),
+				h('div', { className: 'at-field' }, h('span', null, t('teamMembers')),
+					draft.members.length === 0 ? h('div', { className: 'at-modalmeta' }, t('teamEmptyPick')) : h('div', { className: 'at-teamrows' }, draft.members.map((m, i) => {
+						const talent = byId(m.talent) || { name: m.talent, role: '' };
+						return h('div', { key: i, className: 'at-teamrow' },
+							h('input', { value: m.name, placeholder: talent.name, 'aria-label': t('teamName'), onChange: (e) => rename(i, e.target.value) }),
+							h('span', { className: 'at-modalmeta' }, talent.role),
+							h('label', { className: 'at-teamlead' }, h('input', { type: 'radio', name: 'team-lead', checked: draft.lead === i, onChange: () => setDraft({ ...draft, lead: i }) }), t('teamLead')),
+							h('button', { type: 'button', className: 'at-btn at-btn-small', 'aria-label': t('tcRemove'), onClick: () => remove(i) }, '×'));
+					}))),
+				h('div', { className: 'at-field' }, h('span', null, t('teamPick')),
+					h('input', { className: 'at-marketsearch', type: 'search', value: query, placeholder: t('talentSearch'), onChange: (e) => setQuery(e.target.value) }),
+					talents === null ? h('div', { className: 'at-modalmeta' }, t('talentLoading')) : h('div', { className: 'at-teampick' }, shown.map((talent) => h('div', { key: talent.id, className: 'at-teampickrow' },
+						h('span', null, talent.name + ' · ' + talent.role + (talent.source === 'user' ? ' · ' + t('talentUser') : '')),
+						h('button', { type: 'button', className: 'at-btn at-btn-small', onClick: () => add(talent) }, t('teamAdd')))))),
+				error ? h('div', { className: 'at-modalerror', role: 'alert' }, error) : null,
+				h('div', { className: 'at-modalactions' },
+					h('button', { type: 'button', className: 'at-btn', onClick: onCancel }, t('teamBack')),
+					h('button', { type: 'button', className: 'at-btn at-btn-primary', disabled: busy || !draft.name.trim() || draft.members.length === 0, onClick: save }, busy ? t('saving') : t('teamSave'))));
+		}
 		function ModelFields({ t, catalog, provider, model, effort, onEffort, onProvider, onModel, error }) {
 			const providers = Array.isArray(catalog?.providers) ? catalog.providers.slice() : [];
 			// 推理等级按「提供商 + 模型」按需解析：不同模型支持的档位不同，宿主也随时可能
@@ -3110,6 +3166,16 @@ window.__ModuleLoader__.load({
 				sourceName: String(draft.name || ''),
 			};
 		}
+		/** 组队草稿 → POST /api/teams 请求体：成员只带人才 id 与（改过的）名字；负责人按下标，越界退回第一位。 */
+		function teamDraftToBody(draft) {
+			const members = (Array.isArray(draft && draft.members) ? draft.members : []).filter((m) => m && m.talent).map((m) => (String(m.name || '').trim() ? { talent: m.talent, name: String(m.name).trim() } : { talent: m.talent }));
+			const lead = Number.isInteger(draft && draft.lead) && draft.lead >= 0 && draft.lead < members.length ? draft.lead : 0;
+			return { name: String((draft && draft.name) || '').trim(), description: String((draft && draft.description) || '').trim(), members, lead };
+		}
+		/** 团队一行摘要：负责人打星，其余按名字列出。 */
+		function teamMembersLine(team) {
+			return (Array.isArray(team && team.members) ? team.members : []).map((m) => (m.id === team.lead ? '★' : '') + m.name + (m.role ? '·' + m.role : '')).join('、');
+		}
 		// </member-copy>
 
 		// <composer-rich>
@@ -3269,6 +3335,12 @@ window.__ModuleLoader__.load({
 			const [nName, setNName] = React.useState('');
 			const [nGoal, setNGoal] = React.useState('');
 			const [nWorkspace, setNWorkspace] = React.useState('');
+			// 新建项目选团队（2d）：团队列表、所选团队、组队面板。
+			const [teamList, setTeamList] = React.useState(null);
+			const [nTeam, setNTeam] = React.useState('');
+			const [teamLoadError, setTeamLoadError] = React.useState('');
+			const [teamComposeOpen, setTeamComposeOpen] = React.useState(false);
+			const selectedTeam = (teamList || []).find((entry) => entry.id === nTeam) || null;
 			const [workspaceOpen, setWorkspaceOpen] = React.useState(false);
 			const [workspaceDraft, setWorkspaceDraft] = React.useState('');
 			const [workspaceError, setWorkspaceError] = React.useState('');
@@ -3948,6 +4020,9 @@ window.__ModuleLoader__.load({
 				// 工作目录，成员只能在插件数据目录里跑，workspace attach 也会被拒。
 				setNWorkspace(data?.defaultWorkspace ?? '');
 				setNError('');
+				setNTeam('');
+				setTeamComposeOpen(false);
+				void loadTeams();
 				setNewOpen(true);
 			}
 			async function togglePmo() {
@@ -4003,12 +4078,37 @@ window.__ModuleLoader__.load({
 					setWorkspaceBusy(false);
 				}
 			}
+			/** 每次打开新建项目现取团队列表：刚组的队、刚改的 team.yml 立刻可选。select 留空表示沿用设置里的默认团队。 */
+			async function loadTeams(select) {
+				setTeamLoadError('');
+				try {
+					const response = await fetch('/ai-team/api/teams', { headers: { accept: 'application/json' } });
+					const body = await response.json().catch(() => null);
+					if (!response.ok) throw new Error((body && body.error && body.error.message) || ('HTTP ' + response.status));
+					setTeamList(Array.isArray(body && body.teams) ? body.teams : []);
+					setNTeam(select || (body && body.defaultTeam) || 'default');
+				} catch (error) {
+					setTeamList([]);
+					setTeamLoadError(tf(t, 'teamLoadFailed', { error: (error && error.message) || String(error) }));
+				}
+			}
+			async function removeTeam(team) {
+				if (!(await askConfirm(t('teamDelete'), tf(t, 'teamDeleteConfirm', { name: team.name })))) return;
+				try {
+					const response = await fetch('/ai-team/api/teams/delete', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: team.id }) });
+					const body = await response.json().catch(() => null);
+					if (!response.ok) throw new Error((body && body.error && body.error.message) || ('HTTP ' + response.status));
+					await loadTeams();
+				} catch (error) {
+					setNError((error && error.message) || String(error));
+				}
+			}
 			async function createProject() {
 				if (!nName.trim() || !nWorkspace.trim() || nBusy) return;
 				setNBusy(true);
 				setNError('');
 				try {
-					const result = await runCommand('project.create', { name: nName.trim(), goal: nGoal.trim(), workspacePath: nWorkspace.trim() });
+					const result = await runCommand('project.create', { name: nName.trim(), goal: nGoal.trim(), workspacePath: nWorkspace.trim(), ...(nTeam ? { team: nTeam } : {}) });
 					const next = result.project;
 					setNewOpen(false);
 					setScope('project');
@@ -5269,10 +5369,22 @@ window.__ModuleLoader__.load({
 								h('div', { className: 'at-inlineadd' },
 									h('input', { value: nWorkspace, onChange: (event) => setNWorkspace(event.target.value), placeholder: data?.workspaceExample ?? t('workspacePathPlaceholder') }),
 									h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: pickNewWorkspace }, t('workspaceChoose')))),
+							h('label', { className: 'at-field' }, h('span', null, t('projectTeam')),
+								teamList === null ? h('div', { className: 'at-modalmeta' }, t('talentLoading'))
+									: h('select', { value: nTeam, onChange: (event) => setNTeam(event.target.value) }, teamList.filter((entry) => !entry.broken).map((entry) => h('option', { key: entry.id, value: entry.id }, entry.name + '（' + entry.members.length + '）' + (entry.source === 'user' ? ' · ' + t('talentUser') : ''))))),
+							selectedTeam ? h('div', { className: 'at-modalmeta' }, (selectedTeam.description ? selectedTeam.description + '：' : '') + teamMembersLine(selectedTeam)) : null,
+							teamLoadError ? h('div', { className: 'at-modalerror', role: 'alert' }, teamLoadError) : null,
+							h('div', { className: 'at-tcpick' },
+								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => { setTeamComposeOpen(true); loadTalents(); } }, t('teamCompose')),
+								selectedTeam && selectedTeam.source === 'user' ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => void removeTeam(selectedTeam) }, t('teamDelete')) : null),
 							nError ? h('div', { className: 'at-modalerror', role: 'alert' }, nError) : null,
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setNewOpen(false), disabled: nBusy }, t('cancel')),
 								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: nBusy || !nName.trim() || !nWorkspace.trim() }, nBusy ? t('saving') : t('projectCreate'))))) : null,
+					teamComposeOpen ? h(ModalBack, { onClose: () => setTeamComposeOpen(false) },
+						h('div', { className: 'at-modal at-modal-wide', role: 'dialog', 'aria-modal': 'true', 'aria-label': t('teamComposeTitle') },
+							h('h2', { className: 'at-modaltitle' }, t('teamComposeTitle')),
+							h(TeamComposer, { t, talents, onSaved: (team) => { setTeamComposeOpen(false); void loadTeams(team && team.id); }, onCancel: () => setTeamComposeOpen(false) }))) : null,
 					dialog ? h(WorkbenchDialog, { key: dialogSeqRef.current, t, dialog, onDismiss: () => setDialog(null) }) : null,
 					shortcutsOpen ? h(ModalBack, { onClose: () => setShortcutsOpen(false) },
 						h('div', { className: 'at-modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': t('shortcutTitle') },

@@ -139,6 +139,46 @@ test('talent market 2a: create a custom talent, install a written skill and a fo
 	const over = await post('/ai-team/api/talents', { id: 'dup', name: 'A2', role: 'r', overwrite: true });
 	assert.deepEqual([over.body.talent.id, over.body.talent.name], ['dup', 'A2']);
 
+	// 11. 2d 组队：团队列表默认团队排第一；从人才里挑人建团队（同一人才招两位，成员 id 自动去重，lead 按下标）。
+	const teams = await get('/ai-team/api/teams');
+	assert.equal(teams.status, 200);
+	assert.equal(teams.body.teams[0].id, 'default');
+	assert.equal(teams.body.defaultTeam, 'default');
+	assert.ok(teams.body.teams.some((x) => x.id === 'science' && x.source === 'bundled' && !x.broken));
+	const team = await post('/ai-team/api/teams', { name: 'speaking', description: '口语陪练小组', members: [{ talent: 'executor' }, { talent: 'executor', name: '青岚二号' }, { talent: 'qa-acceptor' }], lead: 2 });
+	assert.equal(team.status, 200, JSON.stringify(team.body));
+	assert.equal(team.body.team.id, 'speaking');
+	assert.equal(team.body.team.source, 'user');
+	assert.deepEqual(team.body.team.members.map((m) => [m.id, m.name]), [['mem_executor', '青岚'], ['mem_executor_2', '青岚二号'], ['mem_qa_acceptor', '白砚']]);
+	assert.equal(team.body.team.lead, 'mem_qa_acceptor');
+	assert.ok(existsSync(join(root, 'ai-team', 'catalog', 'user', 'teams', 'speaking', 'team.yml')));
+	assert.equal((await post('/ai-team/api/teams', { name: 'speaking', members: [{ talent: 'executor' }] })).body.team.id, 'speaking-2', '新建撞名加序号');
+	assert.equal((await post('/ai-team/api/teams', { name: 'science', members: [{ talent: 'executor' }] })).body.team.id, 'science-2', '不遮盖内置团队');
+	assert.equal((await post('/ai-team/api/teams', { name: 'bad', members: [{ talent: 'nobody' }] })).status, 400, '引用不存在的人才被拒');
+	assert.equal((await post('/ai-team/api/teams', { name: 'empty', members: [] })).status, 400, '空团队被拒');
+
+	// 12. 新建项目时选团队：按团队种成员，负责人成为项目主理人；不存在的团队 400。
+	const ws = await mkdtemp(join(tmpdir(), 'ai-team-talent-ws-'));
+	t.after(() => rm(ws, { recursive: true, force: true }));
+	const proj = await post(`/ai-team/api/projects/${pid}/commands`, { type: 'project.create', payload: { name: '口语项目', workspacePath: ws, team: 'speaking' } });
+	assert.equal(proj.status, 200, JSON.stringify(proj.body));
+	const newId = proj.body.project.id;
+	const newBoot = (await get(`/ai-team/api/bootstrap?project=${newId}`)).body;
+	assert.deepEqual(newBoot.agents.map((a) => [a.id, a.team, a.talent]).sort(), [['mem_executor', 'speaking', 'executor'], ['mem_executor_2', 'speaking', 'executor'], ['mem_qa_acceptor', 'speaking', 'qa-acceptor']]);
+	assert.equal(newBoot.project.owner, 'mem_qa_acceptor');
+	const sci = await post(`/ai-team/api/projects/${pid}/commands`, { type: 'project.create', payload: { name: '科研项目', workspacePath: ws, team: 'science' } });
+	assert.equal(sci.status, 200);
+	const sciAgents = (await get(`/ai-team/api/bootstrap?project=${sci.body.project.id}`)).body.agents;
+	assert.ok(sciAgents.length > 0 && sciAgents.every((a) => a.team === 'science'), '内置科研团队也能直接选');
+	assert.equal((await post(`/ai-team/api/projects/${pid}/commands`, { type: 'project.create', payload: { name: 'x', workspacePath: ws, team: 'no-such' } })).status, 400);
+	// 不选团队照旧用默认团队。
+	const plainProj = await post(`/ai-team/api/projects/${pid}/commands`, { type: 'project.create', payload: { name: '普通项目', workspacePath: ws } });
+	assert.ok((await get(`/ai-team/api/bootstrap?project=${plainProj.body.project.id}`)).body.agents.every((a) => a.team === 'default'));
+
+	// 13. 删团队：用户团队可删，内置团队 409。
+	assert.equal((await post('/ai-team/api/teams/delete', { id: 'speaking-2' })).status, 200);
+	assert.equal((await post('/ai-team/api/teams/delete', { id: 'science' })).status, 409);
+
 	// 精简测试壳没接 tool registry，SkillOpt 注册会打一条环境提示——与本测试无关，过滤掉。
 	const faults = consoleErrors.filter((line) => !line.includes('SkillOpt tools not registered'));
 	assert.deepEqual(faults, [], '运行期无 console.error/warn：' + faults.join(' | '));
