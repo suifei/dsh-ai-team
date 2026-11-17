@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { openLedger } from '../lib/ledger/writer.js';
 import { TeamService } from '../lib/host/service.js';
 import { planWakes } from '../lib/host/waker.js';
-import { describeAttachments, findMentions, messageContent, normalizeAttachments } from '../lib/domain/rich-message.js';
+import { describeAttachments, findMentions, messageContent, normalizeAttachments, plainMentionLinks } from '../lib/domain/rich-message.js';
 import { attachmentAt, displayName, readAttachment, uploadAttachment } from '../lib/host/attachment-routes.js';
 
 // #65：主对话的「需求内容」= 文字 + 图片/文件 + @成员；文渊阁对话框与 DSH 标准会话共用这一份实现。
@@ -42,6 +42,39 @@ test('@ mentions resolve against the roster, longest name first, active agents o
 	assert.deepEqual(findMentions('@玄策2 和 @玄策看下这张图，@青岚 也看，@玄策 再说一次', members), ['a2', 'a1', 'a4']);
 	assert.deepEqual(findMentions('@白砚 @Human @无名', members), []);
 	assert.deepEqual(findMentions('没有点名', members), []);
+});
+
+test('an @ inserted by the DSH standard session composer (a dsh-session link) names the member by session id (il2c 11-17 20:53)', () => {
+	// 实机原文：「@[tony老师](dsh-session:…) 你看看你的任务」——账本没有 mentions，tony 老师没被直接叫醒。
+	const live = '@[tony老师](dsh-session:IjFlMmJjOGU5LTAzNjMtNDQ3Yy1iZmEyLWJjYzVlOTYzMmI4ZCI) 你看看你的任务';
+	const members = {
+		tony: { id: 'tony', name: 'tony老师', kind: 'agent', status: 'idle', sessionId: '1e2bc8e9-0363-447c-bfa2-bcc5e9632b8d' },
+		renamed: { id: 'renamed', name: '玄策', kind: 'agent', status: 'idle', sessionId: 'sess-x' },
+		lead: { id: 'lead', name: '墨渊', kind: 'agent', status: 'idle', sessionId: 'sess-lead' },
+	};
+	assert.deepEqual(findMentions(live, members), ['tony']);
+	assert.equal(plainMentionLinks(live), '@tony老师 你看看你的任务');
+	// 会话 id 对不上（旧会话）时按链接里的名字；与普通 @ 混用按出现顺序。
+	const stale = '@墨渊 先看，再叫 @[玄策](dsh-session:' + Buffer.from(JSON.stringify('old-session')).toString('base64url') + ')';
+	assert.deepEqual(findMentions(stale, members), ['lead', 'renamed']);
+	assert.equal(findMentions('@[陌生人](dsh-session:bm90LWpzb24) hi', members).length, 0);
+});
+
+test('stream.post shows a DSH session @ as "@name" and records the mention', async () => {
+	const root = await mkdtemp(join(tmpdir(), 'ai-team-link-'));
+	const ledger = openLedger({ dir: join(root, 'ledger'), projectId: 'prj_link', fsync: false });
+	try {
+		const service = new TeamService({ ledger });
+		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'h1', name: 'Human', kind: 'human' } });
+		await service.dispatch({ type: 'member.add', actor: human, payload: { id: 'tony', name: 'tony老师', kind: 'agent' } });
+		await service.dispatch({ type: 'project.create', actor: human, payload: { name: 'L', ownerId: 'h1', workspacePath: root } });
+		const ref = Buffer.from(JSON.stringify('no-such-session')).toString('base64url');
+		const { entry } = await service.dispatch({ type: 'stream.post', actor: human, projectId: 'prj_link', payload: { body: `@[tony老师](dsh-session:${ref}) 你看看你的任务` } });
+		assert.deepEqual([entry.body, entry.mentions], ['@tony老师 你看看你的任务', ['tony']]);
+	} finally {
+		ledger.close?.();
+		await rm(root, { recursive: true, force: true });
+	}
 });
 
 test('stream.post stores attachments and mentions, accepts an image-only message, and the ledger replays them', async () => {
