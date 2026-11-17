@@ -28,6 +28,11 @@ const BOOTSTRAP = {
 	stream: [
 		{ id: 's1', type: 'agent_message', at: now - 60000, author: { name: '青岚', kind: 'agent' }, body: '已认领任务并开始执行。', taskIds: ['t1'] },
 		{ id: 's2', type: 'human_message', at: now - 30000, author: { name: '你', kind: 'human' }, body: '请优先处理高风险项。' },
+		// #65：带图片与文件的 Human 消息（渲染 MessageAttachments）。
+		{ id: 's3', seq: 3, projectId: 'prj_t', type: 'human_message', at: now - 20000, author: { name: '你', kind: 'human' }, body: '@青岚 看下这张图', mentions: ['a1'], attachments: [
+			{ type: 'image', attachment: { attachmentId: 'img-1', mediaType: 'image/png', bytes: 10, width: 4, height: 3, name: '报错.png' } },
+			{ type: 'file', attachment: { attachmentId: 'f-1', bytes: 2048, name: 'spec.pdf' } },
+		] },
 	],
 	tasks: [
 		{ id: 't1', number: 1, title: '实现登录页', status: 'in_progress', ownerId: 'a1', assigneeId: 'a1', revision: 3, blockedBy: [], irreversible: false, createdAt: now - 3600000, updatedAt: now - 60000, replies: 2, summary: '登录页初稿' },
@@ -184,6 +189,7 @@ test('headless render: workbench main path evaluates every component without ref
 		},
 		EventSource: class { addEventListener() {} close() {} },
 		location: { href: 'http://127.0.0.1:28862/', pathname: '/', search: '' },
+		URL, URLSearchParams,
 		requestAnimationFrame: () => 0,
 		setTimeout: () => 0, clearTimeout() {},
 		console: { log() {}, error() {}, warn() {} },

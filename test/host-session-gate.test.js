@@ -18,9 +18,9 @@ function gate({ humanFails = false, memberFails = false } = {}) {
 	const g = registerHostSessionGate({
 		on: (name, listener) => { hooks.push(name); return () => hooks.splice(hooks.indexOf(name), 1); },
 		isHostSession: (id) => (id === HOST ? { projectId: 'prj_1' } : null),
-		forwardHuman: async (projectId, text) => {
+		forwardHuman: async (projectId, text, attachments) => {
 			if (humanFails) throw new Error('ledger closed');
-			forwardedHuman.push([projectId, text]);
+			forwardedHuman.push(attachments.length > 0 ? [projectId, text, attachments] : [projectId, text]);
 		},
 		forwardMember: async (projectId, from, text) => {
 			if (memberFails) throw new Error('no member');
@@ -74,6 +74,17 @@ test('a failed Human forward lets the host model answer instead of losing what H
 	assert.deepEqual(failedMember.rows.map((row) => row.ev), ['host.member.forward.fail', 'host.turn.blocked']);
 });
 
+test('images and files Human pastes into the DSH standard session reach the main conversation with the text (#65)', async () => {
+	// #65：DSH 标准会话输入框能贴图/拖文件，0.4.119 只转文字，附件在转发时丢了。
+	const { human, run } = gate();
+	const image = { type: 'image', attachment: { attachmentId: 'img-1', mediaType: 'image/png', bytes: 10, width: 4, height: 3 } };
+	const file = { type: 'file', attachment: { attachmentId: 'f-1', bytes: 20, name: 'spec.pdf' } };
+	const withText = { role: 'user', content: [{ type: 'text', text: '@玄策 看下这张图' }, image, file], source: { kind: 'user' } };
+	const imageOnly = { role: 'user', content: [image], source: { kind: 'user' } };
+	assert.equal((await run({ agent: agentOf(HOST), messages: [withText, imageOnly], turn: 3, step: 1 })).kind, 'reject');
+	assert.deepEqual(human, [['prj_1', '@玄策 看下这张图', [image, file]], ['prj_1', '', [image]]]);
+});
+
 test('the gate leaves member sessions and later steps alone', async () => {
 	const { rows, human, members, run } = gate();
 	assert.equal((await run({ agent: agentOf('member-1'), messages: [say('你好'), notice('x'), fromMember('y', 'hi')], turn: 1, step: 1 })).kind, 'enter');
@@ -86,7 +97,7 @@ test('index.js registers the gate for project host sessions, forwards through st
 	const start = index.indexOf('registerHostSessionGate({');
 	const wiring = index.slice(start, start + 2000);
 	assert.match(wiring, /runtime\.service\.state\.hostSessionId === sessionId\) return \{ projectId: runtime\.id \}/);
-	assert.match(wiring, /type: 'stream\.post', payload: \{ body \}, actor: \{ kind: 'human', memberId: HUMAN_ID \}/);
+	assert.match(wiring, /type: 'stream\.post', payload: \{ body, \.\.\.\(refs\.length > 0 \? \{ attachments: refs \} : \{\}\) \}, actor: \{ kind: 'human', memberId: HUMAN_ID \}/);
 	assert.match(wiring, /entry\?\.sessionId === senderSessionId/);
 	assert.match(wiring, /actor: \{ kind: 'agent', memberId: member\.id \}/);
 	assert.match(index, /hostSessionGate\.dispose\(\);/);

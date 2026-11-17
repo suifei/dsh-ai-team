@@ -33,7 +33,14 @@ window.__ModuleLoader__.load({
 			boardTab: '看板',
 			tabSituation: '态势',
 			tabsAria: '项目视图',
-			composer: '写一条消息…',
+			composer: '写一条消息… @ 点名成员，可粘贴或拖入图片与文件',
+			attachAdd: '添加图片或文件',
+			attachRemove: '移除 {name}',
+			attachUploading: '附件还在上传，稍等再发送。',
+			attachFailed: '「{name}」上传失败：{message}',
+			attachDrop: '松开即可添加图片或文件',
+			attachTaskMode: '附件随讨论发送；建卡模式下不带附件。',
+			mentionList: '点名成员',
 			taskPlaceholder: '任务标题：要做什么',
 			taskDefinitionPlaceholder: '验收标准（必填）：怎样算完成、拿什么证据',
 			taskDefinitionAria: 'Task 验收标准',
@@ -453,7 +460,14 @@ window.__ModuleLoader__.load({
 			boardTab: 'Board',
 			tabSituation: 'Situation',
 			tabsAria: 'Project views',
-			composer: 'Write a message…',
+			composer: 'Write a message… @ a member; paste or drop images and files',
+			attachAdd: 'Add images or files',
+			attachRemove: 'Remove {name}',
+			attachUploading: 'Attachments are still uploading; send again in a moment.',
+			attachFailed: 'Upload of “{name}” failed: {message}',
+			attachDrop: 'Drop to attach images or files',
+			attachTaskMode: 'Attachments go with discussion messages; task mode sends none.',
+			mentionList: 'Mention a member',
 			taskPlaceholder: 'Task title: what to do',
 			taskDefinitionPlaceholder: 'Definition of done (required): how it is accepted, with what evidence',
 			taskDefinitionAria: 'Definition of done',
@@ -1186,6 +1200,25 @@ window.__ModuleLoader__.load({
 			.at-box.at-taskmode { border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 20%, var(--dsw-alias-border-l2)); }
 			.at-box textarea { display: block; width: 100%; box-sizing: border-box; min-height: 38px; max-height: 60vh; resize: vertical; padding: 2px; border: 0; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; line-height: 21px; }
 			.at-barrow { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+			.at-box { position: relative; }
+			.at-box.at-dropping { border-style: dashed; border-color: var(--dsw-alias-state-business-primary); }
+			.at-drophint { position: absolute; inset: 0; z-index: 2; display: flex; align-items: center; justify-content: center; border-radius: inherit; background: color-mix(in srgb, var(--dsw-alias-bg-layer-2) 88%, transparent); color: var(--dsw-alias-label-secondary); font-size: 12px; pointer-events: none; }
+			.at-mentions { position: absolute; left: 8px; bottom: calc(100% + 4px); z-index: 3; min-width: 180px; max-width: calc(100% - 16px); max-height: 240px; overflow-y: auto; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); box-shadow: 0 6px 20px rgba(0, 0, 0, .14); }
+			.at-mention { display: flex; align-items: baseline; gap: 8px; padding: 5px 8px; border-radius: var(--dsw-radius-sm); font-size: 12px; cursor: pointer; }
+			.at-mention span { min-width: 0; overflow: hidden; color: var(--dsw-alias-label-tertiary); text-overflow: ellipsis; white-space: nowrap; }
+			.at-mention-on, .at-mention:hover { background: var(--dsw-alias-button-ghost-active-fill); }
+			.at-attachrow, .at-msgfiles { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+			.at-attach, .at-msgfile { display: inline-flex; align-items: center; gap: 6px; max-width: 240px; min-height: 28px; padding: 3px 6px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary); font-size: 11px; text-decoration: none; }
+			.at-attach img { width: 28px; height: 28px; object-fit: cover; border-radius: 3px; }
+			.at-attach-busy { opacity: .6; }
+			.at-attach-error { border-color: var(--dsw-alias-state-danger-primary, #d33); }
+			.at-attachname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+			.at-attachsize { flex: 0 0 auto; color: var(--dsw-alias-label-caption); }
+			.at-attachx { flex: 0 0 auto; padding: 0 2px; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 14px; line-height: 1; cursor: pointer; }
+			.at-attachbtn { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 24px; padding: 0; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: transparent; color: var(--dsw-alias-label-tertiary); cursor: pointer; }
+			.at-attachbtn:hover { color: var(--dsw-alias-label-primary); }
+			.at-msgimg { display: block; line-height: 0; }
+			.at-msgimg img { max-width: min(320px, 100%); max-height: 240px; width: auto; height: auto; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); object-fit: contain; background: var(--dsw-alias-bg-base); }
 			.at-mode { display: inline-flex; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); }
 			.at-mode button { min-height: 24px; padding: 0 8px; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; }
 			.at-mode button[aria-pressed="true"] { background: var(--dsw-alias-button-ghost-active-fill); color: var(--dsw-alias-label-primary); }
@@ -1425,6 +1458,8 @@ window.__ModuleLoader__.load({
 			if (name === 'inbox') return h('svg', common, h('path', { d: 'M2.5 9.5h3l1 1.5h3l1-1.5h3' }), h('path', { d: 'M2.5 9.5V4.5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v5' }));
 			if (name === 'board') return h('svg', common, h('rect', { x: 2.5, y: 3.5, width: 11, height: 9, rx: 1.5 }), h('path', { d: 'M6 3.5v9M10 3.5v9' }));
 			if (name === 'plus') return h('svg', common, h('path', { d: 'M8 3v10M3 8h10' }));
+			if (name === 'clip') return h('svg', common, h('path', { d: 'M10.5 5.5 6 10a1.4 1.4 0 0 0 2 2l5-5a2.8 2.8 0 0 0-4-4L4 8a4.2 4.2 0 0 0 6 6l3.5-3.5' }));
+			if (name === 'file') return h('svg', common, h('path', { d: 'M4 2.5h5l3 3v8H4Z' }), h('path', { d: 'M9 2.5v3h3' }));
 			if (name === 'menu') return h('svg', common, h('path', { d: 'M3 4.5h10M3 8h10M3 11.5h10' }));
 			if (name === 'bell') return h('svg', common, h('path', { d: 'M4.5 7a3.5 3.5 0 0 1 7 0v3l1 1.5h-9L4.5 10V7Z' }), h('path', { d: 'M6.5 13a1.5 1.5 0 0 0 3 0' }));
 			if (name === 'bellOff') return h('svg', common, h('path', { d: 'M4.5 7a3.5 3.5 0 0 1 5.5-3' }), h('path', { d: 'M6.5 13a1.5 1.5 0 0 0 3 0' }), h('path', { d: 'M4.5 10l-1 1.5h9L11.5 10V8.5' }), h('path', { d: 'M3 3l10 10' }));
@@ -1590,8 +1625,21 @@ window.__ModuleLoader__.load({
 						agent && onChat ? h('button', { className: 'at-workspacebtn', type: 'button', title: t('routingHint'), onClick: () => onChat(agent) }, t('agentChat')) : null,
 					),
 					h('div', { className: 'at-msgt' }, item.body),
+					Array.isArray(item.attachments) && item.attachments.length > 0 ? h(MessageAttachments, { item }) : null,
 					cards.length ? h(TaskGroup, { t, cards, tasks, selected, follows, onOpen, onToggleFollow }) : null,
 				));
+		}
+
+		/** #65：主对话消息里的图片（缩略图，点开看原图）与文件（点击下载）；按账本 seq + 序号读回。 */
+		function MessageAttachments({ item }) {
+			const src = (index) => '/ai-team/api/attachments/content?' + new URLSearchParams({ project: item.projectId ?? '', seq: String(item.seq), index: String(index) }).toString();
+			return h('div', { className: 'at-msgfiles' }, item.attachments.map((block, index) => block.type === 'image'
+				? h('a', { key: index, className: 'at-msgimg', href: src(index), target: '_blank', rel: 'noopener', title: block.attachment?.name ?? '' },
+					h('img', { src: src(index), alt: block.attachment?.name ?? '', loading: 'lazy', width: block.attachment?.width, height: block.attachment?.height }))
+				: h('a', { key: index, className: 'at-msgfile', href: src(index), download: block.attachment?.name ?? 'file' },
+					h(Ico, { name: 'file' }),
+					h('span', { className: 'at-attachname' }, block.attachment?.name ?? 'file'),
+					h('span', { className: 'at-attachsize' }, fmtBytes(block.attachment?.bytes)))));
 		}
 
 		function ToastStack({ t, toasts, onClose }) {
@@ -2346,18 +2394,56 @@ window.__ModuleLoader__.load({
 							h('button', { className: 'at-send', type: 'button', disabled: !reply.trim(), onClick: onReplySend }, t('send'))))) : null);
 		}
 
-		function Composer({ t, mode, draft, definition, qaChecklist, disabled, qaRequired, onQaRequired, onDefinition, onQaChecklist, onMode, onDraft, onSend, inputRef }) {
+		function Composer({ t, mode, draft, definition, qaChecklist, disabled, qaRequired, onQaRequired, onDefinition, onQaChecklist, onMode, onDraft, onSend, inputRef, agents, attachments, onAttach, onRemoveAttachment }) {
+			const pending = Array.isArray(attachments) ? attachments : [];
+			const discuss = mode !== 'task';
+			const ready = discuss && pending.some((item) => item.status === 'ready');
+			const canSend = !disabled && (draft.trim() !== '' || ready)
+				&& !(mode === 'task' && (!draft.trim() || !definition.trim() || (qaRequired && !qaChecklist.trim())));
 			const send = () => {
-				if (!draft.trim() || disabled) return;
-				if (mode === 'task' && (!definition.trim() || (qaRequired && !qaChecklist.trim()))) return;
+				if (!canSend) return;
 				onSend();
 			};
 			const ownRef = React.useRef(null);
 			const boxRef = inputRef ?? ownRef;
+			const fileRef = React.useRef(null);
+			const [mention, setMention] = React.useState(null);
+			const [dragging, setDragging] = React.useState(false);
 			useFitTextarea(boxRef, draft);
+			const candidates = mention === null ? [] : mentionCandidates(agents, mention.query);
+			const track = (el) => {
+				const found = el ? mentionQuery(el.value, el.selectionStart ?? el.value.length) : null;
+				setMention(found === null ? null : { ...found, caret: el.selectionStart ?? el.value.length, index: 0 });
+			};
+			const pick = (agent) => {
+				if (mention === null || !agent) return;
+				const next = applyMention(draft, mention.start, mention.caret, agent.name);
+				onDraft(next.text);
+				setMention(null);
+				const el = boxRef.current;
+				if (el) requestAnimationFrame(() => { el.focus(); el.setSelectionRange(next.caret, next.caret); });
+			};
+			const attach = (files) => {
+				const list = Array.from(files ?? []);
+				if (list.length > 0 && discuss && typeof onAttach === 'function') onAttach(list);
+			};
 			return h('div', { className: 'at-composer' },
 				h('div', { className: 'at-composerinner' },
-					h('div', { className: cx('at-box', mode === 'task' && 'at-taskmode') },
+					h('div', {
+						className: cx('at-box', mode === 'task' && 'at-taskmode', dragging && 'at-dropping'),
+						onDragOver: (event) => { if (discuss && event.dataTransfer?.types?.includes?.('Files')) { event.preventDefault(); setDragging(true); } },
+						onDragLeave: () => setDragging(false),
+						onDrop: (event) => { setDragging(false); if (!discuss) return; event.preventDefault(); attach(event.dataTransfer?.files); },
+					},
+						dragging ? h('div', { className: 'at-drophint', 'aria-hidden': 'true' }, t('attachDrop')) : null,
+						candidates.length > 0 ? h('ul', { className: 'at-mentions', role: 'listbox', 'aria-label': t('mentionList') },
+							candidates.map((agent, index) => h('li', {
+								key: agent.id,
+								role: 'option',
+								'aria-selected': index === mention.index,
+								className: cx('at-mention', index === mention.index && 'at-mention-on'),
+								onMouseDown: (event) => { event.preventDefault(); pick(agent); },
+							}, h('b', null, '@' + agent.name), agent.role ? h('span', null, agent.role) : null))) : null,
 						h('textarea', {
 							ref: boxRef,
 							onMouseUp: (event) => rememberTextareaDrag(event.currentTarget),
@@ -2366,14 +2452,44 @@ window.__ModuleLoader__.load({
 							disabled,
 							placeholder: mode === 'task' ? t('taskPlaceholder') : t('composer'),
 							'aria-label': t('composerAria'),
-							onChange: (event) => onDraft(event.target.value),
+							onChange: (event) => { onDraft(event.target.value); track(event.target); },
+							onClick: (event) => track(event.currentTarget),
+							onBlur: () => setMention(null),
+							onPaste: (event) => {
+								const files = Array.from(event.clipboardData?.files ?? []);
+								if (files.length > 0 && discuss) { event.preventDefault(); attach(files); }
+							},
 							onKeyDown: (event) => {
+								if (candidates.length > 0) {
+									if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+										event.preventDefault();
+										const step = event.key === 'ArrowDown' ? 1 : candidates.length - 1;
+										setMention({ ...mention, index: (mention.index + step) % candidates.length });
+										return;
+									}
+									if ((event.key === 'Enter' && !event.metaKey && !event.ctrlKey) || event.key === 'Tab') {
+										event.preventDefault();
+										pick(candidates[mention.index] ?? candidates[0]);
+										return;
+									}
+									if (event.key === 'Escape') { event.preventDefault(); setMention(null); return; }
+								}
 								if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
 									event.preventDefault();
 									send();
 								}
 							},
 						}),
+						pending.length > 0 ? h('div', { className: 'at-attachrow' }, pending.map((item) => h('div', {
+							key: item.id,
+							className: cx('at-attach', item.status === 'error' && 'at-attach-error', item.status === 'uploading' && 'at-attach-busy'),
+							title: item.status === 'error' ? item.error : item.name,
+						},
+							item.preview ? h('img', { src: item.preview, alt: item.name }) : h(Ico, { name: 'file' }),
+							h('span', { className: 'at-attachname' }, item.name),
+							h('span', { className: 'at-attachsize' }, item.status === 'uploading' ? '…' : fmtBytes(item.size)),
+							h('button', { type: 'button', className: 'at-attachx', 'aria-label': tf(t, 'attachRemove', { name: item.name }), onClick: () => onRemoveAttachment?.(item.id) }, '×')))) : null,
+						pending.length > 0 && !discuss ? h('div', { className: 'at-hint' }, t('attachTaskMode')) : null,
 						mode === 'task' ? h('div', { className: 'at-taskfields' },
 							h('textarea', {
 								className: 'at-taskdef',
@@ -2397,11 +2513,13 @@ window.__ModuleLoader__.load({
 							h('div', { className: 'at-mode', role: 'group', 'aria-label': t('modeAria') },
 								h('button', { type: 'button', 'aria-pressed': mode === 'discuss', onClick: () => onMode('discuss') }, t('discuss')),
 								h('button', { type: 'button', 'aria-pressed': mode === 'task', onClick: () => onMode('task') }, t('taskMode'))),
+							discuss ? h('button', { className: 'at-attachbtn', type: 'button', title: t('attachAdd'), 'aria-label': t('attachAdd'), disabled, onClick: () => fileRef.current?.click() }, h(Ico, { name: 'clip' })) : null,
+							h('input', { ref: fileRef, type: 'file', multiple: true, hidden: true, onChange: (event) => { attach(event.target.files); event.target.value = ''; } }),
 							mode === 'task' ? h('label', { className: 'at-qacheck' },
 								h('input', { type: 'checkbox', checked: qaRequired, onChange: (event) => onQaRequired(event.target.checked) }),
 								h('span', null, t('qaRequired'))) : null,
 							h('span', { className: 'at-hint' }, t('enterHint')),
-							h('button', { className: 'at-send', type: 'button', disabled: disabled || !draft.trim() || (mode === 'task' && (!definition.trim() || (qaRequired && !qaChecklist.trim()))), onClick: send }, mode === 'task' ? t('createTask') : t('send'))))));
+							h('button', { className: 'at-send', type: 'button', disabled: !canSend, onClick: send }, mode === 'task' ? t('createTask') : t('send'))))));
 		}
 
 		function QuadrantCard({ t, meta, quadrant, tasks, items, count, onItem, onViewAll }) {
@@ -2748,6 +2866,46 @@ window.__ModuleLoader__.load({
 		}
 		// </member-copy>
 
+		// <composer-rich>
+		/**
+		 * 输入框里的 @ 与附件（#65）。纯函数，便于单测；服务端用同一份花名册规则识别 @（rich-message.js）。
+		 * mentionQuery：光标前最近的 @ 到光标之间没有空白、不超过 16 字时，返回 { start, query }。
+		 */
+		function mentionQuery(text, caret) {
+			const before = String(text ?? '').slice(0, caret);
+			const at = before.lastIndexOf('@');
+			if (at === -1) return null;
+			const query = before.slice(at + 1);
+			if (/\s/.test(query) || query.length > 16) return null;
+			return { start: at, query };
+		}
+		/** 在岗 agent 中名字以 query 开头的排前、包含的排后，最多 8 个。 */
+		function mentionCandidates(agents, query) {
+			const q = String(query ?? '').toLowerCase();
+			const active = (Array.isArray(agents) ? agents : []).filter((agent) => agent?.status !== 'retired' && typeof agent?.name === 'string' && agent.name !== '');
+			const starts = active.filter((agent) => agent.name.toLowerCase().startsWith(q));
+			const contains = active.filter((agent) => !agent.name.toLowerCase().startsWith(q) && agent.name.toLowerCase().includes(q));
+			return [...starts, ...contains].slice(0, 8);
+		}
+		/** 用「@名字 」替换 start..caret，返回新文本与新光标。 */
+		function applyMention(text, start, caret, name) {
+			const value = String(text ?? '');
+			const inserted = '@' + name + ' ';
+			return { text: value.slice(0, start) + inserted + value.slice(caret), caret: start + inserted.length };
+		}
+		const ATTACH_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+		/** 浏览器 File → 上传种类：宿主收的四种图片走 image（会规范化、给模型看），其余一律原样作为文件。 */
+		function attachmentKind(file) {
+			return ATTACH_IMAGE_TYPES.includes(file?.type) ? 'image' : 'file';
+		}
+		function fmtBytes(bytes) {
+			const n = Number(bytes) || 0;
+			if (n < 1024) return n + ' B';
+			if (n < 1024 * 1024) return (n / 1024).toFixed(n < 10 * 1024 ? 1 : 0) + ' KB';
+			return (n / 1024 / 1024).toFixed(1) + ' MB';
+		}
+		// </composer-rich>
+
 		/**
 		 * 滚动容器「跟随最新」的 React 接线（主对话、任务记录共用这一份）。
 		 *   key   变化即重置并贴底（切项目/标签/任务）；
@@ -2971,6 +3129,7 @@ window.__ModuleLoader__.load({
 			const jumpToLatest = mainFollow.jump;
 			// R-08 快捷键：composer 聚焦句柄 + `?` 帮助浮层开关。
 			const composerInputRef = React.useRef(null);
+			const [pendingFiles, setPendingFiles] = React.useState([]);
 			const [shortcutsOpen, setShortcutsOpen] = React.useState(false);
 			const gPrefixRef = React.useRef(0);
 			// Latest-data mirror for effects that must react to `selected` alone,
@@ -4026,9 +4185,40 @@ window.__ModuleLoader__.load({
 					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
 				}
 			}
+			/** #65：选中/粘贴/拖入的文件立即上传进 DSH 附件存储；发送时只带已上传好的块。 */
+			function attachFiles(files) {
+				for (const file of files) {
+					const id = 'att-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+					const kind = attachmentKind(file);
+					const preview = kind === 'image' && typeof URL?.createObjectURL === 'function' ? URL.createObjectURL(file) : null;
+					const name = file.name || (kind === 'image' ? 'image' : 'file');
+					setPendingFiles((list) => [...list, { id, kind, name, size: file.size, preview, status: 'uploading', block: null, error: '' }]);
+					const query = new URLSearchParams({ kind, name, ...(kind === 'image' ? { type: file.type } : {}) });
+					fetch('/ai-team/api/attachments?' + query.toString(), { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: file })
+						.then(async (response) => {
+							const body = await response.json().catch(() => null);
+							if (!response.ok || !body?.block) throw new Error(body?.error?.message ?? ('HTTP ' + response.status));
+							setPendingFiles((list) => list.map((item) => item.id === id ? { ...item, status: 'ready', block: body.block } : item));
+						})
+						.catch((error) => {
+							const message = error?.message ?? String(error);
+							setPendingFiles((list) => list.map((item) => item.id === id ? { ...item, status: 'error', error: message } : item));
+							say(tf(t, 'attachFailed', { name, message }));
+						});
+				}
+			}
+			function removeAttachment(id) {
+				setPendingFiles((list) => {
+					const gone = list.find((item) => item.id === id);
+					if (gone?.preview && typeof URL?.revokeObjectURL === 'function') URL.revokeObjectURL(gone.preview);
+					return list.filter((item) => item.id !== id);
+				});
+			}
 			async function send() {
 				const text = draft.trim();
-				if (!text) return;
+				const withFiles = mode !== 'task' && pendingFiles.some((item) => item.status === 'ready');
+				if (!text && !withFiles) return;
+				if (mode !== 'task' && pendingFiles.some((item) => item.status === 'uploading')) { say(t('attachUploading')); return; }
 				if (sendingRef.current) return;
 				sendingRef.current = true;
 				try {
@@ -4060,7 +4250,10 @@ window.__ModuleLoader__.load({
 						setTaskDefinition('');
 						setQaChecklistText('');
 					} else {
-						await runCommand('stream.post', { body: text });
+						const blocks = pendingFiles.filter((item) => item.status === 'ready').map((item) => item.block);
+						await runCommand('stream.post', { body: text, ...(blocks.length > 0 ? { attachments: blocks } : {}) });
+						for (const item of pendingFiles) if (item.preview && typeof URL?.revokeObjectURL === 'function') URL.revokeObjectURL(item.preview);
+						setPendingFiles([]);
 					}
 					setDraft('');
 					say(mode === 'task' ? t('taskSent') : t('discussSent'));
@@ -4553,6 +4746,10 @@ window.__ModuleLoader__.load({
 							onDraft: setDraft,
 							onSend: send,
 							inputRef: composerInputRef,
+							agents: (data?.agents ?? []).filter((agent) => agent.status !== 'retired'),
+							attachments: pendingFiles,
+							onAttach: attachFiles,
+							onRemoveAttachment: removeAttachment,
 						}) : null),
 					threadOpen && selectedTask ? h(ThreadPanel, {
 						t,

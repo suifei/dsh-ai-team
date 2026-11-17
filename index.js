@@ -68,6 +68,8 @@ import { aggregatePeople } from './lib/host/people-view.js';
 import { riskView } from './lib/host/risk-view.js';
 import { weeklyView } from './lib/host/weekly-view.js';
 import { isInformationalThreadMention } from './lib/domain/inbox.js';
+import { messageContent, normalizeAttachments } from './lib/domain/rich-message.js';
+import { readAttachment, uploadAttachment } from './lib/host/attachment-routes.js';
 import { createDiagLogger, defaultDiagDir, installDiagSink } from './lib/diaglog.js';
 
 export const name = 'ai-team';
@@ -716,10 +718,11 @@ export function apply(ctx, config = {}) {
 				}
 				return null;
 			},
-			forwardHuman: (projectId, body) => {
+			forwardHuman: (projectId, body, attachments = []) => {
 				const runtime = projectRuntime(projectId);
 				if (runtime === null) return Promise.reject(new Error(`no Project runtime ${projectId}`));
-				return runtime.service.dispatch({ type: 'stream.post', payload: { body }, actor: { kind: 'human', memberId: HUMAN_ID }, projectId });
+				const refs = normalizeAttachments(attachments);
+				return runtime.service.dispatch({ type: 'stream.post', payload: { body, ...(refs.length > 0 ? { attachments: refs } : {}) }, actor: { kind: 'human', memberId: HUMAN_ID }, projectId });
 			},
 			forwardMember: (projectId, senderSessionId, body) => {
 				const runtime = projectRuntime(projectId);
@@ -996,6 +999,8 @@ export function apply(ctx, config = {}) {
 			// personality, skills). A wake is only the Task delta; re-sending the
 			// whole activation prompt caused the duplicated blocks users saw.
 			const wakePrompt = async (plan, member, options = {}) => describeWake(plan, projectRuntime.service.state, options);
+			// #65：Human 消息里的图片/文件随唤醒一起交给成员会话（文字块 + 附件块）。
+			const wakeContent = async (plan, member, options = {}) => messageContent(await wakePrompt(plan, member, options), plan.attachments);
 			for (const plan of plans) {
 				if (wakeKeys.has(plan.key)) continue;
 				let member = projectRuntime.service.state.members?.[plan.memberId];
@@ -1038,6 +1043,7 @@ export function apply(ctx, config = {}) {
 									memberId: member.id,
 									...(routeStale ? { force: true } : {}),
 									prompt: await wakePrompt(plan, member, { includeThread: true }),
+									...(Array.isArray(plan.attachments) ? { attachments: plan.attachments } : {}),
 								},
 							}, projectRuntime))();
 							activationTasks.set(activationKey, activation);
@@ -1063,7 +1069,7 @@ export function apply(ctx, config = {}) {
 						const delivered = await runtime.wake(member, {
 							// 冷路径（会话不在线）才附 Thread 尾巴：成员靠它续跑，不必从零回忆；
 							// 热路径上下文已在会话里，附上去只是白烧 token。
-							prompt: await wakePrompt(plan, member, { includeThread: sessions?.get?.(member.sessionId) === undefined }),
+							prompt: await wakeContent(plan, member, { includeThread: sessions?.get?.(member.sessionId) === undefined }),
 						});
 						messageId = delivered.messageId ?? null;
 						// A cold session cannot be renamed before wake; retry once it is live.
@@ -2103,7 +2109,8 @@ export function apply(ctx, config = {}) {
 					cwd: effectiveDir,
 				});
 				const result = await runtime.activate(activationMember, {
-					prompt: `${memberIdentity(activationMember)}\n\n${typeof body.payload?.prompt === 'string'
+					// #65：激活时若带着 Human 消息的图片/文件，一并放进首条消息。
+					prompt: messageContent(`${memberIdentity(activationMember)}\n\n${typeof body.payload?.prompt === 'string'
 						? body.payload.prompt
 						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: effectiveDir })}${await loadSkillContext(activationMember, [join(effectiveDir, '.dsh'), dshHome(), projectRuntime.dir], {
 					vars: {
@@ -2115,7 +2122,7 @@ export function apply(ctx, config = {}) {
 					// 按身份装配内置技能：项目主理人拿审查规程，验收拿复跑规程，其余拿执行规程。
 					ownerId: projectRuntime.service.state.projects?.[projectRuntime.id]?.ownerMemberId
 						?? projectRuntime.service.state.projects?.[projectRuntime.id]?.ownerId,
-					})}`,
+					})}`, body.payload?.attachments),
 				});
 				let bound;
 				try {
@@ -2365,6 +2372,37 @@ export function apply(ctx, config = {}) {
 				// 批量恢复入口：把「因运行时/提供方不可用而 failed」的成员按新运行时重建。
 				// 这类失败与任务无关，但 failed 成员被 waker 排除，不手动救就永远醒不过来
 				// （实机：rc.2 那次激活全挂，6 个成员一起变 failed）。
+				// #65：图片/文件进 DSH 附件存储（与标准会话输入框同一份存储），返回可放进 stream.post 的块。
+				if (req.method === 'POST' && url.pathname === '/ai-team/api/attachments') {
+					try {
+						const result = await uploadAttachment({ store: serviceOf(ctx, 'attachments'), req, url });
+						if (result.status >= 400) diag?.append({ ev: 'attachment.upload.fail', code: result.body?.error?.code ?? null });
+						return send(res, result.body, result.status);
+					} catch (error) {
+						diag?.append({ ev: 'attachment.upload.fail', code: error?.code ?? null, message: error?.message ?? String(error) });
+						return send(res, { ok: false, error: { code: error?.code ?? 'E_ATTACHMENT', message: error?.message ?? String(error) } }, 400);
+					}
+				}
+				if (req.method === 'GET' && url.pathname === '/ai-team/api/attachments/content') {
+					const requested = url.searchParams.get('project');
+					const runtime = (requested === null ? null : projectRuntime(requested)) ?? currentRuntime();
+					try {
+						const result = await readAttachment({ store: serviceOf(ctx, 'attachments'), state: runtime?.service?.state, url });
+						if (result.bytes === undefined) return send(res, result.body, result.status);
+						res.statusCode = 200;
+						res.setHeader('content-type', result.contentType);
+						res.setHeader('cache-control', 'private, max-age=31536000, immutable');
+						const disposition = result.contentType.startsWith('image/') ? 'inline' : 'attachment';
+						res.setHeader('content-disposition', `${disposition}; filename*=UTF-8''${encodeURIComponent(result.name || 'file')}`);
+						if (result.bytes instanceof Uint8Array) return res.end(Buffer.from(result.bytes));
+						for await (const chunk of result.bytes) res.write(Buffer.from(chunk));
+						return res.end();
+					} catch (error) {
+						diag?.append({ ev: 'attachment.read.fail', code: error?.code ?? null, message: error?.message ?? String(error) });
+						if (res.headersSent) return res.destroy(error);
+						return send(res, { ok: false, error: { code: error?.code ?? 'E_ATTACHMENT', message: error?.message ?? String(error) } }, 500);
+					}
+				}
 				if (req.method === 'POST' && url.pathname === '/ai-team/api/members/retry') {
 					const body = await readJson(req);
 					const includeAll = body?.all === true;
