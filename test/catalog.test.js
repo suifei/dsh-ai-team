@@ -179,3 +179,16 @@ test('hiring from the market through member.add records the talent and duty; a b
 		await assert.rejects(service.dispatch({ type: 'member.add', actor: human, payload: { name: 'X', kind: 'agent', duty: 'boss' } }), /duty must be one of/);
 	});
 });
+
+test('2b: uniqueTalentId never reuses a taken id; talentFromMember carries role, duty, personality, model and skills but not notes', async () => {
+	const { uniqueTalentId, talentFromMember } = await import('../lib/domain/catalog.js');
+	const catalog = { talents: new Map([['coach', {}], ['coach-2', {}], ['editor', {}]]) };
+	assert.equal(uniqueTalentId(catalog, 'fresh'), 'fresh');
+	assert.equal(uniqueTalentId(catalog, 'coach'), 'coach-3');
+	assert.equal(uniqueTalentId(catalog, 'editor'), 'editor-2');
+	assert.equal(uniqueTalentId(catalog, 'Bad Id'), '');
+	const member = { name: '青岚', role: '执行', personality: '先交付再汇报', notes: ['私人经历'], skills: ['delivery-checklist', '../etc', 'ok.v2'], config: { provider: 'qwen', model: 'q-max', reasoningEffort: 'high' } };
+	assert.deepEqual(talentFromMember(member, 'qa'), { name: '青岚', role: '执行', duty: 'qa', category: '', tags: [], personality: '先交付再汇报', model: { provider: 'qwen', model: 'q-max', reasoningEffort: 'high' }, skills: ['delivery-checklist', 'ok.v2'] });
+	assert.equal(talentFromMember({ name: 'x' }, 'boss').duty, 'executor');
+	assert.equal(talentFromMember({ name: 'x' }, 'lead').model, null);
+});
