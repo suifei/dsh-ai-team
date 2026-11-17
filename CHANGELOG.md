@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.115 - 2026-11-17
+
+**受限宿主只记一行 boot.refused，不再连带两行派生 .fail**
+
+- 实机诊断日志（errors 级）11-14 / 11-16 各有 44 / 42 次 `skillopt.skip.fail`：每次都紧跟在
+  `service.missing.fail`（无 sessions/subagents）+ `boot.refused`（workspace-write）之后，同时还有一行
+  `team.discipline.section.unavailable.fail`——插件被加载进不跑团队的受限宿主，后两行是同一原因的派生；
+- 启动被拒时不再记这两行；full-access 宿主缺工具注册或提示词段时照常报错；
+- 测试：`test/diag-sink.test.js` 新增 2 例，用真实 `apply()` 分别在受限 / full-access 宿主下检查落盘的诊断行
+  （去掉修复，受限宿主一例即失败）；
+
 ## 0.4.114 - 2026-11-16
 
 **SkillOpt 判分不再因答复开头复述 JSON 格式而全部记零**

@@ -697,7 +697,9 @@ export function apply(ctx, config = {}) {
 				systemPrompt: serviceOf(ctx, 'systemPrompt'),
 				on: typeof ctx.on === 'function' ? (name, listener) => ctx.on(name, listener) : undefined,
 				teamProjectOf,
-				diag,
+				// 受限宿主（boot.refused：无会话/子代理服务、非 full-access）本就不跑团队，
+				// 缺 systemPrompt 段是同一原因的派生，不再各记一行 .fail（il2c 11-16：42 次）。
+				diag: access.ok ? diag : undefined,
 				newId: randomUUID,
 			});
 		} catch (error) {
@@ -1428,7 +1430,7 @@ export function apply(ctx, config = {}) {
 			// shell 惰性代理：注入时机早于 shell 服务就绪时，注册仍必须完成——
 			// 每次调用现取，避免「boot 时 shell 未就绪 → 整条技能链静默跳过」。
 			const shellProxy = lazyShellService(ctx);
-			if (!tools?.register) {
+			if (!tools?.register && access.ok) {
 				diag.append({ ev: 'skillopt.skip.fail', hasToolsRegister: false, hasShell: Boolean(serviceOf(ctx, 'shell')) });
 				console.warn('[ai-team] SkillOpt tools not registered: no tool registry');
 			}
