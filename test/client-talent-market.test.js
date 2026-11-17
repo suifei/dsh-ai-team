@@ -8,7 +8,7 @@ import { listTalents, loadCatalog } from '../lib/domain/catalog.js';
 // 按 <member-copy> 标记取出纯函数单测（与界面用的是同一份源码），数据用真实的内置人才。
 const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
 const between = (tag) => source.slice(source.indexOf(`// <${tag}>`), source.indexOf(`// </${tag}>`));
-const market = vm.runInNewContext(`${between('member-copy')}\n({ hireTalentDraft, filterTalents })`);
+const market = vm.runInNewContext(`${between('member-copy')}\n({ hireTalentDraft, filterTalents, blankTalentForm, talentFormToBody })`);
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const talents = listTalents(loadCatalog());
 
@@ -32,4 +32,13 @@ test('the market filters by category and by a keyword over name, role, tags, des
 	assert.deepEqual(ids(market.filterTalents(talents, 'ui', '')), ['ux-designer']);
 	assert.deepEqual(ids(market.filterTalents([{ id: 'x', name: 'X', skills: ['Paper-Review'] }], 'paper', '')), ['x']);
 	assert.deepEqual(plain(market.filterTalents(null, 'a', '')), []);
+});
+
+test('新建人才表单 → POST 体：标签按逗号/顿号/空白拆开，职责只认三种，字段 trim', () => {
+	assert.deepEqual(plain(market.blankTalentForm()), { name: '', role: '', duty: 'executor', category: '', tags: '', personality: '' });
+	const body = plain(market.talentFormToBody({ name: '  小教练 ', role: ' 口语陪练 ', duty: 'qa', category: '教育', tags: '英语, 口语、听力  写作', personality: ' 多鼓励 ' }));
+	assert.deepEqual(body, { name: '小教练', role: '口语陪练', duty: 'qa', category: '教育', tags: ['英语', '口语', '听力', '写作'], personality: '多鼓励' });
+	// 非法职责兜底 executor；空表单安全。
+	assert.equal(plain(market.talentFormToBody({ name: 'x', duty: 'boss' })).duty, 'executor');
+	assert.deepEqual(plain(market.talentFormToBody({})), { name: '', role: '', duty: 'executor', category: '', tags: [], personality: '' });
 });

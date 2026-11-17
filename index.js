@@ -71,7 +71,7 @@ import { isInformationalThreadMention } from './lib/domain/inbox.js';
 import { messageContent, normalizeAttachments } from './lib/domain/rich-message.js';
 import { readAttachment, uploadAttachment } from './lib/host/attachment-routes.js';
 import { createDiagLogger, defaultDiagDir, installDiagSink } from './lib/diaglog.js';
-import { DEFAULT_TEAM, catalogRoots, listTalents, loadCatalog, resolveTeam } from './lib/domain/catalog.js';
+import { DEFAULT_TEAM, catalogRoots, deleteTalent, installSkill, listInstallableSkills, listTalents, loadCatalog, readSkillText, resolveTeam, talentIdFrom, userCatalogDir, writeTalent } from './lib/domain/catalog.js';
 
 export const name = 'ai-team';
 
@@ -2365,6 +2365,71 @@ export function apply(ctx, config = {}) {
 					// 人才市场：「添加成员」弹窗里可招聘的人才（用户自建优先于内置）。
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/talents') {
 						return send(res, { talents: listTalents(talentCatalog(diag)) });
+					}
+					// 可安装的技能清单（每个人才自带的技能），给「从已有装」挑。
+					if (req.method === 'GET' && url.pathname === '/ai-team/api/skills-install') {
+						return send(res, { skills: listInstallableSkills(talentCatalog(diag)) });
+					}
+					// 某人才自带技能的正文（预览 / fork 前读）。
+					if (req.method === 'GET' && url.pathname === '/ai-team/api/skills-install/content') {
+						const cat = talentCatalog(diag);
+						const t = cat.talents.get(url.searchParams.get('talent') ?? '');
+						if (t === undefined) return send(res, { error: { code: 'NOT_FOUND', message: 'talent not found' } }, 404);
+						try {
+							return send(res, { markdown: readSkillText(t.dir, url.searchParams.get('name') ?? '') });
+						} catch (error) {
+							return send(res, { error: { code: 'NOT_FOUND', message: error.message } }, 404);
+						}
+					}
+					// 新建 / 覆盖一个用户自定义人才（只写用户根；内置只读）。
+					if (req.method === 'POST' && url.pathname === '/ai-team/api/talents') {
+						const body = await readJson(req);
+						// 显式 id 优先，其次按名字派生；中文名派生为空时生成兜底 id（纯中文名也能建）。
+						let id = talentIdFrom(body?.id) || talentIdFrom(body?.name);
+						if (id === '' && typeof body?.name === 'string' && body.name.trim() !== '') id = 'talent-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+						if (id === '') return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: '人才需要一个名字（用于生成 id）' } }, 400);
+						try {
+							const saved = writeTalent(userCatalogDir(dshHome()), id, body ?? {});
+							diag?.append({ ev: 'talent.write', id, source: 'user' });
+							return send(res, { ok: true, talent: { id: saved.id, source: saved.source, version: saved.version, name: saved.name, role: saved.role, duty: saved.duty, category: saved.category, tags: saved.tags, description: saved.description, personality: saved.personality, skills: saved.skills, model: saved.model } });
+						} catch (error) {
+							return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: error.message } }, 400);
+						}
+					}
+					// 删一个用户自定义人才（只删用户根的）。
+					if (req.method === 'POST' && url.pathname === '/ai-team/api/talents/delete') {
+						const body = await readJson(req);
+						const cat = talentCatalog(diag);
+						const t = cat.talents.get(talentIdFrom(body?.id ?? ''));
+						if (t === undefined) return send(res, { error: { code: 'NOT_FOUND', message: 'talent not found' } }, 404);
+						if (t.source !== 'user') return send(res, { error: { code: 'E_READONLY', message: '内置人才只读，不能删除；它只会被同名的自定义人才遮盖' } }, 409);
+						deleteTalent(userCatalogDir(dshHome()), t.id);
+						diag?.append({ ev: 'talent.delete', id: t.id });
+						return send(res, { ok: true });
+					}
+					// 往某用户人才装一份技能：自写（markdown）或从现成人才 fork（fromTalent + fromSkill）。
+					const talentSkillRoute = url.pathname.match(/^\/ai-team\/api\/talents\/([^/]+)\/skills$/);
+					if (req.method === 'POST' && talentSkillRoute !== null) {
+						const body = await readJson(req);
+						const cat = talentCatalog(diag);
+						const t = cat.talents.get(decodeURIComponent(talentSkillRoute[1]));
+						if (t === undefined) return send(res, { error: { code: 'NOT_FOUND', message: 'talent not found' } }, 404);
+						if (t.source !== 'user') return send(res, { error: { code: 'E_READONLY', message: '内置人才只读；先把它存为自己的人才再装技能' } }, 409);
+						let markdown = typeof body?.markdown === 'string' ? body.markdown : null;
+						if (markdown === null && typeof body?.fromTalent === 'string' && typeof body?.fromSkill === 'string') {
+							const src = cat.talents.get(body.fromTalent);
+							if (src === undefined) return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: '来源人才不存在' } }, 400);
+							try { markdown = readSkillText(src.dir, body.fromSkill); } catch (error) { return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: error.message } }, 400); }
+						}
+						if (markdown === null) return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: '需要 markdown 正文，或 fromTalent + fromSkill' } }, 400);
+						try {
+							const name = installSkill(t.dir, body?.name, markdown);
+							const saved = writeTalent(userCatalogDir(dshHome()), t.id, { ...t, skills: [...new Set([...t.skills, name])] });
+							diag?.append({ ev: 'talent.skill.install', id: t.id, skill: name, from: body?.fromTalent ?? null });
+							return send(res, { ok: true, skill: name, talent: { id: saved.id, source: saved.source, skills: saved.skills } });
+						} catch (error) {
+							return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: error.message } }, 400);
+						}
 					}
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/models') {
 						const catalog = await buildModelCatalog(serviceOf(ctx, 'llm'), serviceOf(ctx, 'agentDefaultModel'));

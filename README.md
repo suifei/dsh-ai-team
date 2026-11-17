@@ -29,6 +29,7 @@
 - 团队 `teams/<团队>/team.yml`：只引用人才（可覆盖名字、岗位、性格，追加技能），`skills/` 放这个团队的三份岗位规程（`ai-team-core` / `ai-team-qa` / `ai-team-executor`），`procedures` 可换成自己的规程。内置默认团队见 [`teams/default/`](teams/default/)。还预置了**逆向工程队** [`teams/reverse/`](teams/reverse/)：静态分析、动态调试、OLLVM 去混淆、移动端逆向、算法复刻与行为对账（`teamPreset: reverse` 启用）。此外预置了文档（`docs`）、视频（`video`）、游戏（`game`）、自媒体写作（`content`）、深度研究（`research`）、科学研究（`science`）、中小学教育软件（`education`）等团队,共 44 位人才可在人才市场挑选、组合或自建。
 - 「人员 → 添加成员」先打开人才市场：按分类、关键词挑一位，点「招聘」预填表单，改名、换模型后创建；也可以切到「自定义」从零填写。
 - 自建：人才放 `~/.dsh/ai-team/catalog/user/talents/<人才>/`，团队放 `~/.dsh/ai-team/catalog/user/teams/<团队>/`，同名覆盖内置；插件设置 `teamPreset` 选新项目用哪个团队。
+- **新建自定义人才（界面）**：「添加成员 → 新建人才」填名号、岗位、职责、性格，再按需装技能——从现成人才 fork、自写一份、或导入 `.md`，存成可复用的人才（落用户根）。内置没有的角色能自己攒；技能装进人才自己的文件夹，自包含、可分享。走 `POST /api/talents` 与 `POST /api/talents/:id/skills`，内置只读、装删回 `409`。
 - 成员在账本里记下来源人才与版本、职责；人才文件之后再改，不会悄悄改动已招成员的性格与职责。已有项目不受新团队影响。文件写坏时跳过它并在诊断日志记 `catalog.load.fail` / `catalog.team.fail`。
 
 ---

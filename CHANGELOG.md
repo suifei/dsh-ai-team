@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.4.125 - 2026-11-18
+
+**人才市场（第 2 步 2a）：自定义智能体 + 安装 skill**
+
+- 一个智能体 = 职责 + 性格 + 装上的若干技能。此前只能招内置人才；现在能从零造一个自己的人才，
+  按需装技能，存成可复用的人才，再招进项目——内置没有的角色也能自己攒出来；
+- **catalog.js 增加「写」的唯一一份实现**（此前只读）：`writeTalent` / `deleteTalent` / `installSkill` /
+  `readSkillText` / `listInstallableSkills` / `talentIdFrom` / `userCatalogDir`。校验复用 `parseTalent`
+  （先 `stringify` 再 `parse`，验不过就抛、绝不落盘），**只往用户根 `~/.dsh/ai-team/catalog/user/` 写，内置永不触碰**；
+- **技能装进人才自己的文件夹** `talents/<id>/skills/<技能>/SKILL.md`——自包含、可打包、可分享（也是第 3 步在线库的最小单元）。
+  来源三选：从现成人才 fork、自写一份、导入 `.md` 文件；
+- **新接口**：`POST /api/talents` 建/覆盖自定义人才（中文名自动生成兜底 id），`POST /api/talents/delete`，
+  `POST /api/talents/:id/skills` 装技能（`markdown` 自写 / `fromTalent`+`fromSkill` fork），
+  `GET /api/skills-install` 列可装技能，`GET /api/skills-install/content` 读技能正文；内置人才只读，装/删都回 `409 E_READONLY`；
+- **界面**：「添加成员」弹窗加「新建人才」页——填名号/岗位/职责/分类/标签/性格，技能区三选装、可移除，「存为我的人才」后进市场；
+- 诊断埋点 `talent.write` / `talent.delete` / `talent.skill.install`；
+- 测试：`test/talent-routes.test.js`（进程内起 server 真打全部接口：建人才、自写装、从内置 fork、只读守卫、中文名兜底、删除）；
+  `test/client-talent-market.test.js` 补 `talentFormToBody` / `blankTalentForm` 纯函数单测。
+
 ## 0.4.124 - 2026-11-18
 
 **人才市场（第 1 步）：人才 → 团队 → 项目成员**
