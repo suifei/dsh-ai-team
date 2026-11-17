@@ -620,7 +620,8 @@ test('fold：Task 全生命周期（含 delete tombstone 与失效 assignee reop
 	state = applyEvent(state, next());
 	assert.deepEqual(state.tasks.tsk_3.claimHistory, ['mem_b']);
 	assert.equal(isEligibleReviewer(state, 'tsk_3', 'mem_b'), false);
-	assert.equal(isEligibleReviewer(state, 'tsk_3', 'mem_a'), true);
+	// mem_a 是项目主理人：主理人只调度交付、不核对产出，不在验收候选里（2026-11-18）。
+	assert.equal(isEligibleReviewer(state, 'tsk_3', 'mem_a'), false);
 	assert.equal(isEligibleReviewer(state, 'tsk_3', 'mem_c'), true);
 	assert.equal(isEligibleReviewer(state, 'tsk_3', 'mem_h'), true);
 

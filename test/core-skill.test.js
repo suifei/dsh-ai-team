@@ -5,8 +5,9 @@ import { loadSkillContext, renderSkillVars } from '../lib/runtime/skill-loader.j
 import { CORE_SKILL_TEXT, EXECUTOR_SKILL_TEXT, QA_SKILL_TEXT, skillKindForMember } from '../lib/runtime/core-skill.js';
 
 test('the three built-in skills keep their own contract', () => {
-	// 主理人/PMO：只读审查与导航
-	assert.match(CORE_SKILL_TEXT, /审查与导航/);
+	// 主理人/PMO：交付调度，不看产出
+	assert.match(CORE_SKILL_TEXT, /交付调度/);
+	assert.match(CORE_SKILL_TEXT, /不看产出内容/);
 	assert.match(CORE_SKILL_TEXT, /\{\{GOAL\}\}/);
 	assert.match(CORE_SKILL_TEXT, /STATUS: CONTINUE \| DONE \| NEED_HUMAN/);
 	// 执行：按 resultDefinition 交付、要证据、不越界
@@ -43,20 +44,20 @@ test('member skill context assembles by identity and renders variables', async (
 		vars: { GOAL: '把邻里小活做成 4 周实验' },
 		ownerId: 'a1',
 	});
-	assert.match(lead, /审查与导航/);
+	assert.match(lead, /交付调度/);
 	assert.match(lead, /把邻里小活做成 4 周实验/);
 	assert.doesNotMatch(lead, /\{\{GOAL\}\}/, '占位符必须被渲染');
 
 	// 执行成员拿执行规程，且不含「不写代码」这种会误伤的限制
 	const executor = await loadSkillContext({ id: 'a2', role: '执行' }, undefined, { ownerId: 'a1' });
 	assert.match(executor, /执行成员/);
-	assert.doesNotMatch(executor, /审查与导航/);
+	assert.doesNotMatch(executor, /交付调度/);
 	assert.doesNotMatch(executor, /只读，不写代码/);
 
 	// 验收成员拿复跑规程
 	const qa = await loadSkillContext({ id: 'a3', role: 'QA' }, undefined, { ownerId: 'a1' });
 	assert.match(qa, /验收成员/);
-	assert.doesNotMatch(qa, /审查与导航/);
+	assert.doesNotMatch(qa, /交付调度/);
 });
 
 test('legacy third-argument form (a bare variable table) still works', async () => {
