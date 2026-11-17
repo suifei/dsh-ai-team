@@ -1,0 +1,12 @@
+# 自媒体写作团队：从人才市场（talents/）挑人组队。teamPreset 设成 content 即用于新建的 Project。
+# 岗位规程沿用内置默认团队的主理人/执行/验收三份；领域专长在各人才里。
+
+name: 自媒体写作团队
+description: 公众号 / 博客 / 社媒：选题、文案、分发优化、编辑、核查。
+lead: mem_lead
+members:
+  - { talent: content-strategist, id: mem_lead }
+  - { talent: copywriter, id: mem_copy }
+  - { talent: seo-specialist, id: mem_seo }
+  - { talent: editor, id: mem_editor }
+  - { talent: fact-checker, id: mem_fact }

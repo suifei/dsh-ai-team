@@ -25,7 +25,9 @@ test('hiring a talent prefills the add-member draft with role, duty, personality
 test('the market filters by category and by a keyword over name, role, tags, description and skills', () => {
 	const ids = (list) => plain(list).map((talent) => talent.id).sort();
 	assert.equal(market.filterTalents(talents, '', '').length, talents.length);
-	assert.deepEqual(ids(market.filterTalents(talents, '', '质量')), ['code-reviewer', 'qa-acceptor', 'security-auditor']);
+	const quality = ids(market.filterTalents(talents, '', '质量'));
+	assert.ok(['code-reviewer', 'qa-acceptor', 'security-auditor'].every((id) => quality.includes(id)));
+	assert.ok(quality.every((id) => talents.find((t) => t.id === id).category === '质量'));
 	assert.deepEqual(ids(market.filterTalents(talents, '架构', '')), ['architect']);
 	assert.deepEqual(ids(market.filterTalents(talents, 'ui', '')), ['ux-designer']);
 	assert.deepEqual(ids(market.filterTalents([{ id: 'x', name: 'X', skills: ['Paper-Review'] }], 'paper', '')), ['x']);

@@ -1,0 +1,13 @@
+# 教育软件团队：从人才市场（talents/）挑人组队。teamPreset 设成 education 即用于新建的 Project。
+# 岗位规程沿用内置默认团队的主理人/执行/验收三份；领域专长在各人才里。
+
+name: 教育软件团队
+description: 给中小学做英语 / 数学复习小工具：课纲、题目、小软件、适童交互、验收。
+lead: mem_lead
+members:
+  - { talent: education-lead, id: mem_lead }
+  - { talent: curriculum-designer, id: mem_curri }
+  - { talent: content-author, id: mem_author }
+  - { talent: engineer, id: mem_coder }
+  - { talent: ux-designer, id: mem_ux }
+  - { talent: qa-acceptor, id: mem_qa }

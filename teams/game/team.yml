@@ -1,0 +1,12 @@
+# 游戏开发团队：从人才市场（talents/）挑人组队。teamPreset 设成 game 即用于新建的 Project。
+# 岗位规程沿用内置默认团队的主理人/执行/验收三份；领域专长在各人才里。
+
+name: 游戏开发团队
+description: 做一款小游戏：玩法设计、游戏程序、美术、测试。
+lead: mem_lead
+members:
+  - { talent: game-director, id: mem_lead }
+  - { talent: game-designer, id: mem_design }
+  - { talent: gameplay-programmer, id: mem_gp }
+  - { talent: game-artist, id: mem_art }
+  - { talent: game-tester, id: mem_test }

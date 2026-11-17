@@ -1,0 +1,12 @@
+# 视频团队：从人才市场（talents/）挑人组队。teamPreset 设成 video 即用于新建的 Project。
+# 岗位规程沿用内置默认团队的主理人/执行/验收三份；领域专长在各人才里。
+
+name: 视频团队
+description: 短视频 / 教程视频：脚本、分镜、剪辑,配事实核查。
+lead: mem_lead
+members:
+  - { talent: creative-director, id: mem_lead }
+  - { talent: scriptwriter, id: mem_script }
+  - { talent: storyboard-artist, id: mem_board }
+  - { talent: video-editor, id: mem_cut }
+  - { talent: fact-checker, id: mem_fact }
