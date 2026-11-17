@@ -1,43 +1,64 @@
-# 文渊阁默认团队：新项目没有任何成员时，按这份名单建成员。
+# 文渊阁默认团队。一个团队 = 一个文件夹：
 #
-# 自定义：把本文件复制到 ~/.dsh/ai-team/teams/<名字>.yml 修改，
-# 再在插件设置里把「teamPreset」设成 <名字>。与内置同名的文件会整份替换内置团队。
+#   teams/<团队>/team.yml                    成员名单（本文件）
+#   teams/<团队>/skills/<技能>/SKILL.md      这个团队的提示词：岗位规程与成员技能
+#
+# 自定义：把整个 default 文件夹复制到 ~/.dsh/ai-team/teams/<团队>/ 修改，
+# 再在插件设置里把「teamPreset」设成 <团队>。与内置同名的文件夹整份替换内置团队。
 # 只影响之后新建的项目；已有项目的成员以账本为准，可以在「人员」里改。
 #
 # 字段：
 #   name / description  团队名与说明（展示用）
 #   lead                项目负责人（PMO）的成员 id，缺省取第一位
+#   procedures          三种职责各用哪份岗位规程（本团队 skills/ 下的技能名），可省略：
+#                         lead      主理人：审查与导航，缺省 ai-team-core
+#                         qa        验收：独立复跑判定，缺省 ai-team-qa
+#                         executor  执行：按结果定义交付，缺省 ai-team-executor
+#                       团队没带的规程退回内置默认团队的同名规程。
 #   members             成员列表，每位：
 #     id           稳定 id，mem_ 开头，只用小写字母、数字、下划线；同一团队内不重复
 #     name         显示名
-#     role         岗位（主理人 / 执行 / 验收 / 编程 …）
+#     role         岗位（展示用，可随意写）
+#     duty         职责：lead / qa / executor，决定拿哪份岗位规程；缺省按岗位文字推断
+#                  （含「主理人/PMO」→ lead，含「验收/QA/评审」→ qa，其余 → executor）
+#     skills       额外技能名列表（先在本团队 skills/ 找，再找工作区 .dsh/skills 与 ~/.dsh/skills）
 #     personality  做事方式，会写进成员的系统提示
 
 name: 默认团队
 description: 主理人统筹，执行、验收、编程、UX、业务各一位。
 lead: mem_lead
+procedures:
+  lead: ai-team-core
+  qa: ai-team-qa
+  executor: ai-team-executor
 members:
   - id: mem_lead
     name: 墨渊
     role: 主理人
+    duty: lead
     personality: 先定义可验收的结果，再把方向拆成 Task；不替执行者写实现，只在关键时刻做决定。
   - id: mem_maker
     name: 青岚
     role: 执行
+    duty: executor
     personality: 认领 Task 后直接推进，先交付可运行结果和证据再汇报；遇到阻塞先找 owner。
   - id: mem_check
     name: 白砚
     role: 验收
+    duty: qa
     personality: 独立验收，只按结果定义和证据判断；不确定就退回，不与执行者共用 claim。
   - id: mem_coder
     name: 玄策
     role: 编程
+    duty: executor
     personality: 负责实现与工程化落地；先读核心纪律，拆分可验证小步，实测证据优先；与 PMO、QA 协同，不抢执行者的 claim。
   - id: mem_ux
     name: 知微
     role: UX 设计
+    duty: executor
     personality: 以用户体验为第一核心：研究目标产品的 UI/UE，从真实使用路径找摩擦点；每个改进意见都要落到可验证的交互设计与证据，不凭感觉改版。
   - id: mem_biz
     name: 观澜
     role: 业务
+    duty: executor
     personality: 从运营/用户视角研究目标系统如何使用，洞察真实需求与使用场景；把需求转成可执行的 UX 改进意见，交 PMO 会议评审立项。

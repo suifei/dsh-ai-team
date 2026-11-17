@@ -127,11 +127,16 @@ export const Config = z.object({
 	teamPreset: z.string().default('default'),
 });
 
-/** 新项目用哪份团队（每次建项目现读，改了 YAML 不用重启）；读取细节见 lib/domain/team-preset.js。 */
+/** 新项目用哪个团队（每次建项目现读，改了 team.yml 不用重启）；读取细节见 lib/domain/team-preset.js。 */
 function teamPresetFor(config, diag) {
-	const preset = loadTeamPreset({ name: config?.teamPreset || DEFAULT_TEAM, userDir: join(dshHome(), 'ai-team', 'teams'), diag });
-	diag?.append?.({ ev: 'team.preset', name: preset.id, source: preset.source, members: preset.team.members.length });
+	const preset = loadTeamPreset({ name: config?.teamPreset || DEFAULT_TEAM, userDir: userTeamsDir(), diag });
+	diag?.append?.({ ev: 'team.preset', name: preset.id, source: preset.source, dir: preset.dir, members: preset.team.members.length });
 	return preset;
+}
+
+/** 用户自定义团队的目录：~/.dsh/ai-team/teams/<团队>/team.yml。 */
+function userTeamsDir() {
+	return join(dshHome(), 'ai-team', 'teams');
 }
 
 /**
@@ -2130,7 +2135,9 @@ export function apply(ctx, config = {}) {
 						MEMBER: activationMember.name ?? '',
 						WORKSPACE: effectiveDir,
 					},
-					// 按身份装配内置技能：项目主理人拿审查规程，验收拿复跑规程，其余拿执行规程。
+					// 成员来自哪个团队就用哪个团队的岗位规程与技能（老成员没有记录 → 默认团队）。
+					preset: loadTeamPreset({ name: activationMember.team ?? DEFAULT_TEAM, userDir: userTeamsDir(), diag }),
+					// 按身份装配岗位规程：项目主理人拿审查规程，验收拿复跑规程，其余拿执行规程。
 					ownerId: projectRuntime.service.state.projects?.[projectRuntime.id]?.ownerMemberId
 						?? projectRuntime.service.state.projects?.[projectRuntime.id]?.ownerId,
 					})}`, body.payload?.attachments),
