@@ -57,3 +57,27 @@ test('QA review reminders run on the submission clock and escalate hourly', () =
 test('a task with no timestamp is skipped', () => {
 	assert.deepEqual(planTaskNudges({ id: 't', status: 'in_progress' }, { now: 10 * MIN }), []);
 });
+
+test('an idle board that PMO already looked at is pushed again, with doubling gaps, only while nobody is in a turn', async () => {
+	// il2c 11-17：03:55 wave_done 送达后主理人起了后台批就收尾，后台批随会话释放被杀；
+	// 此后无人建卡、无 Human 输入，PMO 每轮判「无新进展」，看板空转到天亮。
+	const { planIdleRetry, PMO_IDLE_RETRY_BASE, PMO_IDLE_RETRY_MAX } = await import('../lib/host/pmo.js');
+	const state = { members: { mem_lead: { kind: 'agent', sessionId: 's-lead' }, h: { kind: 'human' } } };
+	const since = 1_000_000;
+	const idle = () => false;
+	assert.equal(planIdleRetry(state, { since, now: since + 29 * MIN, inTurn: idle }), false, 'not before 30 minutes');
+	assert.equal(planIdleRetry(state, { since, now: since + 30 * MIN, inTurn: idle }), true, 'first push at 30 minutes');
+	assert.equal(planIdleRetry(state, { since, now: since + 30 * MIN, inTurn: (id) => id === 's-lead' }), false, 'a member in a turn is progress');
+	// 推进过一次后：下一次要再等 60 分钟，然后 120 分钟……
+	const lastAt = since + 30 * MIN;
+	assert.equal(planIdleRetry(state, { since, lastAt, retries: 1, now: lastAt + 59 * MIN, inTurn: idle }), false);
+	assert.equal(planIdleRetry(state, { since, lastAt, retries: 1, now: lastAt + 60 * MIN, inTurn: idle }), true);
+	assert.equal(planIdleRetry(state, { since, lastAt, retries: 2, now: lastAt + 119 * MIN, inTurn: idle }), false);
+	assert.equal(planIdleRetry(state, { since, lastAt, retries: 9, now: lastAt + PMO_IDLE_RETRY_MAX, inTurn: idle }), true, 'gap is capped');
+	assert.equal(PMO_IDLE_RETRY_BASE, 30 * MIN);
+
+	// 接线：pmoTick 在 pmoNews=false 时不再永久 return，而是交给 planIdleRetry。
+	const { readFileSync } = await import('node:fs');
+	const index = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+	assert.match(index, /if \(!planIdleRetry\(state, \{ \.\.\.quiet, now, inTurn: \(id\) => turnsInFlight\.has\(id\) \}\)\) return;/);
+});

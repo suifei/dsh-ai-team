@@ -212,3 +212,13 @@ test('personality is capped: evolve must rewrite, not append', async () => {
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test('the discipline section tells members that background jobs die with the turn, that PMO auto means no waiting for a go, and what plain Chinese excludes', () => {
+	// il2c 11-17：主理人起后台批后收尾「等批毕即续刀」，回合结束 34ms 后批被 teardown 杀掉；
+	// 报告里「270 开卡候 Human 令」；成员资料里「刀/席/宣/拍/腿」等代号累计数百处。
+	assert.match(TEAM_DISCIPLINE_TEXT, /后台任务活不过回合/);
+	assert.match(TEAM_DISCIPLINE_TEXT, /不要结束回合去「等批跑完」/);
+	assert.match(TEAM_DISCIPLINE_TEXT, /不等 Human 下令「开下一波」/);
+	assert.match(TEAM_DISCIPLINE_TEXT, /「刀」「席」「拍」「腿」「宣」/);
+	assert.match(TEAM_DISCIPLINE_TEXT, /个性、笔记都一样/);
+});

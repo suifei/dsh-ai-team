@@ -8,7 +8,7 @@
  * The member runtime (real Agent sessions) lands in M2. Until then the
  * ledger/domain service is the only writer and the Host never fakes work.
  */
-import { planDispatch, planTaskNudges } from './lib/host/pmo.js';
+import { planDispatch, planIdleRetry, planTaskNudges } from './lib/host/pmo.js';
 import { pmoHasNews } from './lib/ledger/fold.js';
 import { homedir, tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -842,7 +842,8 @@ export function apply(ctx, config = {}) {
 		const requestAttempts = new Map();
 		const activationTasks = new Map();
 		const pmoLastKick = new Map();
-		const pmoQuiet = new Set();
+		/** 空看板静默的项目：projectId → { since, lastAt, retries }（planIdleRetry 用）。 */
+		const pmoQuiet = new Map();
 		const pmoLastStall = new Map();
 		const pmoLastHeartbeat = new Map();
 		const pmoLastDispatch = new Map();
@@ -1311,13 +1312,20 @@ export function apply(ctx, config = {}) {
 			// PMO 已看过当前局面（汇报 / 推进 / 回复 Human）且之后没有新进展：不再推进，
 			// 否则目标完成后每 10 分钟空转一次会议（见 fold.js pmoNews）。每段静默只记一次。
 			if (!pmoHasNews(state)) {
-				if (!pmoQuiet.has(projectRuntime.id)) {
-					pmoQuiet.add(projectRuntime.id);
+				const quiet = pmoQuiet.get(projectRuntime.id);
+				if (quiet === undefined) {
+					pmoQuiet.set(projectRuntime.id, { since: now, lastAt: now, retries: 0 });
 					diag.append({ ev: 'pmo.continue.quiet', projectId: projectRuntime.id, seq: state.lastSeq });
+					return;
 				}
-				return;
+				// 静默不是永久的：没人在跑且静默够久，再推进一次（规则见 planIdleRetry）。
+				if (!planIdleRetry(state, { ...quiet, now, inTurn: (id) => turnsInFlight.has(id) })) return;
+				quiet.lastAt = now;
+				quiet.retries += 1;
+				diag.append({ ev: 'pmo.continue.idle', projectId: projectRuntime.id, retries: quiet.retries, quietMs: now - quiet.since });
+			} else {
+				pmoQuiet.delete(projectRuntime.id);
 			}
-			pmoQuiet.delete(projectRuntime.id);
 			const last = pmoLastKick.get(projectRuntime.id) ?? 0;
 			if (now - last < 10 * 60_000) return;
 			pmoLastKick.set(projectRuntime.id, now);
