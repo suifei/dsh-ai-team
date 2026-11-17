@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import { openLedger } from '../lib/ledger/writer.js';
 import { TeamService } from '../lib/host/service.js';
 import { seedDefaultRoster } from '../lib/host/default-roster.js';
-import { catalogRoots, listTalents, loadCatalog, parseTalent, parseTeam, procedureText, resolveTeam } from '../lib/domain/catalog.js';
-import { loadSkillContext } from '../lib/runtime/skill-loader.js';
+import { bundledHasTalent, catalogRoots, forkTalent, listTalents, loadCatalog, parseTalent, parseTeam, procedureText, resolveTeam } from '../lib/domain/catalog.js';
+import { findSkill, findSkillText, loadSkillContext } from '../lib/runtime/skill-loader.js';
 
 // 人才市场（2026-11-18）：人才 talents/<人才>/ → 团队 teams/<团队>/（只引用人才）→ 项目成员（账本实例）。
 // 之前默认名单是 JS 常量、三份岗位规程放在 skills/ 按岗位文字猜，名单与提示词离散，也不能自由组队。
@@ -210,4 +210,27 @@ test('2b: uniqueTalentId never reuses a taken id; talentFromMember carries role,
 	assert.deepEqual(talentFromMember(member, 'qa'), { name: '青岚', role: '执行', duty: 'qa', category: '', tags: [], personality: '先交付再汇报', model: { provider: 'qwen', model: 'q-max', reasoningEffort: 'high' }, skills: ['delivery-checklist', 'ok.v2'] });
 	assert.equal(talentFromMember({ name: 'x' }, 'boss').duty, 'executor');
 	assert.equal(talentFromMember({ name: 'x' }, 'lead').model, null);
+});
+
+test('2c: forkTalent copies a bundled talent with its skills into the user root under the same id; it shadows the bundled one and never overwrites an existing copy', async () => {
+	await withUser(async ({ user, catalog }) => {
+		const bundled = catalog().talents.get('executor');
+		assert.equal(bundled.source, 'bundled');
+		assert.equal(bundledHasTalent('executor'), true);
+		assert.equal(bundledHasTalent('nobody'), false);
+		const first = forkTalent(user, bundled);
+		assert.deepEqual(first, { forked: true, dir: join(user, 'talents', 'executor') });
+		const copy = catalog().talents.get('executor');
+		assert.deepEqual([copy.source, copy.version, copy.skills], ['user', bundled.version, bundled.skills]);
+		assert.equal(listTalents(catalog()).find((x) => x.id === 'executor').forked, true);
+		assert.equal(listTalents(catalog()).find((x) => x.id === 'editor').forked, false);
+		// 改过的副本不会被第二次 fork 冲掉。
+		await put(user, 'talents/executor/skills/delivery-checklist/SKILL.md', skillMd('delivery-checklist', '进化后的版本'));
+		assert.equal(forkTalent(user, bundled).forked, false);
+		assert.match(await findSkillText([copy.dir], 'delivery-checklist'), /进化后的版本/);
+		// findSkill 报命中的根与路径：先命中者胜。
+		const hit = await findSkill([copy.dir, bundled.dir], 'delivery-checklist');
+		assert.deepEqual([hit.root, hit.path, hit.name], [copy.dir, join(copy.dir, 'skills', 'delivery-checklist', 'SKILL.md'), 'delivery-checklist']);
+		assert.equal(await findSkill([copy.dir], '../etc'), null);
+	});
 });

@@ -308,6 +308,7 @@ window.__ModuleLoader__.load({
 			talentLoadFailed: '人才市场读取失败：{error}',
 			talentSkills: '技能：{skills}',
 			talentUser: '自建',
+			talentFork: '复制为可编辑', talentForkHint: '把这位内置人才复制成你自己的副本（同名遮盖内置），之后可装技能、进化技能；已招的成员下次激活就用副本。', talentForked: '已改', talentRestore: '恢复内置', talentRestoreConfirm: '删掉「{name}」的可编辑副本，恢复内置版？副本里装的、进化过的技能都会丢弃。', skillEvolve: '进化', skillEvolveHint: '让这位成员用 SkillOpt 优化这份技能：诊断最弱一维、改写、评审官盲评，好就保留，不好回退。', skillEvolveSent: '已私信 {name} 进化技能「{skill}」。', skillEvolveForked: '内置人才「{talent}」已复制为可编辑副本，并已私信 {name} 进化技能「{skill}」。', skillEvolveFailed: '技能进化没发出去：{error}',
 			talentHint: '挑一位人才预填表单，改名、换模型后再招进项目；自建人才放在 ~/.dsh/ai-team/catalog/user/talents/。',
 			memberHireFrom: '招自人才市场「{name}」v{version}：带入岗位、职责、人格与技能，可先修改再创建。',
 			dutyLead: '主理人',
@@ -758,6 +759,7 @@ window.__ModuleLoader__.load({
 			talentLoadFailed: 'Could not load the talent market: {error}',
 			talentSkills: 'Skills: {skills}',
 			talentUser: 'Custom',
+			talentFork: 'Make editable', talentForkHint: 'Copy this built-in talent into your own copy (same id, shadows the built-in) so you can install and evolve its skills; hired members use the copy on their next activation.', talentForked: 'Edited', talentRestore: 'Restore built-in', talentRestoreConfirm: 'Delete your editable copy of “{name}” and restore the built-in? Skills installed or evolved in the copy are discarded.', skillEvolve: 'Evolve', skillEvolveHint: 'Have this member optimize the skill with SkillOpt: diagnose the weakest dimension, rewrite, blind review by the reviewer; kept if better, reverted if not.', skillEvolveSent: 'Asked {name} to evolve the skill “{skill}”.', skillEvolveForked: 'Built-in talent “{talent}” was copied into an editable copy, and {name} was asked to evolve the skill “{skill}”.', skillEvolveFailed: 'Could not start skill evolution: {error}',
 			talentHint: 'Pick a talent to prefill the form, rename it or change the model, then hire. Your own talents live in ~/.dsh/ai-team/catalog/user/talents/.',
 			memberHireFrom: 'Hired from the talent market: “{name}” v{version}. Role, duty, personality and skills are filled in; edit before creating.',
 			dutyLead: 'Lead',
@@ -2717,7 +2719,7 @@ window.__ModuleLoader__.load({
 
 		const DUTY_LABEL = { lead: 'dutyLead', qa: 'dutyQa', executor: 'dutyExecutor' };
 		/** 「添加成员」弹窗的人才市场页：分类、搜索、卡片；点「招聘」按人才预填表单。 */
-		function TalentMarket({ t, talents, error, query, onQuery, category, onCategory, onHire, onCancel }) {
+		function TalentMarket({ t, talents, error, query, onQuery, category, onCategory, onHire, onFork, onRestore, onCancel }) {
 			const categories = [...new Set((talents ?? []).map((talent) => talent.category).filter(Boolean))];
 			const shown = filterTalents(talents, query, category);
 			return h('div', { className: 'at-market' },
@@ -2739,12 +2741,15 @@ window.__ModuleLoader__.load({
 								h('span', { className: 'at-talentname' }, talent.name),
 								h('span', { className: 'at-talentrole' }, talent.role),
 								talent.duty ? h('span', { className: 'at-talentduty' }, t(DUTY_LABEL[talent.duty])) : null,
-								talent.source === 'user' ? h('span', { className: 'at-talentduty' }, t('talentUser')) : null),
+								talent.forked ? h('span', { className: 'at-talentduty' }, t('talentForked')) : talent.source === 'user' ? h('span', { className: 'at-talentduty' }, t('talentUser')) : null),
 							talent.description ? h('div', { className: 'at-talentdesc' }, talent.description) : null,
 							talent.skills?.length ? h('div', { className: 'at-modalmeta' }, tf(t, 'talentSkills', { skills: talent.skills.join('、') })) : null,
 							h('div', { className: 'at-talentfoot' },
 								h('span', { className: 'at-modalmeta' }, [talent.category, ...(talent.tags ?? [])].filter(Boolean).join(' · ')),
-								h('button', { type: 'button', className: 'at-btn at-btn-primary', onClick: () => onHire(talent) }, t('talentHire')))))),
+								h('span', { className: 'at-tcpick' },
+									talent.source !== 'user' && onFork ? h('button', { type: 'button', className: 'at-btn at-btn-small', title: t('talentForkHint'), onClick: () => onFork(talent) }, t('talentFork')) : null,
+									talent.forked && onRestore ? h('button', { type: 'button', className: 'at-btn at-btn-small', onClick: () => onRestore(talent) }, t('talentRestore')) : null,
+									h('button', { type: 'button', className: 'at-btn at-btn-primary', onClick: () => onHire(talent) }, t('talentHire'))))))),
 				h('div', { className: 'at-modalactions' },
 					h('button', { className: 'at-btn', type: 'button', onClick: onCancel }, t('cancel'))));
 		}
@@ -3331,6 +3336,7 @@ window.__ModuleLoader__.load({
 			const [pNote, setPNote] = React.useState('');
 			const [pSkill, setPSkill] = React.useState('');
 			const [pMessage, setPMessage] = React.useState('');
+			const [pEvolve, setPEvolve] = React.useState('');
 			const [newOpen, setNewOpen] = React.useState(false);
 			const [nName, setNName] = React.useState('');
 			const [nGoal, setNGoal] = React.useState('');
@@ -4197,6 +4203,41 @@ window.__ModuleLoader__.load({
 					setTalentError(error?.message ?? String(error));
 				}
 			}
+			/** 2c：内置人才 fork 成可编辑副本（同 id 遮盖内置，已招成员下次激活读副本）。 */
+			async function forkTalent(talent) {
+				try {
+					const response = await fetch('/ai-team/api/talents/' + encodeURIComponent(talent.id) + '/fork', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+					const body = await response.json().catch(() => null);
+					if (!response.ok) throw new Error(body?.error?.message ?? ('HTTP ' + response.status));
+					await loadTalents();
+				} catch (error) {
+					setTalentError(error?.message ?? String(error));
+				}
+			}
+			/** 删掉可编辑副本，恢复内置版（副本里改过的技能一并丢弃）。 */
+			async function restoreTalent(talent) {
+				if (!(await askConfirm(t('talentRestore'), tf(t, 'talentRestoreConfirm', { name: talent.name })))) return;
+				try {
+					const response = await fetch('/ai-team/api/talents/delete', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: talent.id }) });
+					const body = await response.json().catch(() => null);
+					if (!response.ok) throw new Error(body?.error?.message ?? ('HTTP ' + response.status));
+					await loadTalents();
+				} catch (error) {
+					setTalentError(error?.message ?? String(error));
+				}
+			}
+			/** 2c：技能「进化」——服务端必要时先 fork 人才，再私信成员按 SkillOpt 两步优化这份技能。 */
+			async function evolveSkill(agent, name) {
+				setPEvolve('');
+				try {
+					const response = await fetch('/ai-team/api/projects/' + encodeURIComponent(projectId) + '/members/' + encodeURIComponent(agent.id) + '/skills/evolve', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) });
+					const body = await response.json().catch(() => null);
+					if (!response.ok) throw new Error(body?.error?.message ?? ('HTTP ' + response.status));
+					setPEvolve(tf(t, body.forked ? 'skillEvolveForked' : 'skillEvolveSent', { name: agent.name, skill: body.skill, talent: body.talent || '' }));
+				} catch (error) {
+					setPEvolve(tf(t, 'skillEvolveFailed', { error: error?.message ?? String(error) }));
+				}
+			}
 			/** 招聘：按人才预填表单，切到自定义页让 Human 改名、换模型后再确认。 */
 			function hireTalent(talent) {
 				const draft = hireTalentDraft(talent, (data?.agents ?? []).map((agent) => agent.name));
@@ -4341,6 +4382,7 @@ window.__ModuleLoader__.load({
 			}
 			function openProfile(agent) {
 				setProfileAgent(agent);
+				setPEvolve('');
 				setPName(agent.name ?? '');
 				setPRole(agent.role ?? '');
 				setPPersonality(agent.personality ?? '');
@@ -5213,6 +5255,8 @@ window.__ModuleLoader__.load({
 								category: talentCategory,
 								onCategory: setTalentCategory,
 								onHire: hireTalent,
+								onFork: (talent) => void forkTalent(talent),
+								onRestore: (talent) => void restoreTalent(talent),
 								onCancel: () => setAddOpen(false),
 							}) : mTab === 'create' && !(mCopy && !mCopy.talent) ? h(TalentCreator, { key: talentInit && talentInit.memberId ? 'm:' + talentInit.memberId : 'blank', t, initial: talentInit, onSaved: () => { loadTalents(); setTalentInit(null); setMTab('market'); }, onCancel: () => { setAddOpen(false); setTalentInit(null); } }) : [
 							mCopy?.talent ? h('div', { key: 'from', className: 'at-modalmeta' }, tf(t, 'memberHireFrom', { name: mCopy.sourceName, version: mCopy.talent.version })) : null,
@@ -5266,12 +5310,14 @@ window.__ModuleLoader__.load({
 							h('div', { className: 'at-permbadge', title: t('permissionNote') },
 								t('permissionBadge') + ' @ ' + (project?.workspacePath || '—')),
 							h('div', { className: 'at-modalmeta' }, t('permissionNote')),
-							(profileAgent.skills?.length || profileAgent.notes?.length)
-								? h('div', { className: 'at-modalmeta' },
-									(profileAgent.skills?.length ? t('memberSkills') + '：' + profileAgent.skills.join('、') : ''),
-									(profileAgent.skills?.length && profileAgent.notes?.length ? ' · ' : ''),
-									(profileAgent.notes?.length ? t('memberNotes') + '：' + profileAgent.notes.slice(-3).join('；') : ''))
+							profileAgent.skills?.length
+								? h('div', { className: 'at-tcskills', 'aria-label': t('memberSkills') },
+									h('span', { className: 'at-modalmeta' }, t('memberSkills') + '：'),
+									profileAgent.skills.map((name) => h('span', { key: name, className: 'at-tcskill' }, name,
+										h('button', { type: 'button', className: 'at-btn at-btn-small', title: t('skillEvolveHint'), onClick: () => void evolveSkill(profileAgent, name) }, t('skillEvolve')))))
 								: null,
+							pEvolve ? h('div', { className: 'at-modalmeta', role: 'status' }, pEvolve) : null,
+							profileAgent.notes?.length ? h('div', { className: 'at-modalmeta' }, t('memberNotes') + '：' + profileAgent.notes.slice(-3).join('；')) : null,
 							h('label', { className: 'at-field' }, h('span', null, t('memberName')),
 								h('input', { value: pName, onChange: (event) => setPName(event.target.value), autoFocus: true })),
 							h('label', { className: 'at-field' }, h('span', null, t('memberRole')),
