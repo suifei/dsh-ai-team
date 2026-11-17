@@ -8,7 +8,7 @@ import { listTalents, loadCatalog } from '../lib/domain/catalog.js';
 // 按 <member-copy> 标记取出纯函数单测（与界面用的是同一份源码），数据用真实的内置人才。
 const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
 const between = (tag) => source.slice(source.indexOf(`// <${tag}>`), source.indexOf(`// </${tag}>`));
-const market = vm.runInNewContext(`${between('member-copy')}\n({ hireTalentDraft, filterTalents, blankTalentForm, talentFormToBody, talentCreatorInit })`);
+const market = vm.runInNewContext(`${between('member-copy')}\n({ hireTalentDraft, filterTalents, blankTalentForm, talentFormToBody, talentCreatorInit, teamDraftToBody, teamMembersLine })`);
 const plain = (value) => JSON.parse(JSON.stringify(value));
 const talents = listTalents(loadCatalog());
 
@@ -52,4 +52,13 @@ test('存为人才：服务端草稿 → 新建人才页初值；找得到的技
 	assert.equal(init.sourceName, '青岚');
 	const bare = plain(market.talentCreatorInit({ projectId: 'p', memberId: 'm', draft: { name: 'x', duty: 'boss' } }));
 	assert.deepEqual([bare.form.duty, bare.pending, bare.missing, bare.model], ['executor', [], [], null]);
+});
+
+test('组队草稿 → POST 体：只带人才 id 与改过的名字，负责人越界退回第一位；成员摘要给负责人打星', () => {
+	const body = plain(market.teamDraftToBody({ name: ' 口语组 ', description: ' 陪练 ', members: [{ talent: 'executor', name: '' }, { talent: 'executor', name: ' 青岚二号 ' }, { talent: '' }, { talent: 'qa-acceptor' }], lead: 2 }));
+	assert.deepEqual(body, { name: '口语组', description: '陪练', members: [{ talent: 'executor' }, { talent: 'executor', name: '青岚二号' }, { talent: 'qa-acceptor' }], lead: 2 });
+	assert.equal(plain(market.teamDraftToBody({ name: 'x', members: [{ talent: 'a' }], lead: 5 })).lead, 0);
+	assert.deepEqual(plain(market.teamDraftToBody(null)), { name: '', description: '', members: [], lead: 0 });
+	assert.equal(market.teamMembersLine({ lead: 'mem_b', members: [{ id: 'mem_a', name: '青岚', role: '执行' }, { id: 'mem_b', name: '白砚', role: '验收' }] }), '青岚·执行、★白砚·验收');
+	assert.equal(market.teamMembersLine(null), '');
 });
