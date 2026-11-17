@@ -52,6 +52,28 @@ test('the bundled default team picks six talents from the market and keeps the s
 	assert.ok(market.every((t) => t.source === 'bundled' && t.name && t.role && t.category && t.description));
 });
 
+test('the bundled reverse-engineering team seeds seven RE talents, each with its own skill and the right duty', () => {
+	const c = loadCatalog();
+	const rev = resolveTeam(c, 'reverse');
+	assert.deepEqual([rev.id, rev.source, rev.team.lead], ['reverse', 'bundled', 'mem_re_lead']);
+	assert.deepEqual(rev.team.members.map((m) => [m.talent.id, m.duty, m.skills]), [
+		['re-lead', 'lead', []],
+		['binary-analyst', 'executor', ['static-analysis']],
+		['dynamic-debugger', 'executor', ['dynamic-debugging']],
+		['deobfuscator', 'executor', ['deobfuscation']],
+		['mobile-re', 'executor', ['mobile-re']],
+		['algo-reimplementer', 'executor', ['reimplementation']],
+		['re-verifier', 'qa', ['behavior-diff']],
+	]);
+	// 没带自己的岗位规程 → 退回内置默认团队的三份。
+	assert.match(procedureText(rev, 'lead'), /审查与导航/);
+	assert.match(procedureText(rev, 'executor'), /执行成员/);
+	// RE 人才都在人才市场里，分类为「逆向」。
+	const re = listTalents(c).filter((t) => t.category === '逆向');
+	assert.equal(re.length, 7);
+	assert.ok(re.every((t) => t.description && t.personality));
+});
+
 test('talent.yml and team.yml are validated with messages that name the field', () => {
 	assert.throws(() => parseTalent('role: x', 'a.yml'), /name 不能为空/);
 	assert.throws(() => parseTalent('name: A\nrole: B\nduty: boss'), /duty 只认 lead \/ qa \/ executor/);

@@ -16,6 +16,7 @@
 - 成员在账本里记下 `team`、`talent`、`talentVersion`、`duty`；激活时岗位规程取所属团队的，技能先在人才目录里找；
   老成员没有记录，按默认团队与岗位文字推断，行为不变；用户团队只用于新项目；
 - 写坏的文件跳过并记 `catalog.load.fail` / `catalog.team.fail`；新依赖 `yaml`（~2.9.1，无传递依赖）；
+- 预置**逆向工程队**（`teams/reverse/`）：把二进制拆开、还原算法、复刻功能。7 位人才进入人才市场——逆向负责人、二进制分析、动态调试、去混淆（OLLVM）、移动端逆向、算法复刻、逆向验收；各带 IDA/Ghidra 静态分析、x64dbg/frida 动态调试与内存 dump、符号执行去混淆、Android/iOS 逆向、算法复刻测试向量、沙箱行为对账等技能；插件设置 `teamPreset: reverse` 启用；
 - 测试：`test/catalog.test.js`、`test/client-talent-market.test.js`；实机 E2E（rc.1 / rc.3）：用户目录的「课题组」
   （导师 / 助研 / 质检）替换默认团队并按人才建成员、导师成为负责人；人才市场接口列出 12 位（2 位自建 + 10 位内置）；
   经 member.add 招聘的「助研」记下 talent@1.1.0，激活时带上它自带的 paper-review 技能。

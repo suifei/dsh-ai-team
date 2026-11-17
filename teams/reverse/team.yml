@@ -1,0 +1,17 @@
+# 逆向工程队：把二进制程序拆开、还原算法、复刻功能。从人才市场（talents/）挑出 7 位。
+#
+# 用法：插件设置 teamPreset 设成 reverse，之后新建的 Project 就用这个团队建成员。
+# 只分析获授权的目标、尊重软件许可；未知样本在隔离虚机/沙箱里运行。
+# 岗位规程沿用内置默认团队的主理人/执行/验收三份；逆向专长在各人才的技能里。
+
+name: 逆向工程队
+description: 把二进制拆开、还原算法、复刻软件功能：静态分析、动态调试、去混淆、移动端逆向、算法复刻与行为对账。
+lead: mem_re_lead
+members:
+  - { talent: re-lead, id: mem_re_lead }
+  - { talent: binary-analyst, id: mem_binary }
+  - { talent: dynamic-debugger, id: mem_debugger }
+  - { talent: deobfuscator, id: mem_deobf }
+  - { talent: mobile-re, id: mem_mobile }
+  - { talent: algo-reimplementer, id: mem_reimpl }
+  - { talent: re-verifier, id: mem_reverify }
