@@ -71,6 +71,7 @@ import { isInformationalThreadMention } from './lib/domain/inbox.js';
 import { messageContent, normalizeAttachments } from './lib/domain/rich-message.js';
 import { readAttachment, uploadAttachment } from './lib/host/attachment-routes.js';
 import { createDiagLogger, defaultDiagDir, installDiagSink } from './lib/diaglog.js';
+import { DEFAULT_TEAM, loadTeamPreset } from './lib/domain/team-preset.js';
 
 export const name = 'ai-team';
 
@@ -122,7 +123,16 @@ export const Config = z.object({
 	// 有界自主：Human 每次操作后，PMO 最多自主推进（无 active Task 时开会、自拟下一批卡）几轮；
 	// 用尽即暂停并在主流告知，等 Human 续。0 = 从不自主推进。Issue #1：一句「在吗」跑 7 小时。
 	pmoMaxRounds: z.number().step(1).min(0).max(100).default(3),
+	// 新项目的初始团队：内置 teams/<名字>.yml，或 ~/.dsh/ai-team/teams/<名字>.yml（同名覆盖内置）。
+	teamPreset: z.string().default('default'),
 });
+
+/** 新项目用哪份团队（每次建项目现读，改了 YAML 不用重启）；读取细节见 lib/domain/team-preset.js。 */
+function teamPresetFor(config, diag) {
+	const preset = loadTeamPreset({ name: config?.teamPreset || DEFAULT_TEAM, userDir: join(dshHome(), 'ai-team', 'teams'), diag });
+	diag?.append?.({ ev: 'team.preset', name: preset.id, source: preset.source, members: preset.team.members.length });
+	return preset;
+}
 
 /**
  * 惰性 shell 服务代理：插件注入时机可能早于 shell 服务就绪，注册与 tick 都
@@ -238,6 +248,7 @@ async function boot(diag, config = {}) {
 			workspacePath: project.workspacePath ?? '',
 			diag,
 			pmoMaxRounds: config.pmoMaxRounds,
+			teamPreset: teamPresetFor(config, diag),
 		});
 		runtimes.set(project.id, runtime);
 	}
@@ -2272,6 +2283,7 @@ export function apply(ctx, config = {}) {
 					workspacePath,
 					diag,
 					pmoMaxRounds: config.pmoMaxRounds,
+					teamPreset: teamPresetFor(config, diag),
 				});
 				booted.runtimes.set(nextProjectId, next);
 				attachRuntime(next);

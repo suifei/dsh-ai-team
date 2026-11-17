@@ -36,7 +36,8 @@
     "./icon": "./icon.svg"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "~3.19.0"
+    "@deepseek-ai/schemastery": "~3.19.0",
+    "yaml": "~2.9.1"
   },
   "files": [
     "index.js",
@@ -51,6 +52,7 @@
     "lib/vendor/skillopt/requirements.txt",
     "lib/vendor/skillopt/LICENSE",
     "skills/**/*",
+    "teams/*.yml",
     "README.md",
     "CHANGELOG.md",
     "LICENSE"
