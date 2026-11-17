@@ -282,6 +282,8 @@ window.__ModuleLoader__.load({
 			memberNoModels: '该提供商暂无模型',
 			memberOwner: '设为 Project owner',
 			memberCreate: '创建并激活',
+			memberCopy: '复制成员',
+			memberCopyFrom: '复制自「{name}」：沿用角色、人格、运行配方、模型、输出上限与技能；笔记、会话与任务不带。',
 			memberAdding: '正在创建…',
 			memberAdded: '成员已创建并激活。',
 			cancel: '取消',
@@ -701,6 +703,8 @@ window.__ModuleLoader__.load({
 			memberNoModels: 'No models for this provider',
 			memberOwner: 'Make Project owner',
 			memberCreate: 'Create and activate',
+			memberCopy: 'Duplicate member',
+			memberCopyFrom: 'Copy of “{name}”: keeps role, personality, recipe, model, output limit and skills; notes, session and tasks stay with the original.',
 			memberAdding: 'Creating…',
 			memberAdded: 'Member created and activated.',
 			cancel: 'Cancel',
@@ -1180,7 +1184,7 @@ window.__ModuleLoader__.load({
 			.at-box { min-width: 0; padding: 8px 9px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-md); background: var(--dsw-alias-bg-layer-2); }
 			.at-box:focus-within { border-color: var(--dsw-alias-state-business-primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--dsw-alias-state-business-primary) 20%, transparent); }
 			.at-box.at-taskmode { border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 20%, var(--dsw-alias-border-l2)); }
-			.at-box textarea { display: block; width: 100%; min-height: 38px; max-height: 160px; resize: none; padding: 2px; border: 0; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; line-height: 21px; }
+			.at-box textarea { display: block; width: 100%; box-sizing: border-box; min-height: 38px; max-height: 60vh; resize: vertical; padding: 2px; border: 0; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 13px; line-height: 21px; }
 			.at-barrow { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
 			.at-mode { display: inline-flex; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); }
 			.at-mode button { min-height: 24px; padding: 0 8px; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; }
@@ -2257,6 +2261,7 @@ window.__ModuleLoader__.load({
 				count: entries.length,
 				tail: entries.length > 0 ? String(entries[entries.length - 1]?.seq ?? '') + '|' + task.status : task.status,
 			});
+			useFitTextarea(replyRef, reply);
 			return h('aside', { className: 'at-right', role: 'complementary', 'aria-label': t('threadAria'), tabIndex: -1, ref: panelRef },
 				h('div', { className: 'at-rhead' },
 					h('div', { className: 'at-rh' },
@@ -2325,6 +2330,7 @@ window.__ModuleLoader__.load({
 							value: reply,
 							rows: 2,
 							ref: replyRef,
+							onMouseUp: (event) => rememberTextareaDrag(event.currentTarget),
 							placeholder: t('reply'),
 							'aria-label': t('reply'),
 							onChange: (event) => onReplyChange(event.target.value),
@@ -2346,11 +2352,15 @@ window.__ModuleLoader__.load({
 				if (mode === 'task' && (!definition.trim() || (qaRequired && !qaChecklist.trim()))) return;
 				onSend();
 			};
+			const ownRef = React.useRef(null);
+			const boxRef = inputRef ?? ownRef;
+			useFitTextarea(boxRef, draft);
 			return h('div', { className: 'at-composer' },
 				h('div', { className: 'at-composerinner' },
 					h('div', { className: cx('at-box', mode === 'task' && 'at-taskmode') },
 						h('textarea', {
-							ref: inputRef,
+							ref: boxRef,
+							onMouseUp: (event) => rememberTextareaDrag(event.currentTarget),
 							value: draft,
 							rows: 2,
 							disabled,
@@ -2674,6 +2684,70 @@ window.__ModuleLoader__.load({
 		}
 		// </stream-follow>
 
+		// <textarea-fit>
+		/**
+		 * 输入框随内容长高（#65：输入框只显示一两行，长文看不全也拉不大）。
+		 *   - 高度 = max(内容高度, 用户拖出来的高度)，封顶 maxHeight，超出才出滚动条；
+		 *   - 用户拖动右下角改过高度（与上次自适应结果不同）即记为下限，清空发送后保持；
+		 * 只读写传入元素的 style/dataset/scrollHeight/offsetHeight，便于单测。
+		 */
+		function fitTextarea(el, maxHeight) {
+			if (el === null || el === undefined || el.style === undefined) return null;
+			const floor = Number(el.dataset?.userHeight) || 0;
+			el.style.height = 'auto';
+			const want = Math.max(el.scrollHeight, floor);
+			const height = Math.min(want, maxHeight);
+			el.style.height = height + 'px';
+			el.style.overflowY = want > maxHeight ? 'auto' : 'hidden';
+			if (el.dataset) el.dataset.fitHeight = String(height);
+			return height;
+		}
+		/** 拖动结束时调用：高度与自适应结果不同 = 用户手动调过，记为下限。 */
+		function rememberTextareaDrag(el) {
+			if (el === null || el === undefined || !el.dataset) return null;
+			const fitted = Number(el.dataset.fitHeight) || 0;
+			if (Math.abs(el.offsetHeight - fitted) <= 2) return null;
+			el.dataset.userHeight = String(el.offsetHeight);
+			return el.offsetHeight;
+		}
+		// </textarea-fit>
+
+		/** 输入框自适应的 React 接线（主对话与任务回复共用）；封顶为窗口高度的 45%，至少 160px。 */
+		function useFitTextarea(ref, value) {
+			React.useLayoutEffect(() => {
+				const viewport = Number(globalThis.innerHeight) || 800;
+				fitTextarea(ref?.current, Math.max(160, Math.floor(viewport * 0.45)));
+			}, [ref, value]);
+		}
+
+		// <member-copy>
+		/**
+		 * 复制成员（#65：想要两个「玄策」一起写代码，只能手工重填一遍）。
+		 * 沿用角色、人格、运行配方、模型、输出上限与技能；不带笔记、会话与任务（那是原成员自己的经历）。
+		 * 名字取「原名去掉尾部数字 + 最小未占用序号」：玄策 → 玄策2，再复制玄策2 → 玄策3。
+		 */
+		function copyMemberDraft(source, takenNames) {
+			const taken = new Set((Array.isArray(takenNames) ? takenNames : []).map((name) => String(name ?? '').trim()));
+			const base = String(source?.name ?? '').trim().replace(/\s*\d+$/, '') || 'agent';
+			let n = 2;
+			while (taken.has(base + n)) n += 1;
+			const config = source?.config ?? {};
+			const maxTokens = Number(config.maxTokens);
+			return {
+				name: base + n,
+				role: typeof source?.role === 'string' ? source.role : '',
+				personality: typeof source?.personality === 'string' ? source.personality : '',
+				preset: config.preset ?? source?.preset ?? 'standard',
+				provider: config.provider ?? '',
+				model: config.model ?? '',
+				reasoningEffort: config.reasoningEffort ?? '',
+				maxTokens: Number.isSafeInteger(maxTokens) && maxTokens > 0 ? maxTokens : null,
+				skills: (Array.isArray(source?.skills) ? source.skills : []).filter((skill) => typeof skill === 'string' && skill.trim() !== ''),
+				sourceName: String(source?.name ?? ''),
+			};
+		}
+		// </member-copy>
+
 		/**
 		 * 滚动容器「跟随最新」的 React 接线（主对话、任务记录共用这一份）。
 		 *   key   变化即重置并贴底（切项目/标签/任务）；
@@ -2755,6 +2829,7 @@ window.__ModuleLoader__.load({
 			const [acceptChecked, setAcceptChecked] = React.useState(false);
 			const [qaChecks, setQaChecks] = React.useState([]);
 			const [addOpen, setAddOpen] = React.useState(false);
+			const [mCopy, setMCopy] = React.useState(null);
 			const [mName, setMName] = React.useState('');
 			const [mRole, setMRole] = React.useState('');
 			const [mPrompt, setMPrompt] = React.useState('');
@@ -3587,6 +3662,21 @@ window.__ModuleLoader__.load({
 				setMModel(defaults.model ?? '');
 				setMEffort(defaults.reasoningEffort ?? '');
 				setMOwner((data?.agents ?? []).length === 0);
+				setMCopy(null);
+				setMError('');
+				setAddOpen(true);
+			}
+			/** #65：从成员资料「复制成员」——新增表单按原成员预填，人格/配方/上限/技能随创建一并写入。 */
+			function openCopyAgent(source) {
+				const draft = copyMemberDraft(source, (data?.agents ?? []).map((agent) => agent.name));
+				setMName(draft.name);
+				setMRole(draft.role);
+				setMPrompt('');
+				setMProvider(draft.provider);
+				setMModel(draft.model);
+				setMEffort(draft.reasoningEffort);
+				setMOwner(false);
+				setMCopy(draft);
 				setMError('');
 				setAddOpen(true);
 			}
@@ -3600,18 +3690,25 @@ window.__ModuleLoader__.load({
 						role: mRole.trim(),
 						kind: 'agent',
 						status: 'provisioning',
+						...(mCopy?.personality ? { personality: mCopy.personality } : {}),
 					});
 					const memberId = added.member.id;
-					if (mProvider.trim() || mModel.trim()) {
+					const patch = {
+						...(mProvider.trim() ? { provider: mProvider.trim() } : {}),
+						...(mModel.trim() ? { model: mModel.trim() } : {}),
+						...(mEffort.trim() ? { reasoningEffort: mEffort.trim() } : {}),
+						...(mCopy && mCopy.preset !== 'standard' ? { preset: mCopy.preset } : {}),
+						...(mCopy?.maxTokens ? { maxTokens: mCopy.maxTokens } : {}),
+					};
+					if (Object.keys(patch).length > 0) {
 						await runCommand('member.config.update', {
 							memberId,
-							patch: {
-								...(mProvider.trim() ? { provider: mProvider.trim() } : {}),
-								...(mModel.trim() ? { model: mModel.trim() } : {}),
-								...(mEffort.trim() ? { reasoningEffort: mEffort.trim() } : {}),
-							},
-							reason: 'workbench add member',
+							patch,
+							reason: mCopy ? 'workbench copy member' : 'workbench add member',
 						});
+					}
+					for (const skill of mCopy?.skills ?? []) {
+						await runCommand('member.skill', { memberId, name: skill });
 					}
 					await runCommand('member.activate', {
 						memberId,
@@ -4503,7 +4600,8 @@ window.__ModuleLoader__.load({
 							'aria-label': t('addAgentTitle'),
 							onSubmit: (event) => { event.preventDefault(); createAgent(); },
 						},
-							h('h2', { className: 'at-modaltitle' }, t('addAgentTitle')),
+							h('h2', { className: 'at-modaltitle' }, mCopy ? t('memberCopy') : t('addAgentTitle')),
+							mCopy ? h('div', { className: 'at-modalmeta' }, tf(t, 'memberCopyFrom', { name: mCopy.sourceName })) : null,
 							h('label', { className: 'at-field' }, h('span', null, t('memberName')),
 								h('input', { value: mName, onChange: (event) => setMName(event.target.value), autoFocus: true })),
 							h('label', { className: 'at-field' }, h('span', null, t('memberRole')),
@@ -4613,6 +4711,7 @@ window.__ModuleLoader__.load({
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setProfileAgent(null), disabled: pBusy }, t('cancel')),
 								h('button', { className: 'at-btn', type: 'button', onClick: () => { const target = profileAgent; setProfileAgent(null); openMemberView(target); } }, t('memberTasks')),
 								h('button', { className: 'at-btn', type: 'button', onClick: () => { const target = profileAgent; setProfileAgent(null); void openAgentChat(target); } }, t('agentChat')),
+								h('button', { className: 'at-btn', type: 'button', onClick: () => { const source = profileAgent; setProfileAgent(null); openCopyAgent(source); }, disabled: pBusy }, t('memberCopy')),
 								h('button', { className: 'at-btn', type: 'button', onClick: leaveProfile, disabled: pBusy }, t('leaveTeam')),
 								profileAgent.status === 'failed' ? h('button', { className: 'at-btn', type: 'button', onClick: retryProfile, disabled: pBusy }, t('retry')) : null,
 								profileAgent.sessionId ? h('button', { className: 'at-btn', type: 'button', title: t('reseatConfirm'), onClick: reseatProfile, disabled: pBusy }, t('reseatSession')) : null,
