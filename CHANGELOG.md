@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.126 - 2026-11-18
+
+**人才市场（第 2 步 2b）：把项目里的成员存为人才**
+
+- 成员在项目里干久了，性格会被复盘与手工调整打磨，技能也会越挂越多；此前这些只属于那一个项目。
+  现在成员资料多了「存为人才」：把它此刻的岗位、职责、性格、模型与技能存成可复用的人才，换个项目照样招；
+- 草稿由服务端生成 `GET /api/projects/:p/members/:m/talent-draft`：职责与激活注入同一判定（`skillKindForMember`，主理人即 lead），
+  逐份技能标出找不到正文的（如只是挂了名字）；笔记、会话与任务不带——那是这位成员自己的经历；
+- 技能按**成员实际读取的路径**拷进新人才的文件夹（团队目录 → 人才自带 → 工作区 `.dsh` → `~/.dsh` → 项目数据目录）：
+  `POST /api/talents/:id/skills` 新增 `fromProject` + `fromMember`；查找抽成 `skill-loader.findSkillText` 一份实现，激活注入与存为人才共用；
+- 存为人才复用「新建人才」页：草稿预填、可改，找不到正文的技能单列提示，沿用的模型一并存下；
+- **新建不再静默覆盖**：`POST /api/talents` 撞了已有 id（含内置，如英文名 `editor`）自动加序号，要改写已有自定义人才须显式 `overwrite`（`uniqueTalentId`）；
+- 测试：`test/talent-routes.test.js` 补存为人才全流程与去重；`test/catalog.test.js` 补 `uniqueTalentId` / `talentFromMember`；
+  `test/client-talent-market.test.js` 补 `talentCreatorInit`。实机 E2E（rc.1 / rc.3）：改过性格、挂了工作区独有技能的青岚存为人才，
+  删掉工作区那份后招进新人才并激活——性格、模型与两份技能都随人才走。
+
 ## 0.4.125 - 2026-11-18
 
 **人才市场（第 2 步 2a）：自定义智能体 + 安装 skill**

@@ -28,7 +28,8 @@ import { activationSpec } from './lib/runtime/activation-spec.js';
 import { repairArchivedHosts as repairHostSessions } from './lib/runtime/host-repair.js';
 import { classifyLlmFailure, nextRequestAttempt, retryDecision } from './lib/runtime/failure-policy.js';
 import { memberIdentity } from './lib/domain/member-profile.js';
-import { loadSkillContext } from './lib/runtime/skill-loader.js';
+import { findSkillText, loadSkillContext } from './lib/runtime/skill-loader.js';
+import { skillKindForMember } from './lib/runtime/core-skill.js';
 import { formatSkillCatalog } from './lib/runtime/skill-catalog.js';
 import { isSkillExcluded } from './lib/runtime/skill-policy.js';
 import { installFileSkillProvider, pickProjectForCwd } from './lib/runtime/skill-provider.js';
@@ -71,7 +72,7 @@ import { isInformationalThreadMention } from './lib/domain/inbox.js';
 import { messageContent, normalizeAttachments } from './lib/domain/rich-message.js';
 import { readAttachment, uploadAttachment } from './lib/host/attachment-routes.js';
 import { createDiagLogger, defaultDiagDir, installDiagSink } from './lib/diaglog.js';
-import { DEFAULT_TEAM, catalogRoots, deleteTalent, installSkill, listInstallableSkills, listTalents, loadCatalog, readSkillText, resolveTeam, talentIdFrom, userCatalogDir, writeTalent } from './lib/domain/catalog.js';
+import { DEFAULT_TEAM, catalogRoots, deleteTalent, installSkill, listInstallableSkills, listTalents, loadCatalog, readSkillText, resolveTeam, talentFromMember, talentIdFrom, uniqueTalentId, userCatalogDir, writeTalent } from './lib/domain/catalog.js';
 
 export const name = 'ai-team';
 
@@ -136,6 +137,16 @@ function talentCatalog(diag) {
 function memberCatalogDirs(member, diag) {
 	const talent = typeof member?.talent === 'string' ? talentCatalog(diag).talents.get(member.talent) : undefined;
 	return talent === undefined ? [] : [talent.dir];
+}
+
+/**
+ * 成员技能的查找根（团队规程目录另由 preset 前置）：人才自带 → 工作区 `.dsh` → 用户 `~/.dsh` → 项目数据目录。
+ * 激活注入与「存为人才」共用，拷出来的技能就是成员实际读到的那份。
+ */
+function memberSkillRoots(member, runtime, diag) {
+	const workspacePath = runtime?.service?.state?.projects?.[runtime.id]?.workspacePath;
+	const dir = member?.workspace || (typeof workspacePath === 'string' ? workspacePath.trim() : '');
+	return [...memberCatalogDirs(member, diag), ...(dir ? [join(dir, '.dsh')] : []), dshHome(), runtime?.dir].filter((root) => typeof root === 'string' && root !== '');
 }
 
 /** 新项目用哪个团队。 */
@@ -2134,7 +2145,7 @@ export function apply(ctx, config = {}) {
 					// #65：激活时若带着 Human 消息的图片/文件，一并放进首条消息。
 					prompt: messageContent(`${memberIdentity(activationMember)}\n\n${typeof body.payload?.prompt === 'string'
 						? body.payload.prompt
-						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: effectiveDir })}${await loadSkillContext(activationMember, [...memberCatalogDirs(activationMember, diag), join(effectiveDir, '.dsh'), dshHome(), projectRuntime.dir], {
+						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: effectiveDir })}${await loadSkillContext(activationMember, memberSkillRoots(activationMember, projectRuntime, diag), {
 					vars: {
 						GOAL: goalForProject(projectRuntime),
 						PROJECT: projectRuntime.service.state.projects?.[projectRuntime.id]?.name ?? '',
@@ -2366,6 +2377,19 @@ export function apply(ctx, config = {}) {
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/talents') {
 						return send(res, { talents: listTalents(talentCatalog(diag)) });
 					}
+					// 「存为人才」草稿：按成员此刻的岗位、职责（与激活同一判定）、性格、模型与技能生成；标出每份技能找不找得到。
+					const talentDraftRoute = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/members\/([^/]+)\/talent-draft$/);
+					if (req.method === 'GET' && talentDraftRoute !== null) {
+						const runtime = projectRuntime(decodeURIComponent(talentDraftRoute[1]));
+						const member = runtime?.service?.state?.members?.[decodeURIComponent(talentDraftRoute[2])];
+						if (member === undefined || member.kind !== 'agent') return send(res, { error: { code: 'NOT_FOUND', message: 'member not found' } }, 404);
+						const project = runtime.service.state.projects?.[runtime.id];
+						const draft = talentFromMember(member, skillKindForMember(member, { ownerId: project?.ownerMemberId ?? project?.ownerId }));
+						const roots = [resolveTeam(talentCatalog(diag), member.team ?? DEFAULT_TEAM, { diag }).dir, ...memberSkillRoots(member, runtime, diag)];
+						const skills = [];
+						for (const name of draft.skills) skills.push({ name, found: (await findSkillText(roots, name)) !== null });
+						return send(res, { draft: { ...draft, skills }, projectId: runtime.id, memberId: member.id });
+					}
 					// 可安装的技能清单（每个人才自带的技能），给「从已有装」挑。
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/skills-install') {
 						return send(res, { skills: listInstallableSkills(talentCatalog(diag)) });
@@ -2388,6 +2412,9 @@ export function apply(ctx, config = {}) {
 						let id = talentIdFrom(body?.id) || talentIdFrom(body?.name);
 						if (id === '' && typeof body?.name === 'string' && body.name.trim() !== '') id = 'talent-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 						if (id === '') return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: '人才需要一个名字（用于生成 id）' } }, 400);
+						// 新建不静默覆盖：撞了已有人才（含内置）就加序号；要改写已有的自定义人才须显式 overwrite。
+						if (body?.overwrite !== true) id = uniqueTalentId(talentCatalog(diag), id);
+						if (id === '') return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: '找不到可用的人才 id' } }, 400);
 						try {
 							const saved = writeTalent(userCatalogDir(dshHome()), id, body ?? {});
 							diag?.append({ ev: 'talent.write', id, source: 'user' });
@@ -2421,7 +2448,16 @@ export function apply(ctx, config = {}) {
 							if (src === undefined) return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: '来源人才不存在' } }, 400);
 							try { markdown = readSkillText(src.dir, body.fromSkill); } catch (error) { return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: error.message } }, 400); }
 						}
-						if (markdown === null) return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: '需要 markdown 正文，或 fromTalent + fromSkill' } }, 400);
+						// 「存为人才」：按来源成员实际读技能的路径找正文（团队规程目录 + 成员技能根），拷进新人才。
+						if (markdown === null && typeof body?.fromProject === 'string' && typeof body?.fromMember === 'string') {
+							const runtime = projectRuntime(body.fromProject);
+							const member = runtime?.service?.state?.members?.[body.fromMember];
+							if (member === undefined) return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: '来源成员不存在' } }, 400);
+							const roots = [resolveTeam(cat, member.team ?? DEFAULT_TEAM, { diag }).dir, ...memberSkillRoots(member, runtime, diag)];
+							markdown = await findSkillText(roots, body?.name);
+							if (markdown === null) return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: `成员「${member.name}」能读到的位置里找不到技能 ${String(body?.name)}` } }, 400);
+						}
+						if (markdown === null) return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: '需要 markdown 正文，或 fromTalent + fromSkill，或 fromProject + fromMember' } }, 400);
 						try {
 							const name = installSkill(t.dir, body?.name, markdown);
 							const saved = writeTalent(userCatalogDir(dshHome()), t.id, { ...t, skills: [...new Set([...t.skills, name])] });

@@ -109,6 +109,36 @@ test('talent market 2a: create a custom talent, install a written skill and a fo
 	const delBundled = await post('/ai-team/api/talents/delete', { id: 'copywriter' });
 	assert.equal(delBundled.status, 409);
 
+	// 9. 2b 存为人才：成员草稿（职责按身份判定、标出找不到正文的技能）→ 建人才 → 按成员读技能的路径拷技能。
+	const pid = (await get('/ai-team/api/bootstrap')).body.project.id;
+	const leadDraft = await get(`/ai-team/api/projects/${pid}/members/mem_lead/talent-draft`);
+	assert.equal(leadDraft.status, 200);
+	assert.equal(leadDraft.body.draft.duty, 'lead', '项目主理人按身份判定为 lead');
+	const ghostAdded = await post(`/ai-team/api/projects/${pid}/commands`, { type: 'member.skill', payload: { memberId: 'mem_maker', name: 'ghost-skill' } });
+	assert.equal(ghostAdded.status, 200, JSON.stringify(ghostAdded.body));
+	const draft = (await get(`/ai-team/api/projects/${pid}/members/mem_maker/talent-draft`)).body.draft;
+	assert.equal(draft.duty, 'executor');
+	assert.deepEqual(draft.skills, [{ name: 'delivery-checklist', found: true }, { name: 'ghost-skill', found: false }]);
+	const saved = await post('/ai-team/api/talents', { name: draft.name, role: draft.role, duty: draft.duty, personality: draft.personality });
+	assert.equal(saved.status, 200, JSON.stringify(saved.body));
+	const savedId = saved.body.talent.id;
+	assert.equal(saved.body.talent.personality, draft.personality, '性格原样带走');
+	const copied = await post(`/ai-team/api/talents/${savedId}/skills`, { name: 'delivery-checklist', fromProject: pid, fromMember: 'mem_maker' });
+	assert.equal(copied.status, 200, JSON.stringify(copied.body));
+	const original = await get('/ai-team/api/skills-install/content?talent=executor&name=delivery-checklist');
+	assert.equal(readFileSync(join(root, 'ai-team', 'catalog', 'user', 'talents', savedId, 'skills', 'delivery-checklist', 'SKILL.md'), 'utf8'), original.body.markdown, '拷出来的就是成员读到的那份');
+	const ghost = await post(`/ai-team/api/talents/${savedId}/skills`, { name: 'ghost-skill', fromProject: pid, fromMember: 'mem_maker' });
+	assert.equal(ghost.status, 400, '找不到正文的技能不装');
+	assert.equal((await get(`/ai-team/api/projects/${pid}/members/mem_nope/talent-draft`)).status, 404);
+
+	// 10. 新建不静默覆盖：同 id 再建加序号；撞内置 id 也加序号；显式 overwrite 才改写。
+	const dup1 = await post('/ai-team/api/talents', { id: 'dup', name: 'A', role: 'r' });
+	const dup2 = await post('/ai-team/api/talents', { id: 'dup', name: 'B', role: 'r' });
+	assert.deepEqual([dup1.body.talent.id, dup2.body.talent.id], ['dup', 'dup-2']);
+	assert.equal((await post('/ai-team/api/talents', { name: 'editor', role: '编辑' })).body.talent.id, 'editor-2', '不遮盖内置 editor');
+	const over = await post('/ai-team/api/talents', { id: 'dup', name: 'A2', role: 'r', overwrite: true });
+	assert.deepEqual([over.body.talent.id, over.body.talent.name], ['dup', 'A2']);
+
 	// 精简测试壳没接 tool registry，SkillOpt 注册会打一条环境提示——与本测试无关，过滤掉。
 	const faults = consoleErrors.filter((line) => !line.includes('SkillOpt tools not registered'));
 	assert.deepEqual(faults, [], '运行期无 console.error/warn：' + faults.join(' | '));

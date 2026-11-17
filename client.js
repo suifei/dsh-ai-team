@@ -301,6 +301,7 @@ window.__ModuleLoader__.load({
 			tcName: '名号', tcRole: '岗位', tcDuty: '职责', tcCategory: '分类', tcTags: '标签', tcTagsHint: '逗号分隔', tcPersonality: '性格', tcPersonalityHint: '它怎么做事、什么风格',
 			tcSkills: '技能', tcEmpty: '还没装技能（可选）', tcAddExisting: '从已有装', tcWriteOwn: '自写一份', tcImport: '导入 .md', tcPick: '选一个已有技能…', tcAdd: '加入', tcRemove: '移除',
 			tcSkillName: '技能名（英文/数字/-）', tcSkillBody: '技能正文（SKILL.md）', tcSkillDup: '已经装了同名技能', tcSave: '存为我的人才', tcSaving: '保存中…',
+			memberSaveAsTalent: '存为人才', tcFromMember: '从成员「{name}」存出：沿用它此刻的岗位、职责、性格与技能，可先修改再保存。', tcModelKept: '沿用模型：{model}', tcMissing: '这些技能找不到正文，没有带上：{skills}', tcDraftFailed: '读取成员草稿失败：{error}',
 			talentEmpty: '没有符合条件的人才。',
 			talentLoading: '正在读取人才市场…',
 			talentLoadFailed: '人才市场读取失败：{error}',
@@ -749,6 +750,7 @@ window.__ModuleLoader__.load({
 			tcName: 'Name', tcRole: 'Role', tcDuty: 'Duty', tcCategory: 'Category', tcTags: 'Tags', tcTagsHint: 'comma-separated', tcPersonality: 'Personality', tcPersonalityHint: 'how it works, its style',
 			tcSkills: 'Skills', tcEmpty: 'No skills yet (optional)', tcAddExisting: 'From existing', tcWriteOwn: 'Write one', tcImport: 'Import .md', tcPick: 'Pick an existing skill…', tcAdd: 'Add', tcRemove: 'Remove',
 			tcSkillName: 'Skill name (a-z, 0-9, -)', tcSkillBody: 'Skill body (SKILL.md)', tcSkillDup: 'That skill name is already staged', tcSave: 'Save as my talent', tcSaving: 'Saving…',
+			memberSaveAsTalent: 'Save as talent', tcFromMember: 'Saved from member “{name}”: its current role, duty, personality and skills are filled in; edit before saving.', tcModelKept: 'Keeps the model: {model}', tcMissing: 'These skills have no readable body and were left out: {skills}', tcDraftFailed: 'Could not read the member draft: {error}',
 			talentEmpty: 'No talent matches.',
 			talentLoading: 'Loading the talent market…',
 			talentLoadFailed: 'Could not load the talent market: {error}',
@@ -2738,9 +2740,10 @@ window.__ModuleLoader__.load({
 				h('div', { className: 'at-modalactions' },
 					h('button', { className: 'at-btn', type: 'button', onClick: onCancel }, t('cancel'))));
 		}
-		function TalentCreator({ t, onSaved, onCancel }) {
-			const [form, setForm] = React.useState(blankTalentForm);
-			const [pending, setPending] = React.useState([]);
+		function TalentCreator({ t, initial, onSaved, onCancel }) {
+			const seed = initial && initial.draft ? talentCreatorInit(initial) : null;
+			const [form, setForm] = React.useState(() => (seed ? seed.form : blankTalentForm()));
+			const [pending, setPending] = React.useState(() => (seed ? seed.pending : []));
 			const [installable, setInstallable] = React.useState([]);
 			const [pick, setPick] = React.useState('');
 			const [pickFrom, setPickFrom] = React.useState('');
@@ -2782,12 +2785,12 @@ window.__ModuleLoader__.load({
 				if (!form.name.trim() || busy) return;
 				setBusy(true); setError('');
 				try {
-					const res = await fetch('/ai-team/api/talents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(talentFormToBody(form)) });
+					const res = await fetch('/ai-team/api/talents', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...talentFormToBody(form), ...(seed && seed.model ? { model: seed.model } : {}) }) });
 					const body = await res.json().catch(() => null);
 					if (!res.ok) throw new Error((body && body.error && body.error.message) || ('HTTP ' + res.status));
 					const id = body && body.talent && body.talent.id;
 					for (const sk of pending) {
-						const payload = sk.kind === 'fork' ? { name: sk.name, fromTalent: sk.fromTalent, fromSkill: sk.fromSkill } : { name: sk.name, markdown: sk.markdown };
+						const payload = sk.kind === 'fork' ? { name: sk.name, fromTalent: sk.fromTalent, fromSkill: sk.fromSkill } : sk.kind === 'member' ? { name: sk.name, fromProject: sk.fromProject, fromMember: sk.fromMember } : { name: sk.name, markdown: sk.markdown };
 						const r2 = await fetch('/ai-team/api/talents/' + encodeURIComponent(id) + '/skills', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
 						const b2 = await r2.json().catch(() => null);
 						if (!r2.ok) throw new Error(((b2 && b2.error && b2.error.message) || ('HTTP ' + r2.status)) + '（' + sk.name + '）');
@@ -2801,6 +2804,10 @@ window.__ModuleLoader__.load({
 			}
 			return h('div', { className: 'at-market' },
 				h('div', { className: 'at-modalmeta' }, t('tcHint')),
+				initial && initial.error ? h('div', { className: 'at-modalerror', role: 'alert' }, initial.error) : null,
+				seed ? h('div', { className: 'at-modalmeta' }, tf(t, 'tcFromMember', { name: seed.sourceName })) : null,
+				seed && seed.model ? h('div', { className: 'at-modalmeta' }, tf(t, 'tcModelKept', { model: [seed.model.provider, seed.model.model].filter(Boolean).join(' / ') })) : null,
+				seed && seed.missing.length ? h('div', { className: 'at-modalmeta' }, tf(t, 'tcMissing', { skills: seed.missing.join('、') })) : null,
 				h('label', { className: 'at-field' }, h('span', null, t('tcName')), h('input', { value: form.name, onChange: set('name'), autoFocus: true })),
 				h('label', { className: 'at-field' }, h('span', null, t('tcRole')), h('input', { value: form.role, onChange: set('role') })),
 				h('label', { className: 'at-field' }, h('span', null, t('tcDuty')), h('select', { value: form.duty, onChange: set('duty') }, ['executor', 'qa', 'lead'].map((d) => h('option', { key: d, value: d }, t(DUTY_LABEL[d]))))),
@@ -3089,6 +3096,20 @@ window.__ModuleLoader__.load({
 				personality: String((form && form.personality) || '').trim(),
 			};
 		}
+		/**
+		 * 「存为人才」：服务端草稿 → 新建人才页的初值。找得到正文的技能按「从成员拷」暂存，找不到的单列出来。
+		 */
+		function talentCreatorInit(initial) {
+			const draft = (initial && initial.draft) || {};
+			const skills = Array.isArray(draft.skills) ? draft.skills : [];
+			return {
+				form: { name: String(draft.name || ''), role: String(draft.role || ''), duty: ['lead', 'qa', 'executor'].includes(draft.duty) ? draft.duty : 'executor', category: String(draft.category || ''), tags: (Array.isArray(draft.tags) ? draft.tags : []).join(', '), personality: String(draft.personality || '') },
+				pending: skills.filter((x) => x && x.found).map((x) => ({ name: x.name, kind: 'member', fromProject: initial.projectId, fromMember: initial.memberId })),
+				missing: skills.filter((x) => x && !x.found).map((x) => x.name),
+				model: draft.model && (draft.model.provider || draft.model.model) ? draft.model : null,
+				sourceName: String(draft.name || ''),
+			};
+		}
 		// </member-copy>
 
 		// <composer-rich>
@@ -3219,6 +3240,8 @@ window.__ModuleLoader__.load({
 			const [talentError, setTalentError] = React.useState('');
 			const [talentQuery, setTalentQuery] = React.useState('');
 			const [talentCategory, setTalentCategory] = React.useState('');
+			// 「存为人才」：成员草稿（服务端生成），预填新建人才页。
+			const [talentInit, setTalentInit] = React.useState(null);
 			const [mName, setMName] = React.useState('');
 			const [mRole, setMRole] = React.useState('');
 			const [mPrompt, setMPrompt] = React.useState('');
@@ -4055,6 +4078,7 @@ window.__ModuleLoader__.load({
 				setMCopy(null);
 				setMError('');
 				setMTab('market');
+				setTalentInit(null);
 				setTalentQuery('');
 				setTalentCategory('');
 				setAddOpen(true);
@@ -4099,6 +4123,21 @@ window.__ModuleLoader__.load({
 				setMCopy(draft);
 				setMError('');
 				setAddOpen(true);
+			}
+			/** 存为人才：取服务端草稿（职责按身份判定、标出找不到正文的技能），在「新建人才」页预填。 */
+			async function openSaveAsTalent(source) {
+				try {
+					const response = await fetch('/ai-team/api/projects/' + encodeURIComponent(projectId) + '/members/' + encodeURIComponent(source.id) + '/talent-draft', { headers: { accept: 'application/json' } });
+					const body = await response.json().catch(() => null);
+					if (!response.ok) throw new Error((body && body.error && body.error.message) || ('HTTP ' + response.status));
+					setTalentInit(body);
+				} catch (error) {
+					setTalentInit({ error: tf(t, 'tcDraftFailed', { error: (error && error.message) || String(error) }) });
+				}
+				setMCopy(null);
+				setMTab('create');
+				setAddOpen(true);
+				loadTalents();
 			}
 			async function createAgent() {
 				if (!mName.trim() || mBusy) return;
@@ -5075,7 +5114,7 @@ window.__ModuleLoader__.load({
 								onCategory: setTalentCategory,
 								onHire: hireTalent,
 								onCancel: () => setAddOpen(false),
-							}) : mTab === 'create' && !(mCopy && !mCopy.talent) ? h(TalentCreator, { t, onSaved: () => { loadTalents(); setMTab('market'); }, onCancel: () => setAddOpen(false) }) : [
+							}) : mTab === 'create' && !(mCopy && !mCopy.talent) ? h(TalentCreator, { key: talentInit && talentInit.memberId ? 'm:' + talentInit.memberId : 'blank', t, initial: talentInit, onSaved: () => { loadTalents(); setTalentInit(null); setMTab('market'); }, onCancel: () => { setAddOpen(false); setTalentInit(null); } }) : [
 							mCopy?.talent ? h('div', { key: 'from', className: 'at-modalmeta' }, tf(t, 'memberHireFrom', { name: mCopy.sourceName, version: mCopy.talent.version })) : null,
 							mCopy && !mCopy.talent ? h('div', { key: 'from', className: 'at-modalmeta' }, tf(t, 'memberCopyFrom', { name: mCopy.sourceName })) : null,
 							h('label', { key: 'name', className: 'at-field' }, h('span', null, t('memberName')),
@@ -5189,6 +5228,7 @@ window.__ModuleLoader__.load({
 								h('button', { className: 'at-btn', type: 'button', onClick: () => { const target = profileAgent; setProfileAgent(null); openMemberView(target); } }, t('memberTasks')),
 								h('button', { className: 'at-btn', type: 'button', onClick: () => { const target = profileAgent; setProfileAgent(null); void openAgentChat(target); } }, t('agentChat')),
 								h('button', { className: 'at-btn', type: 'button', onClick: () => { const source = profileAgent; setProfileAgent(null); openCopyAgent(source); }, disabled: pBusy }, t('memberCopy')),
+								h('button', { className: 'at-btn', type: 'button', onClick: () => { const source = profileAgent; setProfileAgent(null); void openSaveAsTalent(source); }, disabled: pBusy }, t('memberSaveAsTalent')),
 								h('button', { className: 'at-btn', type: 'button', onClick: leaveProfile, disabled: pBusy }, t('leaveTeam')),
 								profileAgent.status === 'failed' ? h('button', { className: 'at-btn', type: 'button', onClick: retryProfile, disabled: pBusy }, t('retry')) : null,
 								profileAgent.sessionId ? h('button', { className: 'at-btn', type: 'button', title: t('reseatConfirm'), onClick: reseatProfile, disabled: pBusy }, t('reseatSession')) : null,
