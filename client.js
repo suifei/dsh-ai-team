@@ -291,6 +291,21 @@ window.__ModuleLoader__.load({
 			memberCreate: '创建并激活',
 			memberCopy: '复制成员',
 			memberCopyFrom: '复制自「{name}」：沿用角色、人格、运行配方、模型、输出上限与技能；笔记、会话与任务不带。',
+			talentMarket: '人才市场',
+			talentCustom: '自定义',
+			talentSearch: '搜索名字、岗位、技能…',
+			talentAll: '全部',
+			talentHire: '招聘',
+			talentEmpty: '没有符合条件的人才。',
+			talentLoading: '正在读取人才市场…',
+			talentLoadFailed: '人才市场读取失败：{error}',
+			talentSkills: '技能：{skills}',
+			talentUser: '自建',
+			talentHint: '挑一位人才预填表单，改名、换模型后再招进项目；自建人才放在 ~/.dsh/ai-team/catalog/user/talents/。',
+			memberHireFrom: '招自人才市场「{name}」v{version}：带入岗位、职责、人格与技能，可先修改再创建。',
+			dutyLead: '主理人',
+			dutyQa: '验收',
+			dutyExecutor: '执行',
 			memberAdding: '正在创建…',
 			memberAdded: '成员已创建并激活。',
 			cancel: '取消',
@@ -719,6 +734,21 @@ window.__ModuleLoader__.load({
 			memberCreate: 'Create and activate',
 			memberCopy: 'Duplicate member',
 			memberCopyFrom: 'Copy of “{name}”: keeps role, personality, recipe, model, output limit and skills; notes, session and tasks stay with the original.',
+			talentMarket: 'Talent market',
+			talentCustom: 'Custom',
+			talentSearch: 'Search name, role, skill…',
+			talentAll: 'All',
+			talentHire: 'Hire',
+			talentEmpty: 'No talent matches.',
+			talentLoading: 'Loading the talent market…',
+			talentLoadFailed: 'Could not load the talent market: {error}',
+			talentSkills: 'Skills: {skills}',
+			talentUser: 'Custom',
+			talentHint: 'Pick a talent to prefill the form, rename it or change the model, then hire. Your own talents live in ~/.dsh/ai-team/catalog/user/talents/.',
+			memberHireFrom: 'Hired from the talent market: “{name}” v{version}. Role, duty, personality and skills are filled in; edit before creating.',
+			dutyLead: 'Lead',
+			dutyQa: 'QA',
+			dutyExecutor: 'Executor',
 			memberAdding: 'Creating…',
 			memberAdded: 'Member created and activated.',
 			cancel: 'Cancel',
@@ -1346,6 +1376,21 @@ window.__ModuleLoader__.load({
 			.at-modalback { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 20px; background: color-mix(in srgb, var(--dsw-alias-bg-base) 72%, transparent); }
 			.at-modal { width: min(420px, 100%); max-height: 86vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; background: var(--dsw-alias-bg-layer-2); }
 			.at-modaltitle { margin: 0 0 2px; font-size: 15px; font-weight: 600; color: var(--dsw-alias-label-primary); }
+			.at-modal.at-modal-wide { width: min(640px, 100%); }
+			.at-addtabs { align-self: flex-start; }
+			.at-market { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+			.at-marketsearch { width: 100%; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; }
+			.at-marketcats { display: flex; flex-wrap: wrap; gap: 4px; }
+			.at-marketcat { min-height: 22px; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 11px; cursor: pointer; }
+			.at-marketcat[aria-pressed="true"] { background: var(--dsw-alias-button-ghost-active-fill); color: var(--dsw-alias-label-primary); }
+			.at-marketgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
+			.at-talent { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 10px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 10px; background: var(--dsw-alias-bg-base); }
+			.at-talenthead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
+			.at-talentname { color: var(--dsw-alias-label-primary); font-size: 13px; font-weight: 600; }
+			.at-talentrole { color: var(--dsw-alias-label-secondary); font-size: 12px; }
+			.at-talentduty { padding: 0 6px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; color: var(--dsw-alias-label-tertiary); font-size: 10.5px; line-height: 16px; }
+			.at-talentdesc { color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
+			.at-talentfoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; }
 			.at-modalmeta { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
 			.at-modal .at-check { display: flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
 			.at-modal .at-check input { accent-color: var(--dsw-alias-state-business-primary); }
@@ -2645,6 +2690,39 @@ window.__ModuleLoader__.load({
 			}
 		}
 
+		const DUTY_LABEL = { lead: 'dutyLead', qa: 'dutyQa', executor: 'dutyExecutor' };
+		/** 「添加成员」弹窗的人才市场页：分类、搜索、卡片；点「招聘」按人才预填表单。 */
+		function TalentMarket({ t, talents, error, query, onQuery, category, onCategory, onHire, onCancel }) {
+			const categories = [...new Set((talents ?? []).map((talent) => talent.category).filter(Boolean))];
+			const shown = filterTalents(talents, query, category);
+			return h('div', { className: 'at-market' },
+				h('div', { className: 'at-modalmeta' }, t('talentHint')),
+				h('input', { className: 'at-marketsearch', type: 'search', value: query, placeholder: t('talentSearch'), 'aria-label': t('talentSearch'), onChange: (event) => onQuery(event.target.value), autoFocus: true }),
+				categories.length > 1 ? h('div', { className: 'at-marketcats', role: 'group', 'aria-label': t('talentMarket') },
+					['', ...categories].map((name) => h('button', {
+						key: name || '*',
+						type: 'button',
+						className: 'at-marketcat',
+						'aria-pressed': category === name ? 'true' : 'false',
+						onClick: () => onCategory(name),
+					}, name || t('talentAll')))) : null,
+				error ? h('div', { className: 'at-modalerror', role: 'alert' }, tf(t, 'talentLoadFailed', { error })) : null,
+				talents === null ? h('div', { className: 'at-modalmeta' }, t('talentLoading'))
+					: shown.length === 0 ? h('div', { className: 'at-modalmeta' }, t('talentEmpty'))
+						: h('div', { className: 'at-marketgrid', role: 'list', 'aria-label': t('talentMarket') }, shown.map((talent) => h('div', { key: talent.id, className: 'at-talent', role: 'listitem' },
+							h('div', { className: 'at-talenthead' },
+								h('span', { className: 'at-talentname' }, talent.name),
+								h('span', { className: 'at-talentrole' }, talent.role),
+								talent.duty ? h('span', { className: 'at-talentduty' }, t(DUTY_LABEL[talent.duty])) : null,
+								talent.source === 'user' ? h('span', { className: 'at-talentduty' }, t('talentUser')) : null),
+							talent.description ? h('div', { className: 'at-talentdesc' }, talent.description) : null,
+							talent.skills?.length ? h('div', { className: 'at-modalmeta' }, tf(t, 'talentSkills', { skills: talent.skills.join('、') })) : null,
+							h('div', { className: 'at-talentfoot' },
+								h('span', { className: 'at-modalmeta' }, [talent.category, ...(talent.tags ?? [])].filter(Boolean).join(' · ')),
+								h('button', { type: 'button', className: 'at-btn at-btn-primary', onClick: () => onHire(talent) }, t('talentHire')))))),
+				h('div', { className: 'at-modalactions' },
+					h('button', { className: 'at-btn', type: 'button', onClick: onCancel }, t('cancel'))));
+		}
 		function ModelFields({ t, catalog, provider, model, effort, onEffort, onProvider, onModel, error }) {
 			const providers = Array.isArray(catalog?.providers) ? catalog.providers.slice() : [];
 			// 推理等级按「提供商 + 模型」按需解析：不同模型支持的档位不同，宿主也随时可能
@@ -2864,6 +2942,41 @@ window.__ModuleLoader__.load({
 				sourceName: String(source?.name ?? ''),
 			};
 		}
+		/**
+		 * 人才市场「招聘」：按人才预填新增成员表单（与复制成员同一份草稿形状），名字被占用时加序号；
+		 * 记下来源人才与版本、职责，随 member.add 写进账本。
+		 */
+		function hireTalentDraft(talent, takenNames) {
+			const taken = new Set((Array.isArray(takenNames) ? takenNames : []).map((name) => String(name ?? '').trim()));
+			const base = String(talent?.name ?? '').trim() || 'agent';
+			let name = base;
+			for (let n = 2; taken.has(name); n += 1) name = base + n;
+			const model = talent?.model ?? {};
+			return {
+				name,
+				role: typeof talent?.role === 'string' ? talent.role : '',
+				personality: typeof talent?.personality === 'string' ? talent.personality : '',
+				preset: 'standard',
+				provider: model.provider ?? '',
+				model: model.model ?? '',
+				reasoningEffort: model.reasoningEffort ?? '',
+				maxTokens: null,
+				skills: (Array.isArray(talent?.skills) ? talent.skills : []).filter((skill) => typeof skill === 'string' && skill.trim() !== ''),
+				sourceName: base,
+				talent: { id: String(talent?.id ?? ''), version: String(talent?.version ?? '') },
+				duty: ['lead', 'qa', 'executor'].includes(talent?.duty) ? talent.duty : null,
+			};
+		}
+		/** 人才市场筛选：分类精确匹配；关键词在名字、岗位、分类、标签、说明、技能里找（不分大小写）。 */
+		function filterTalents(talents, query, category) {
+			const q = String(query ?? '').trim().toLowerCase();
+			return (Array.isArray(talents) ? talents : []).filter((talent) => {
+				if (category && talent.category !== category) return false;
+				if (q === '') return true;
+				return [talent.name, talent.role, talent.category, talent.description, ...(talent.tags ?? []), ...(talent.skills ?? [])]
+					.some((field) => String(field ?? '').toLowerCase().includes(q));
+			});
+		}
 		// </member-copy>
 
 		// <composer-rich>
@@ -2988,6 +3101,12 @@ window.__ModuleLoader__.load({
 			const [qaChecks, setQaChecks] = React.useState([]);
 			const [addOpen, setAddOpen] = React.useState(false);
 			const [mCopy, setMCopy] = React.useState(null);
+			// 人才市场（「添加成员」弹窗第一页）：可招聘的人才、筛选条件与当前页。
+			const [mTab, setMTab] = React.useState('market');
+			const [talents, setTalents] = React.useState(null);
+			const [talentError, setTalentError] = React.useState('');
+			const [talentQuery, setTalentQuery] = React.useState('');
+			const [talentCategory, setTalentCategory] = React.useState('');
 			const [mName, setMName] = React.useState('');
 			const [mRole, setMRole] = React.useState('');
 			const [mPrompt, setMPrompt] = React.useState('');
@@ -3823,7 +3942,37 @@ window.__ModuleLoader__.load({
 				setMOwner((data?.agents ?? []).length === 0);
 				setMCopy(null);
 				setMError('');
+				setMTab('market');
+				setTalentQuery('');
+				setTalentCategory('');
 				setAddOpen(true);
+				loadTalents();
+			}
+			/** 每次打开弹窗现取：用户刚改了 talent.yml 也能立刻看到。 */
+			async function loadTalents() {
+				setTalentError('');
+				try {
+					const response = await fetch('/ai-team/api/talents', { headers: { accept: 'application/json' } });
+					const body = await response.json().catch(() => null);
+					if (!response.ok) throw new Error(body?.error?.message ?? ('HTTP ' + response.status));
+					setTalents(Array.isArray(body?.talents) ? body.talents : []);
+				} catch (error) {
+					setTalents([]);
+					setTalentError(error?.message ?? String(error));
+				}
+			}
+			/** 招聘：按人才预填表单，切到自定义页让 Human 改名、换模型后再确认。 */
+			function hireTalent(talent) {
+				const draft = hireTalentDraft(talent, (data?.agents ?? []).map((agent) => agent.name));
+				const defaults = modelCatalog?.defaultModel ?? data?.runtime?.defaultModel ?? {};
+				setMName(draft.name);
+				setMRole(draft.role);
+				setMProvider(draft.provider || defaults.provider || '');
+				setMModel(draft.model || defaults.model || '');
+				setMEffort(draft.reasoningEffort || defaults.reasoningEffort || '');
+				setMCopy(draft);
+				setMError('');
+				setMTab('custom');
 			}
 			/** #65：从成员资料「复制成员」——新增表单按原成员预填，人格/配方/上限/技能随创建一并写入。 */
 			function openCopyAgent(source) {
@@ -3850,6 +3999,8 @@ window.__ModuleLoader__.load({
 						kind: 'agent',
 						status: 'provisioning',
 						...(mCopy?.personality ? { personality: mCopy.personality } : {}),
+						...(mCopy?.talent?.id ? { talent: mCopy.talent.id, talentVersion: mCopy.talent.version } : {}),
+						...(mCopy?.duty ? { duty: mCopy.duty } : {}),
 					});
 					const memberId = added.member.id;
 					const patch = {
@@ -3863,7 +4014,7 @@ window.__ModuleLoader__.load({
 						await runCommand('member.config.update', {
 							memberId,
 							patch,
-							reason: mCopy ? 'workbench copy member' : 'workbench add member',
+							reason: mCopy?.talent ? 'workbench hire talent' : mCopy ? 'workbench copy member' : 'workbench add member',
 						});
 					}
 					for (const skill of mCopy?.skills ?? []) {
@@ -4791,25 +4942,41 @@ window.__ModuleLoader__.load({
 					}) : null,
 					addOpen ? h(ModalBack, { onClose: () => setAddOpen(false) },
 						h('form', {
-							className: 'at-modal',
+							className: mTab === 'market' && !(mCopy && !mCopy.talent) ? 'at-modal at-modal-wide' : 'at-modal',
 							role: 'dialog',
 							'aria-modal': 'true',
 							'aria-label': t('addAgentTitle'),
 							onSubmit: (event) => { event.preventDefault(); createAgent(); },
 						},
-							h('h2', { className: 'at-modaltitle' }, mCopy ? t('memberCopy') : t('addAgentTitle')),
-							mCopy ? h('div', { className: 'at-modalmeta' }, tf(t, 'memberCopyFrom', { name: mCopy.sourceName })) : null,
-							h('label', { className: 'at-field' }, h('span', null, t('memberName')),
+							h('h2', { className: 'at-modaltitle' }, mCopy && !mCopy.talent ? t('memberCopy') : t('addAgentTitle')),
+							mCopy && !mCopy.talent ? null : h('div', { className: 'at-mode at-addtabs', role: 'group', 'aria-label': t('addAgentTitle') },
+								h('button', { type: 'button', 'aria-pressed': mTab === 'market' ? 'true' : 'false', onClick: () => setMTab('market') }, t('talentMarket')),
+								h('button', { type: 'button', 'aria-pressed': mTab === 'custom' ? 'true' : 'false', onClick: () => setMTab('custom') }, t('talentCustom'))),
+							mTab === 'market' && !(mCopy && !mCopy.talent) ? h(TalentMarket, {
+								t,
+								talents,
+								error: talentError,
+								query: talentQuery,
+								onQuery: setTalentQuery,
+								category: talentCategory,
+								onCategory: setTalentCategory,
+								onHire: hireTalent,
+								onCancel: () => setAddOpen(false),
+							}) : [
+							mCopy?.talent ? h('div', { key: 'from', className: 'at-modalmeta' }, tf(t, 'memberHireFrom', { name: mCopy.sourceName, version: mCopy.talent.version })) : null,
+							mCopy && !mCopy.talent ? h('div', { key: 'from', className: 'at-modalmeta' }, tf(t, 'memberCopyFrom', { name: mCopy.sourceName })) : null,
+							h('label', { key: 'name', className: 'at-field' }, h('span', null, t('memberName')),
 								h('input', { value: mName, onChange: (event) => setMName(event.target.value), autoFocus: true })),
-							h('label', { className: 'at-field' }, h('span', null, t('memberRole')),
+							h('label', { key: 'role', className: 'at-field' }, h('span', null, t('memberRole')),
 								h('input', { value: mRole, onChange: (event) => setMRole(event.target.value) })),
-							h('label', { className: 'at-field' }, h('span', null, t('memberPrompt')),
+							h('label', { key: 'prompt', className: 'at-field' }, h('span', null, t('memberPrompt')),
 								h('textarea', {
 									value: mPrompt,
 									onChange: (event) => setMPrompt(event.target.value),
 									placeholder: t('memberPromptHint'),
 								})),
 							h(ModelFields, {
+								key: 'model',
 								t,
 								catalog: modelCatalog,
 								provider: mProvider,
@@ -4820,14 +4987,14 @@ window.__ModuleLoader__.load({
 								onModel: setMModel,
 								error: modelCatalogError,
 							}),
-							h('label', { className: 'at-check' },
+							h('label', { key: 'owner', className: 'at-check' },
 								h('input', { type: 'checkbox', checked: mOwner, onChange: (event) => setMOwner(event.target.checked) }),
 								h('span', null, t('memberOwner'))),
-							h('div', { className: 'at-modalmeta' }, t('permissionNote')),
-							mError ? h('div', { className: 'at-modalerror', role: 'alert' }, mError) : null,
-							h('div', { className: 'at-modalactions' },
+							h('div', { key: 'perm', className: 'at-modalmeta' }, t('permissionNote')),
+							mError ? h('div', { key: 'err', className: 'at-modalerror', role: 'alert' }, mError) : null,
+							h('div', { key: 'actions', className: 'at-modalactions' },
 								h('button', { className: 'at-btn', type: 'button', onClick: () => setAddOpen(false), disabled: mBusy }, t('cancel')),
-								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: mBusy || !mName.trim() }, mBusy ? t('memberAdding') : t('memberCreate'))))) : null,
+								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: mBusy || !mName.trim() }, mBusy ? t('memberAdding') : t('memberCreate')))])) : null,
 					profileAgent ? h(ModalBack, { onClose: () => setProfileAgent(null) },
 						h('form', {
 							className: 'at-modal',

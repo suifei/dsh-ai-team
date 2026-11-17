@@ -71,7 +71,7 @@ import { isInformationalThreadMention } from './lib/domain/inbox.js';
 import { messageContent, normalizeAttachments } from './lib/domain/rich-message.js';
 import { readAttachment, uploadAttachment } from './lib/host/attachment-routes.js';
 import { createDiagLogger, defaultDiagDir, installDiagSink } from './lib/diaglog.js';
-import { DEFAULT_TEAM, loadTeamPreset } from './lib/domain/team-preset.js';
+import { DEFAULT_TEAM, catalogRoots, listTalents, loadCatalog, resolveTeam } from './lib/domain/catalog.js';
 
 export const name = 'ai-team';
 
@@ -123,20 +123,26 @@ export const Config = z.object({
 	// 有界自主：Human 每次操作后，PMO 最多自主推进（无 active Task 时开会、自拟下一批卡）几轮；
 	// 用尽即暂停并在主流告知，等 Human 续。0 = 从不自主推进。Issue #1：一句「在吗」跑 7 小时。
 	pmoMaxRounds: z.number().step(1).min(0).max(100).default(3),
-	// 新项目的初始团队：内置 teams/<名字>.yml，或 ~/.dsh/ai-team/teams/<名字>.yml（同名覆盖内置）。
+	// 新项目的初始团队：内置 teams/<团队>/，或 ~/.dsh/ai-team/catalog/user/teams/<团队>/（同名覆盖内置）。
 	teamPreset: z.string().default('default'),
 });
 
-/** 新项目用哪个团队（每次建项目现读，改了 team.yml 不用重启）；读取细节见 lib/domain/team-preset.js。 */
-function teamPresetFor(config, diag) {
-	const preset = loadTeamPreset({ name: config?.teamPreset || DEFAULT_TEAM, userDir: userTeamsDir(), diag });
-	diag?.append?.({ ev: 'team.preset', name: preset.id, source: preset.source, dir: preset.dir, members: preset.team.members.length });
-	return preset;
+/** 人才市场目录（用户自建 + 插件内置；每次现读，改了文件不用重启）。见 lib/domain/catalog.js。 */
+function talentCatalog(diag) {
+	return loadCatalog({ roots: catalogRoots({ dshHome: dshHome() }), diag });
 }
 
-/** 用户自定义团队的目录：~/.dsh/ai-team/teams/<团队>/team.yml。 */
-function userTeamsDir() {
-	return join(dshHome(), 'ai-team', 'teams');
+/** 成员的技能先在它的人才目录里找（talents/<人才>/skills/），再按调用方给的根找。 */
+function memberCatalogDirs(member, diag) {
+	const talent = typeof member?.talent === 'string' ? talentCatalog(diag).talents.get(member.talent) : undefined;
+	return talent === undefined ? [] : [talent.dir];
+}
+
+/** 新项目用哪个团队。 */
+function teamPresetFor(config, diag) {
+	const preset = resolveTeam(talentCatalog(diag), config?.teamPreset || DEFAULT_TEAM, { diag });
+	diag?.append?.({ ev: 'catalog.team', name: preset.id, source: preset.source, dir: preset.dir, members: preset.team.members.length });
+	return preset;
 }
 
 /**
@@ -2128,7 +2134,7 @@ export function apply(ctx, config = {}) {
 					// #65：激活时若带着 Human 消息的图片/文件，一并放进首条消息。
 					prompt: messageContent(`${memberIdentity(activationMember)}\n\n${typeof body.payload?.prompt === 'string'
 						? body.payload.prompt
-						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: effectiveDir })}${await loadSkillContext(activationMember, [join(effectiveDir, '.dsh'), dshHome(), projectRuntime.dir], {
+						: '你被加入 AI Team。先读取项目简报与收件箱，再处理分配给你的任务。'}${await formatSkillCatalog(skillsService, { cwd: effectiveDir })}${await loadSkillContext(activationMember, [...memberCatalogDirs(activationMember, diag), join(effectiveDir, '.dsh'), dshHome(), projectRuntime.dir], {
 					vars: {
 						GOAL: goalForProject(projectRuntime),
 						PROJECT: projectRuntime.service.state.projects?.[projectRuntime.id]?.name ?? '',
@@ -2136,7 +2142,7 @@ export function apply(ctx, config = {}) {
 						WORKSPACE: effectiveDir,
 					},
 					// 成员来自哪个团队就用哪个团队的岗位规程与技能（老成员没有记录 → 默认团队）。
-					preset: loadTeamPreset({ name: activationMember.team ?? DEFAULT_TEAM, userDir: userTeamsDir(), diag }),
+					preset: resolveTeam(talentCatalog(diag), activationMember.team ?? DEFAULT_TEAM, { diag }),
 					// 按身份装配岗位规程：项目主理人拿审查规程，验收拿复跑规程，其余拿执行规程。
 					ownerId: projectRuntime.service.state.projects?.[projectRuntime.id]?.ownerMemberId
 						?? projectRuntime.service.state.projects?.[projectRuntime.id]?.ownerId,
@@ -2355,6 +2361,10 @@ export function apply(ctx, config = {}) {
 							variants,
 							get: await skillsService.get('distilly', {}).then((skill) => skill?.name ?? null).catch(() => null),
 						});
+					}
+					// 人才市场：「添加成员」弹窗里可招聘的人才（用户自建优先于内置）。
+					if (req.method === 'GET' && url.pathname === '/ai-team/api/talents') {
+						return send(res, { talents: listTalents(talentCatalog(diag)) });
 					}
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/models') {
 						const catalog = await buildModelCatalog(serviceOf(ctx, 'llm'), serviceOf(ctx, 'agentDefaultModel'));

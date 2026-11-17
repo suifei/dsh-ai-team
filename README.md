@@ -23,12 +23,13 @@
 
 新 Project 自带一组可改的默认成员：**墨渊（主理人）**、**青岚（执行）**、**白砚（验收）**、**玄策（编程）**、**知微（UX 设计）**、**观澜（业务）**。名字、职责、个性、模型都可以改；模型提供商和模型名称直接读取 DSH 的 `llm` 目录，不需要手填 id。
 
-初始团队是配置，一个团队就是一个文件夹（内置的见 [`teams/default/`](teams/default/)）：
+**人才市场**：成员来自可复用的「人才」，团队从人才里挑人组队。
 
-- `team.yml`：成员名单。每位成员写 `name`、`role`，以及 `duty`（职责：`lead` 主理人 / `qa` 验收 / `executor` 执行，决定拿哪份岗位规程；不写就按岗位文字推断）、`skills`（额外技能）、`personality`；团队级 `procedures` 可以给三种职责换成自己的规程。
-- `skills/<技能>/SKILL.md`：这个团队的提示词，包括三份岗位规程（`ai-team-core` / `ai-team-qa` / `ai-team-executor`）和成员技能。成员找技能时先找自己团队的 `skills/`，再找工作区 `.dsh/skills` 与 `~/.dsh/skills`。
-
-自定义：把整个文件夹复制到 `~/.dsh/ai-team/teams/<团队>/` 修改，再把插件设置 `teamPreset` 设为 `<团队>`，之后新建的 Project 就按它建成员，成员也记住自己来自哪个团队（与内置同名的文件夹整份替换内置团队；已有 Project 不受影响）。写坏时退回内置团队，并在诊断日志记一行 `team.preset.fail`。
+- 人才 `talents/<人才>/talent.yml`：名字、岗位、`duty`（职责：`lead` 主理人 / `qa` 验收 / `executor` 执行，决定拿哪份岗位规程）、性格、分类与标签、推荐模型，以及自带技能（`talents/<人才>/skills/<技能>/SKILL.md`）。内置 10 位：默认团队的 6 位，外加架构、评审、技术文档、安全审计。
+- 团队 `teams/<团队>/team.yml`：只引用人才（可覆盖名字、岗位、性格，追加技能），`skills/` 放这个团队的三份岗位规程（`ai-team-core` / `ai-team-qa` / `ai-team-executor`），`procedures` 可换成自己的规程。内置默认团队见 [`teams/default/`](teams/default/)。
+- 「人员 → 添加成员」先打开人才市场：按分类、关键词挑一位，点「招聘」预填表单，改名、换模型后创建；也可以切到「自定义」从零填写。
+- 自建：人才放 `~/.dsh/ai-team/catalog/user/talents/<人才>/`，团队放 `~/.dsh/ai-team/catalog/user/teams/<团队>/`，同名覆盖内置；插件设置 `teamPreset` 选新项目用哪个团队。
+- 成员在账本里记下来源人才与版本、职责；人才文件之后再改，不会悄悄改动已招成员的性格与职责。已有项目不受新团队影响。文件写坏时跳过它并在诊断日志记 `catalog.load.fail` / `catalog.team.fail`。
 
 ---
 
@@ -112,7 +113,7 @@ dsh --profile ai-team --no-open --port 33271
 | 验收 | maker 不能验收；QA 硬门禁；`qaChecklist` 逐项通过 |
 | 收件箱 | Human/Agent 各自拉取；跨 Project 聚合；顶部待办入口；`askHuman` 结构化问题与选项直接展开并提交 |
 | 关注 | 关注 Task；完成后收到 `followed_task_update` |
-| 默认成员 | 新 Project 按团队文件夹（`teams/<团队>/team.yml` + `skills/`，设置项 `teamPreset`）初始化成员，默认墨渊 / 青岚 / 白砚 / 玄策 / 知微 / 观澜；可改名、改职责、改个性、改模型 |
+| 默认成员 | 新 Project 按团队（`teams/<团队>/`，从人才市场 `talents/` 挑人，设置项 `teamPreset`）初始化成员，默认墨渊 / 青岚 / 白砚 / 玄策 / 知微 / 观澜；可改名、改职责、改个性、改模型 |
 | 成员 | 持久 session；点击名字直接对话；「⋯」资料里有任务视图与直接对话 |
 | 模型 | Provider / Model 下拉读取 DSH `llm` 目录；可跟随系统默认 |
 | 进化 | `team.evolve` 只改自己的 personality；验收后 reflection wake |

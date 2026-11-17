@@ -52,6 +52,7 @@
     "lib/vendor/skillopt/requirements.txt",
     "lib/vendor/skillopt/LICENSE",
     "skills/**/*",
+    "talents/**/*",
     "teams/**/*",
     "README.md",
     "CHANGELOG.md",
