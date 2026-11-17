@@ -77,5 +77,5 @@ test('SkillOpt one-shot children return their result to the caller only, so the 
 	const index = read('index.js');
 	const handoff = index.slice(index.indexOf('const answerHandoff'), index.indexOf('const pmoTick'));
 	assert.match(handoff, /delivery: 'caller'/, 'handoff answers');
-	assert.match(read('lib/runtime/member-runtime.js'), /delivery: 'parent'/, 'members still report to the PMO');
+	assert.match(read('lib/runtime/member-runtime.js'), /delivery: 'caller'/, 'members return to the plugin too (il2c 11-17)');
 });

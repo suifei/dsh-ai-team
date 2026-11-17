@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.118 - 2026-11-17
+
+**成员回合结束不再唤醒 PMO 宿主会话，不再有「第二个 PMO」**
+
+- il2c 11-17 实账本与会话：宿主会话（`session-team-host-…`）只是成员会话的父会话，进不了看板（team 工具 `E_NOT_MEMBER`）；
+  可每个成员回合收尾，宿主都往它投一条「Background subagent … finished」通知并开回合。宿主模型被叫醒后自当 PMO，
+  用 `send_message` 直接催成员（撞 `NOT_RESUMABLE`：`subagent "墨渊" is unavailable`）、自派子代理、写看不懂的话；
+- 成员激活改用 `delivery: 'caller'`：结果只交回插件，不通知父会话（与 0.4.111 的 SkillOpt 子代理同一做法）；
+- 成员冷恢复后的回合由宿主按父会话投递，激活参数管不到：新增 `agent/pre-step` 闸（`lib/runtime/host-notice-gate.js`）——
+  宿主会话的回合首步若领取到的**全是**这类通知，就拒绝该步，回合以 `blocked` 收口，不发模型请求（诊断行 `host.notice.dropped`）；
+  混有其他输入（Human 在宿主会话里说话）或回合中途的步骤照常放行；
+- PMO 仍由项目负责人担任，推进由插件 PMO tick 负责，均不变；
+- 测试：`test/host-notice-gate.test.js`（拦/放行各情形 + index.js 接线）；成员激活三处断言改为 `caller`；
+- 实机 E2E（隔离 DSH_HOME，真实模型）：rc.1 / rc.3 全新安装，成员激活 + 唤醒两回合后宿主历史 0 条通知、0 次模型请求；
+  rc.1 由 0.4.117 升级：升级前宿主收到 2 条通知并被叫醒，升级后同一成员会话的回合通知被拦下。
+
 ## 0.4.117 - 2026-11-17
 
 **空看板没人在跑就立即推进，不等 30 分钟**

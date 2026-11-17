@@ -54,7 +54,7 @@ test('activation goes through subagents.startActivation (catalog-managed child)'
 	assert.equal(spec.request.cwd, 'E:/works/probe');
 	assert.equal(spec.request.parent.id, 'parent_agent');
 	assert.equal(spec.request.prompt[0].type, 'text');
-	assert.equal(spec.delivery, 'parent');
+	assert.equal(spec.delivery, 'caller', 'member turns return to the plugin, not the PMO host model');
 });
 
 test('the activation spec reads correctly on both host shapes (rc.1 nested, rc.2+ flat)', async () => {
