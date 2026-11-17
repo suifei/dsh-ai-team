@@ -99,6 +99,7 @@ test('activate starts a child, sets danger-full-access and returns a bound membe
 	assert.equal(calls.start.length, 1);
 	assert.equal(calls.start[0].request.cwd, 'E:/works/dsh-ai-team');
 	assert.equal(calls.start[0].request.parent.id, 'session-host');
+	assert.equal(calls.start[0].delivery, 'caller', 'member turns do not wake the PMO host model');
 	assert.deepEqual(calls.start[0].request.agentOptions, { provider: 'p1', model: 'm1', maxTokens: 4096 });
 	assert.equal(sessions.get('session-member-1').sandbox, TEAM_PRESET);
 	assert.equal(calls.disposed, 0);

@@ -60,6 +60,7 @@ import { classifyWakeFailure, isMalformedTurnError } from './lib/runtime/wake-fa
 import { registerShellGuard } from './lib/runtime/shell-guard.js';
 import { registerOneShotToolGuard, registerStopGuard } from './lib/runtime/stop-guard.js';
 import { registerTeamDiscipline } from './lib/runtime/deferral-guard.js';
+import { registerHostNoticeGate } from './lib/runtime/host-notice-gate.js';
 import { createActivationBudget } from './lib/runtime/activation-budget.js';
 import { blocksActivation, probeProviderRegistration } from './lib/runtime/subagent-probe.js';
 import { isRuntimeUnavailableFailure, resolveSubagentProviderName } from './lib/runtime/subagent-provider.js';
@@ -705,6 +706,17 @@ export function apply(ctx, config = {}) {
 		} catch (error) {
 			diag.append({ ev: 'team.discipline.fail', message: error?.message ?? String(error) });
 		}
+		// 宿主会话不被成员的「子智能体已完成」通知唤醒（il2c 11-17：它被叫醒后成了第二个 PMO）。
+		const hostNoticeGate = registerHostNoticeGate({
+			on: typeof ctx.on === 'function' ? (name, listener) => ctx.on(name, listener) : undefined,
+			isHostSession: (sessionId) => {
+				for (const runtime of booted?.runtimes?.values() ?? []) {
+					if (runtime.service.state.hostSessionId === sessionId) return { projectId: runtime.id };
+				}
+				return null;
+			},
+			diag,
+		});
 		const offSessionEvent = typeof ctx.on === 'function'
 			? ctx.on('session/event', async (session, event) => {
 				try { teamDiscipline.observe(session, event); } catch { /* 观察失败不影响事件流 */ }
@@ -2971,6 +2983,7 @@ export function apply(ctx, config = {}) {
 			try { disposeStopGuard(); } catch { /* already disposed */ }
 			try { disposeOneShotToolGuard(); } catch { /* already disposed */ }
 			try { teamDiscipline.dispose(); } catch { /* already disposed */ }
+			hostNoticeGate.dispose();
 			// 在途的 boot 也算本组合的资源：等它落定（落定时见 disposed 会自行关账本），
 			// 否则下一组合抢在关锁之前打开同一账本。
 			const cleanup = [ready.then(() => undefined, () => undefined)];
