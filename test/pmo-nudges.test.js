@@ -58,26 +58,30 @@ test('a task with no timestamp is skipped', () => {
 	assert.deepEqual(planTaskNudges({ id: 't', status: 'in_progress' }, { now: 10 * MIN }), []);
 });
 
-test('an idle board that PMO already looked at is pushed again, with doubling gaps, only while nobody is in a turn', async () => {
+test('an idle board that PMO already looked at is pushed at once while nobody is in a turn, then with doubling gaps', async () => {
 	// il2c 11-17：03:55 wave_done 送达后主理人起了后台批就收尾，后台批随会话释放被杀；
 	// 此后无人建卡、无 Human 输入，PMO 每轮判「无新进展」，看板空转到天亮。
+	// Human：PMO 自动、项目运行都开着，没有成员在跑就应该立即行动，不要等 30 分钟。
 	const { planIdleRetry, PMO_IDLE_RETRY_BASE, PMO_IDLE_RETRY_MAX } = await import('../lib/host/pmo.js');
 	const state = { members: { mem_lead: { kind: 'agent', sessionId: 's-lead' }, h: { kind: 'human' } } };
 	const since = 1_000_000;
 	const idle = () => false;
-	assert.equal(planIdleRetry(state, { since, now: since + 29 * MIN, inTurn: idle }), false, 'not before 30 minutes');
-	assert.equal(planIdleRetry(state, { since, now: since + 30 * MIN, inTurn: idle }), true, 'first push at 30 minutes');
-	assert.equal(planIdleRetry(state, { since, now: since + 30 * MIN, inTurn: (id) => id === 's-lead' }), false, 'a member in a turn is progress');
-	// 推进过一次后：下一次要再等 60 分钟，然后 120 分钟……
-	const lastAt = since + 30 * MIN;
-	assert.equal(planIdleRetry(state, { since, lastAt, retries: 1, now: lastAt + 59 * MIN, inTurn: idle }), false);
-	assert.equal(planIdleRetry(state, { since, lastAt, retries: 1, now: lastAt + 60 * MIN, inTurn: idle }), true);
-	assert.equal(planIdleRetry(state, { since, lastAt, retries: 2, now: lastAt + 119 * MIN, inTurn: idle }), false);
-	assert.equal(planIdleRetry(state, { since, lastAt, retries: 9, now: lastAt + PMO_IDLE_RETRY_MAX, inTurn: idle }), true, 'gap is capped');
-	assert.equal(PMO_IDLE_RETRY_BASE, 30 * MIN);
+	assert.equal(planIdleRetry(state, { since, now: since, inTurn: idle }), true, 'first push right away');
+	assert.equal(planIdleRetry(state, { since, now: since, inTurn: (id) => id === 's-lead' }), false, 'a member in a turn is progress');
+	// 推进过仍没人动：10 分钟、20 分钟……翻倍，封顶 8 小时。
+	const lastAt = since;
+	assert.equal(planIdleRetry(state, { since, lastAt, retries: 1, now: lastAt + 9 * MIN, inTurn: idle }), false);
+	assert.equal(planIdleRetry(state, { since, lastAt, retries: 1, now: lastAt + 10 * MIN, inTurn: idle }), true);
+	assert.equal(planIdleRetry(state, { since, lastAt, retries: 2, now: lastAt + 19 * MIN, inTurn: idle }), false);
+	assert.equal(planIdleRetry(state, { since, lastAt, retries: 2, now: lastAt + 20 * MIN, inTurn: idle }), true);
+	assert.equal(planIdleRetry(state, { since, lastAt, retries: 12, now: lastAt + PMO_IDLE_RETRY_MAX, inTurn: idle }), true, 'gap is capped');
+	assert.equal(PMO_IDLE_RETRY_BASE, 10 * MIN);
 
-	// 接线：pmoTick 在 pmoNews=false 时不再永久 return，而是交给 planIdleRetry。
+	// 接线：pmoTick 在 pmoNews=false 时不再 return，首次进入静默的同一轮就交给 planIdleRetry。
 	const { readFileSync } = await import('node:fs');
 	const index = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
-	assert.match(index, /if \(!planIdleRetry\(state, \{ \.\.\.quiet, now, inTurn: \(id\) => turnsInFlight\.has\(id\) \}\)\) return;/);
+	const quietAt = index.indexOf('pmoQuiet.set(projectRuntime.id, quiet);');
+	const retryAt = index.indexOf('if (!planIdleRetry(state, { ...quiet, now, inTurn: (id) => turnsInFlight.has(id) })) return;');
+	assert.ok(quietAt > 0 && retryAt > quietAt, 'quiet is recorded and the retry is decided in the same tick');
+	assert.equal(index.slice(quietAt, retryAt).includes('return;'), false, 'no early return between entering quiet and the first push');
 });

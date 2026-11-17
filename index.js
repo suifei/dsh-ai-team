@@ -1312,13 +1312,13 @@ export function apply(ctx, config = {}) {
 			// PMO 已看过当前局面（汇报 / 推进 / 回复 Human）且之后没有新进展：不再推进，
 			// 否则目标完成后每 10 分钟空转一次会议（见 fold.js pmoNews）。每段静默只记一次。
 			if (!pmoHasNews(state)) {
-				const quiet = pmoQuiet.get(projectRuntime.id);
+				let quiet = pmoQuiet.get(projectRuntime.id);
 				if (quiet === undefined) {
-					pmoQuiet.set(projectRuntime.id, { since: now, lastAt: now, retries: 0 });
+					quiet = { since: now, lastAt: now, retries: 0 };
+					pmoQuiet.set(projectRuntime.id, quiet);
 					diag.append({ ev: 'pmo.continue.quiet', projectId: projectRuntime.id, seq: state.lastSeq });
-					return;
 				}
-				// 静默不是永久的：没人在跑且静默够久，再推进一次（规则见 planIdleRetry）。
+				// 静默不是永久的：没人在跑就推进（首次立即，之后退避；规则见 planIdleRetry）。
 				if (!planIdleRetry(state, { ...quiet, now, inTurn: (id) => turnsInFlight.has(id) })) return;
 				quiet.lastAt = now;
 				quiet.retries += 1;
