@@ -107,3 +107,22 @@ test('a Human message no longer forces a Task: the PMO decides between answering
 		assert.match(prompt, /action=say/);
 	});
 });
+
+test('a member Human @-mentioned answers that mention once in the Main stream, then the floor returns to the PMO (il2c 11-17 21:44)', async () => {
+	// il2c 11-17 21:44：Human「@tony老师 hi」，tony 老师被直接叫醒，可 say 被拒，只能请墨渊代发。
+	await withTeam(async ({ service, tool, as }) => {
+		await service.dispatch({ type: 'stream.post', actor: human, projectId: 'prj_v', payload: { body: '@玄策 hi，进度如何？' } });
+		const answered = await tool.execute({ action: 'say', body: '在推 #3，今晚交单。' }, as('s-coder'));
+		assert.equal(answered.ok, true);
+		assert.deepEqual([service.state.stream.at(-1).authorId, service.state.stream.at(-1).kind], ['coder', 'milestone']);
+		const again = await tool.execute({ action: 'say', body: '再补一句' }, as('s-coder'));
+		assert.equal(again.ok, false);
+		assert.match(again.error.message, /@-mentioned/);
+		// 下一次点名再换一次发言；没被点名的普通 Human 消息不给发言权。
+		await service.dispatch({ type: 'stream.post', actor: human, projectId: 'prj_v', payload: { body: '大家辛苦' } });
+		assert.equal((await tool.execute({ action: 'say', body: '不客气' }, as('s-coder'))).ok, false);
+		await service.dispatch({ type: 'stream.post', actor: human, projectId: 'prj_v', payload: { body: '@玄策 再确认下' } });
+		assert.equal((await tool.execute({ action: 'say', body: '确认，今晚交单。' }, as('s-coder'))).ok, true);
+		assert.equal((await tool.execute({ action: 'say', body: '照常发言' }, as('s-lead'))).ok, true);
+	});
+});
