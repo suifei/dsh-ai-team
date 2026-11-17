@@ -28,7 +28,7 @@ import { activationSpec } from './lib/runtime/activation-spec.js';
 import { repairArchivedHosts as repairHostSessions } from './lib/runtime/host-repair.js';
 import { classifyLlmFailure, nextRequestAttempt, retryDecision } from './lib/runtime/failure-policy.js';
 import { memberIdentity } from './lib/domain/member-profile.js';
-import { findSkillText, loadSkillContext } from './lib/runtime/skill-loader.js';
+import { findSkill, findSkillText, loadSkillContext } from './lib/runtime/skill-loader.js';
 import { skillKindForMember } from './lib/runtime/core-skill.js';
 import { formatSkillCatalog } from './lib/runtime/skill-catalog.js';
 import { isSkillExcluded } from './lib/runtime/skill-policy.js';
@@ -72,7 +72,7 @@ import { isInformationalThreadMention } from './lib/domain/inbox.js';
 import { messageContent, normalizeAttachments } from './lib/domain/rich-message.js';
 import { readAttachment, uploadAttachment } from './lib/host/attachment-routes.js';
 import { createDiagLogger, defaultDiagDir, installDiagSink } from './lib/diaglog.js';
-import { DEFAULT_TEAM, catalogRoots, deleteTalent, deleteTeam, installSkill, listInstallableSkills, listTalents, listTeams, loadCatalog, readSkillText, resolveTeam, talentFromMember, talentIdFrom, uniqueTalentId, uniqueTeamId, userCatalogDir, writeTalent, writeTeam } from './lib/domain/catalog.js';
+import { DEFAULT_TEAM, catalogRoots, deleteTalent, deleteTeam, forkTalent, installSkill, listInstallableSkills, listTalents, listTeams, loadCatalog, readSkillText, resolveTeam, talentFromMember, talentIdFrom, uniqueTalentId, uniqueTeamId, userCatalogDir, writeTalent, writeTeam } from './lib/domain/catalog.js';
 
 export const name = 'ai-team';
 
@@ -2463,6 +2463,43 @@ export function apply(ctx, config = {}) {
 						diag?.append({ ev: 'talent.delete', id: t.id });
 						return send(res, { ok: true });
 					}
+					// 2c：把内置人才 fork 成可编辑副本（同 id，整个文件夹拷进用户根）。已招成员下次激活即读副本；删副本恢复内置。
+					const talentForkRoute = url.pathname.match(/^\/ai-team\/api\/talents\/([^/]+)\/fork$/);
+					if (req.method === 'POST' && talentForkRoute !== null) {
+						const t = talentCatalog(diag).talents.get(decodeURIComponent(talentForkRoute[1]));
+						if (t === undefined) return send(res, { error: { code: 'NOT_FOUND', message: 'talent not found' } }, 404);
+						if (t.source === 'user') return send(res, { error: { code: 'E_CONFLICT', message: '已经是可编辑的人才了' } }, 409);
+						const { forked } = forkTalent(userCatalogDir(dshHome()), t);
+						diag?.append({ ev: 'talent.fork', id: t.id, forked });
+						return send(res, { ok: true, forked, talent: listTalents(talentCatalog(diag)).find((x) => x.id === t.id) });
+					}
+					// 2c：技能「进化」入口。找到成员实际读的那份技能；在内置人才里就先 fork 人才，让技能落到可写的副本里；
+					// 再私信该成员按 SkillOpt 两步走（诊断 → 只改最弱一维交 candidate → 评审官盲评 keep/revert）。
+					const evolveRoute = url.pathname.match(/^\/ai-team\/api\/projects\/([^/]+)\/members\/([^/]+)\/skills\/evolve$/);
+					if (req.method === 'POST' && evolveRoute !== null) {
+						const body = await readJson(req);
+						const runtime = projectRuntime(decodeURIComponent(evolveRoute[1]));
+						const member = runtime?.service?.state?.members?.[decodeURIComponent(evolveRoute[2])];
+						if (member === undefined || member.kind !== 'agent') return send(res, { error: { code: 'NOT_FOUND', message: 'member not found' } }, 404);
+						let found = await findSkill(memberSkillRoots(member, runtime, diag), body?.name);
+						if (found === null) return send(res, { error: { code: 'E_INVALID_ARGUMENT', message: `成员「${member.name}」没有可进化的技能 ${String(body?.name ?? '')}（岗位规程属于团队，不在这里进化）` } }, 400);
+						let forked = false;
+						const talent = typeof member.talent === 'string' ? talentCatalog(diag).talents.get(member.talent) : undefined;
+						if (talent !== undefined && talent.source !== 'user' && found.root === talent.dir) {
+							forked = forkTalent(userCatalogDir(dshHome()), talent).forked;
+							found = await findSkill(memberSkillRoots(member, runtime, diag), found.name);
+							if (found === null || found.root === talent.dir) return send(res, { error: { code: 'E_INTERNAL', message: 'fork 后仍找不到可写的技能副本' } }, 500);
+						}
+						const message = [
+							`技能进化：请优化你的技能「${found.name}」，文件 ${found.path}。`,
+							`1. 调用 skillopt_optimize（skillPath=${found.path}，不带 candidate）拿诊断；`,
+							'2. 只针对诊断出的最弱维度改写整份 SKILL.md（保留失败分支与检查点，不超过原文 150%），再带 candidate 调一次；',
+							'3. 评审官盲评后用 skillopt_jobs 查结果，好就保留、不好自动回退。只改这一个文件，不开新卡。',
+						].join('\n');
+						await runtime.service.dispatch({ type: 'member.message', actor: { kind: 'human', memberId: HUMAN_ID }, projectId: runtime.id, payload: { memberId: member.id, body: message } });
+						diag?.append({ ev: 'talent.skill.evolve', memberId: member.id, skill: found.name, path: found.path, forked });
+						return send(res, { ok: true, skill: found.name, skillPath: found.path, forked, talent: talent?.id ?? null });
+					}
 					// 往某用户人才装一份技能：自写（markdown）或从现成人才 fork（fromTalent + fromSkill）。
 					const talentSkillRoute = url.pathname.match(/^\/ai-team\/api\/talents\/([^/]+)\/skills$/);
 					if (req.method === 'POST' && talentSkillRoute !== null) {
@@ -2470,7 +2507,7 @@ export function apply(ctx, config = {}) {
 						const cat = talentCatalog(diag);
 						const t = cat.talents.get(decodeURIComponent(talentSkillRoute[1]));
 						if (t === undefined) return send(res, { error: { code: 'NOT_FOUND', message: 'talent not found' } }, 404);
-						if (t.source !== 'user') return send(res, { error: { code: 'E_READONLY', message: '内置人才只读；先把它存为自己的人才再装技能' } }, 409);
+						if (t.source !== 'user') return send(res, { error: { code: 'E_READONLY', message: '内置人才只读；先 fork 成可编辑副本再装技能' } }, 409);
 						let markdown = typeof body?.markdown === 'string' ? body.markdown : null;
 						if (markdown === null && typeof body?.fromTalent === 'string' && typeof body?.fromSkill === 'string') {
 							const src = cat.talents.get(body.fromTalent);

@@ -2,7 +2,7 @@
 // 建人才落用户根、装技能（自写 / 从内置 fork）、只读守卫、中文名兜底 id、校验。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -178,6 +178,36 @@ test('talent market 2a: create a custom talent, install a written skill and a fo
 	// 13. 删团队：用户团队可删，内置团队 409。
 	assert.equal((await post('/ai-team/api/teams/delete', { id: 'speaking-2' })).status, 200);
 	assert.equal((await post('/ai-team/api/teams/delete', { id: 'science' })).status, 409);
+
+	// 14. 2c fork：内置人才拷成用户根里的同 id 可编辑副本（带 skills/），列表标 forked；再 fork 409；副本可以装技能；删副本恢复内置。
+	const forkRes = await post('/ai-team/api/talents/copywriter/fork', {});
+	assert.equal(forkRes.status, 200, JSON.stringify(forkRes.body));
+	assert.deepEqual([forkRes.body.forked, forkRes.body.talent.source, forkRes.body.talent.forked], [true, 'user', true]);
+	const userCopy = join(root, 'ai-team', 'catalog', 'user', 'talents', 'copywriter');
+	assert.ok(existsSync(join(userCopy, 'talent.yml')) && existsSync(join(userCopy, 'skills', 'copywriting', 'SKILL.md')));
+	assert.equal((await post('/ai-team/api/talents/copywriter/fork', {})).status, 409);
+	assert.equal((await post('/ai-team/api/talents/copywriter/skills', { name: 'hooks', markdown: '---\nname: hooks\ndescription: t\n---\n先写钩子\n' })).status, 200, '副本可装技能');
+	assert.equal((await post('/ai-team/api/talents/nobody/fork', {})).status, 404);
+	assert.equal((await post('/ai-team/api/talents/delete', { id: 'copywriter' })).status, 200);
+	const restored = (await get('/ai-team/api/talents')).body.talents.find((x) => x.id === 'copywriter');
+	assert.deepEqual([restored.source, restored.forked], ['bundled', false], '删副本即恢复内置');
+
+	// 15. 2c 技能进化：成员的技能在内置人才里 → 先 fork 人才，技能落到可写副本；私信成员走 SkillOpt 两步。
+	const evolve = await post(`/ai-team/api/projects/${pid}/members/mem_maker/skills/evolve`, { name: 'delivery-checklist' });
+	assert.equal(evolve.status, 200, JSON.stringify(evolve.body));
+	assert.equal(evolve.body.forked, true);
+	assert.equal(evolve.body.talent, 'executor');
+	const userSkill = join(root, 'ai-team', 'catalog', 'user', 'talents', 'executor', 'skills', 'delivery-checklist', 'SKILL.md');
+	assert.equal(evolve.body.skillPath, userSkill, '改的是用户副本，不是插件里的内置文件');
+	assert.ok(existsSync(userSkill));
+	const again = await post(`/ai-team/api/projects/${pid}/members/mem_maker/skills/evolve`, { name: 'delivery-checklist' });
+	assert.deepEqual([again.body.forked, again.body.skillPath], [false, userSkill], '第二次直接用已有副本');
+	const ledgerHits = [];
+	const walk = async (dir) => { for (const e of await readdir(dir, { withFileTypes: true })) { const f = join(dir, e.name); if (e.isDirectory()) await walk(f); else if (/\.jsonl$/.test(e.name) && (await readFile(f, 'utf8')).includes('skillopt_optimize（skillPath=')) ledgerHits.push(f); } };
+	await walk(root);
+	assert.ok(ledgerHits.length > 0, '私信进了账本');
+	assert.equal((await post(`/ai-team/api/projects/${pid}/members/mem_maker/skills/evolve`, { name: 'ai-team-core' })).status, 400, '岗位规程不在这里进化');
+	assert.equal((await post(`/ai-team/api/projects/${pid}/members/mem_nope/skills/evolve`, { name: 'x' })).status, 404);
 
 	// 精简测试壳没接 tool registry，SkillOpt 注册会打一条环境提示——与本测试无关，过滤掉。
 	const faults = consoleErrors.filter((line) => !line.includes('SkillOpt tools not registered'));
