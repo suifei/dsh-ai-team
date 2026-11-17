@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.119 - 2026-11-17
+
+**在「文渊阁·PMO」会话里说话等于在文渊阁主对话里说话；宿主模型不再自己跑**
+
+- il2c 11-17 16:33：Human 在桌面版的「【il2c】文渊阁·PMO」会话里发「继续」。插件只认文渊阁主对话，账本没有 Human 消息，
+  自主预算（满 3 批）的暂停不解除、墨渊不被叫醒；宿主模型自己代办，send_message 与 team 都办不成，还让 Human「去点一下墨渊的席位」；
+- 宿主会话的闸（0.4.118 的 `host-notice-gate` 扩为 `lib/runtime/host-session-gate.js`）：宿主会话每个回合的首步一律拒绝，
+  回合以 `blocked` 收口、不发模型请求；被拒前先把话转走：
+  - Human 的文字以 Human 身份发进该项目主对话（与在文渊阁里发言同一条路径：解除暂停、转给项目负责人）；转发失败时放行，让宿主模型接住；
+  - 成员用 send_message 发给宿主的话（r38 E2E 实见：成员把宿主当主理人汇报），以该成员身份发进主对话；
+  - 成员完成通知照旧丢弃；
+  - 诊断行合为 `host.turn.blocked`（含 Human / 成员 / 通知条数与消息来源种类），失败行 `host.human.forward.fail` / `host.member.forward.fail`；
+- 测试：`test/host-session-gate.test.js`（Human 转发、成员转发、通知、转发失败、成员会话与回合中途不碰、index.js 接线）；
+- 实机 E2E（隔离 DSH_HOME，真实模型）：rc.1 / rc.3 经桌面界面同一入口 `session/prompt` 往宿主会话发一句话 →
+  主对话多一条 Human 消息、宿主回合 `blocked`、宿主 0 次模型请求；rc.1 上墨渊随即收到 `human_message` 唤醒并在主对话回复。
+
 ## 0.4.118 - 2026-11-17
 
 **成员回合结束不再唤醒 PMO 宿主会话，不再有「第二个 PMO」**

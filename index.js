@@ -60,7 +60,7 @@ import { classifyWakeFailure, isMalformedTurnError } from './lib/runtime/wake-fa
 import { registerShellGuard } from './lib/runtime/shell-guard.js';
 import { registerOneShotToolGuard, registerStopGuard } from './lib/runtime/stop-guard.js';
 import { registerTeamDiscipline } from './lib/runtime/deferral-guard.js';
-import { registerHostNoticeGate } from './lib/runtime/host-notice-gate.js';
+import { registerHostSessionGate } from './lib/runtime/host-session-gate.js';
 import { createActivationBudget } from './lib/runtime/activation-budget.js';
 import { blocksActivation, probeProviderRegistration } from './lib/runtime/subagent-probe.js';
 import { isRuntimeUnavailableFailure, resolveSubagentProviderName } from './lib/runtime/subagent-provider.js';
@@ -706,14 +706,26 @@ export function apply(ctx, config = {}) {
 		} catch (error) {
 			diag.append({ ev: 'team.discipline.fail', message: error?.message ?? String(error) });
 		}
-		// 宿主会话不被成员的「子智能体已完成」通知唤醒（il2c 11-17：它被叫醒后成了第二个 PMO）。
-		const hostNoticeGate = registerHostNoticeGate({
+		// 宿主会话的模型不自己跑：Human 与成员发进来的话转进文渊阁主对话，成员完成通知丢弃
+		// （il2c 11-17：它被通知叫醒后成了第二个 PMO；Human 在这里发「继续」，插件收不到）。
+		const hostSessionGate = registerHostSessionGate({
 			on: typeof ctx.on === 'function' ? (name, listener) => ctx.on(name, listener) : undefined,
 			isHostSession: (sessionId) => {
 				for (const runtime of booted?.runtimes?.values() ?? []) {
 					if (runtime.service.state.hostSessionId === sessionId) return { projectId: runtime.id };
 				}
 				return null;
+			},
+			forwardHuman: (projectId, body) => {
+				const runtime = projectRuntime(projectId);
+				if (runtime === null) return Promise.reject(new Error(`no Project runtime ${projectId}`));
+				return runtime.service.dispatch({ type: 'stream.post', payload: { body }, actor: { kind: 'human', memberId: HUMAN_ID }, projectId });
+			},
+			forwardMember: (projectId, senderSessionId, body) => {
+				const runtime = projectRuntime(projectId);
+				const member = Object.values(runtime?.service.state.members ?? {}).find((entry) => entry?.sessionId === senderSessionId);
+				if (runtime === null || member === undefined) return Promise.reject(new Error(`no member for session ${senderSessionId}`));
+				return runtime.service.dispatch({ type: 'stream.post', payload: { body }, actor: { kind: 'agent', memberId: member.id }, projectId });
 			},
 			diag,
 		});
@@ -2983,7 +2995,7 @@ export function apply(ctx, config = {}) {
 			try { disposeStopGuard(); } catch { /* already disposed */ }
 			try { disposeOneShotToolGuard(); } catch { /* already disposed */ }
 			try { teamDiscipline.dispose(); } catch { /* already disposed */ }
-			hostNoticeGate.dispose();
+			hostSessionGate.dispose();
 			// 在途的 boot 也算本组合的资源：等它落定（落定时见 disposed 会自行关账本），
 			// 否则下一组合抢在关锁之前打开同一账本。
 			const cleanup = [ready.then(() => undefined, () => undefined)];
