@@ -21,7 +21,15 @@
 
 `@suifei/dsh-ai-team` 是 DeepSeek Harness 的按需启用插件：装进专用 `ai-team` profile 后，DSH 里出现一个三栏工作台——左侧 Project 与成员，中间主对话 / 看板 / 态势，右侧 Thread。Agent 自己认领 Task、互相交接，由做的人以外的成员验收；Human 只处理方向、信任和不可撤回的决定。
 
-新 Project 自带一组可改的默认成员：**墨渊（主理人）**、**青岚（执行）**、**白砚（验收）**、**玄策（编程）**。名字、职责、个性、模型都可以改；模型提供商和模型名称直接读取 DSH 的 `llm` 目录，不需要手填 id。
+新 Project 自带一组可改的默认成员：**墨渊（主理人）**、**青岚（执行）**、**白砚（验收）**、**玄策（编程）**、**知微（UX 设计）**、**观澜（业务）**。名字、职责、个性、模型都可以改；模型提供商和模型名称直接读取 DSH 的 `llm` 目录，不需要手填 id。
+
+**人才市场**：成员来自可复用的「人才」，团队从人才里挑人组队。
+
+- 人才 `talents/<人才>/talent.yml`：名字、岗位、`duty`（职责：`lead` 主理人 / `qa` 验收 / `executor` 执行，决定拿哪份岗位规程）、性格、分类与标签、推荐模型，以及自带技能（`talents/<人才>/skills/<技能>/SKILL.md`）。内置 10 位：默认团队的 6 位，外加架构、评审、技术文档、安全审计。
+- 团队 `teams/<团队>/team.yml`：只引用人才（可覆盖名字、岗位、性格，追加技能），`skills/` 放这个团队的三份岗位规程（`ai-team-core` / `ai-team-qa` / `ai-team-executor`），`procedures` 可换成自己的规程。内置默认团队见 [`teams/default/`](teams/default/)。还预置了**逆向工程队** [`teams/reverse/`](teams/reverse/)：静态分析、动态调试、OLLVM 去混淆、移动端逆向、算法复刻与行为对账（`teamPreset: reverse` 启用）。此外预置了文档（`docs`）、视频（`video`）、游戏（`game`）、自媒体写作（`content`）、深度研究（`research`）、科学研究（`science`）、中小学教育软件（`education`）等团队,共 44 位人才可在人才市场挑选、组合或自建。
+- 「人员 → 添加成员」先打开人才市场：按分类、关键词挑一位，点「招聘」预填表单，改名、换模型后创建；也可以切到「自定义」从零填写。
+- 自建：人才放 `~/.dsh/ai-team/catalog/user/talents/<人才>/`，团队放 `~/.dsh/ai-team/catalog/user/teams/<团队>/`，同名覆盖内置；插件设置 `teamPreset` 选新项目用哪个团队。
+- 成员在账本里记下来源人才与版本、职责；人才文件之后再改，不会悄悄改动已招成员的性格与职责。已有项目不受新团队影响。文件写坏时跳过它并在诊断日志记 `catalog.load.fail` / `catalog.team.fail`。
 
 ---
 
@@ -105,7 +113,7 @@ dsh --profile ai-team --no-open --port 33271
 | 验收 | maker 不能验收；QA 硬门禁；`qaChecklist` 逐项通过 |
 | 收件箱 | Human/Agent 各自拉取；跨 Project 聚合；顶部待办入口；`askHuman` 结构化问题与选项直接展开并提交 |
 | 关注 | 关注 Task；完成后收到 `followed_task_update` |
-| 默认成员 | 新 Project 初始化墨渊 / 青岚 / 白砚 / 玄策；可改名、改职责、改个性、改模型 |
+| 默认成员 | 新 Project 按团队（`teams/<团队>/`，从人才市场 `talents/` 挑人，设置项 `teamPreset`）初始化成员，默认墨渊 / 青岚 / 白砚 / 玄策 / 知微 / 观澜；可改名、改职责、改个性、改模型 |
 | 成员 | 持久 session；点击名字直接对话；「⋯」资料里有任务视图与直接对话 |
 | 模型 | Provider / Model 下拉读取 DSH `llm` 目录；可跟随系统默认 |
 | 进化 | `team.evolve` 只改自己的 personality；验收后 reflection wake |
@@ -158,12 +166,17 @@ POST /ai-team/api/projects/<id>/commands
 
 ## 技能与 SkillOpt
 
+一个智能体 = 岗位 + 职责 + 性格 + 装上的若干技能（`skills` 数组）。内置人才里每个干活角色（执行 / 验收）都带一份看家技能；负责人只靠岗位规程 + 性格。
+
 - 成员资料可追加 notes / skills，activation / wake prompt 会注入有界技能目录；
 - 完整技能正文由成员自己的 `skill` 工具加载；
-- `ai-team-files` provider 会读取：
-  - `<DSH_HOME>/skills`
-  - `<cwd>/.dsh/skills`
-  - `<cwd>/.agents/skills`
+- **技能从四个根按优先级读，低序号覆盖高序号**，所以"安装一份技能"= 把 `SKILL.md` 落到可写根，再在成员 `skills` 里写上它的名字：
+  - `<cwd>/.dsh/skills`（项目，100，最高）
+  - `<cwd>/.agents/skills`（项目，200）
+  - `<DSH_HOME>/skills`（用户，400）
+  - 插件内置（600，**只读**）
+- **自定义智能体**：在 `~/.dsh/ai-team/catalog/user/talents/<人才>/` 写一份 `talent.yml`（职责 + 性格 + `skills: [...]`），技能来源可以是自己写的、从别处装的、或从现成人才拆出来的；同名覆盖内置，即可加进团队。
+- **自我进化两条链**：性格靠成员 `evolve` / `distill` 自长自压（写账本，开箱即用）；技能靠内置 SkillOpt 过门禁优化 `SKILL.md`。注意内置技能在包内**只读**，要就地进化需先把它复制（fork）到可写根再改。
 - **Microsoft SkillOpt 已内置**：7 个 `skillopt_*` 工具、Python engine bootstrap、`skillopt-sleep` 技能随插件分发，不需要单独安装 `dsh-skillopt`。
 
 ---

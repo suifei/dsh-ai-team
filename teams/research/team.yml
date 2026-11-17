@@ -1,0 +1,11 @@
+# 深度研究团队：从人才市场（talents/）挑人组队。teamPreset 设成 research 即用于新建的 Project。
+# 岗位规程沿用内置默认团队的主理人/执行/验收三份；领域专长在各人才里。
+
+name: 深度研究团队
+description: 围绕一个问题做深度研究：检索、分析、综述,配事实核查。
+lead: mem_lead
+members:
+  - { talent: research-lead, id: mem_lead }
+  - { talent: researcher, id: mem_search }
+  - { talent: analyst, id: mem_analyst }
+  - { talent: fact-checker, id: mem_fact }

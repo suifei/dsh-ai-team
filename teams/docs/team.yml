@@ -1,0 +1,12 @@
+# 文档团队：从人才市场（talents/）挑人组队。teamPreset 设成 docs 即用于新建的 Project。
+# 岗位规程沿用内置默认团队的主理人/执行/验收三份；领域专长在各人才里。
+
+name: 文档团队
+description: 写文档、手册、知识库：定读者、分章写作、配图、事实核查。
+lead: mem_lead
+members:
+  - { talent: editorial-lead, id: mem_lead }
+  - { talent: tech-writer, id: mem_writer }
+  - { talent: editor, id: mem_editor }
+  - { talent: diagrammer, id: mem_diagram }
+  - { talent: fact-checker, id: mem_fact }

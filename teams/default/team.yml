@@ -1,0 +1,35 @@
+# 文渊阁默认团队：从人才市场（talents/）挑出 6 位。
+#
+# 一个团队 = 一个文件夹：
+#   team.yml                     从人才里挑人组队（本文件，只引用人才）
+#   skills/<规程>/SKILL.md       团队的工作方式：主理人 / 验收 / 执行三份岗位规程
+#
+# 自定义：把整个文件夹复制到 ~/.dsh/ai-team/catalog/user/teams/<团队>/ 修改，
+# 再在插件设置里把「teamPreset」设成 <团队>；同名文件夹整份替换内置团队。
+# 自建人才放 ~/.dsh/ai-team/catalog/user/talents/<人才>/talent.yml（格式见 talents/ 下任一位）。
+# 只影响之后新建的项目；已有项目的成员以账本为准。
+#
+# 字段：
+#   name / description  团队名与说明
+#   lead                项目负责人（PMO）的成员 id，缺省取第一位
+#   procedures          三种职责各用哪份岗位规程（本团队 skills/ 下的名字），可省略；没带的退回内置
+#   members             成员列表，每位：
+#     talent       引用的人才 id（talents/<人才>/）
+#     id           本项目里的成员 id，mem_ 开头；缺省 mem_<人才 id>；同一人才招两位时必须写
+#     name / role / duty / personality   可选，覆盖人才的设定
+#     skills       可选，在人才自带技能之外追加
+
+name: 默认团队
+description: 主理人统筹，执行、验收、编程、UX、业务各一位。
+lead: mem_lead
+procedures:
+  lead: ai-team-core
+  qa: ai-team-qa
+  executor: ai-team-executor
+members:
+  - { talent: pmo-lead, id: mem_lead }
+  - { talent: executor, id: mem_maker }
+  - { talent: qa-acceptor, id: mem_check }
+  - { talent: engineer, id: mem_coder }
+  - { talent: ux-designer, id: mem_ux }
+  - { talent: biz-analyst, id: mem_biz }

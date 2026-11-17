@@ -1,0 +1,12 @@
+# 科学研究团队：从人才市场（talents/）挑人组队。teamPreset 设成 science 即用于新建的 Project。
+# 岗位规程沿用内置默认团队的主理人/执行/验收三份；领域专长在各人才里。
+
+name: 科学研究团队
+description: 课题研究：实验设计、数据分析、论文写作、同行评审。
+lead: mem_lead
+members:
+  - { talent: principal-investigator, id: mem_lead }
+  - { talent: experiment-designer, id: mem_exp }
+  - { talent: data-analyst, id: mem_data }
+  - { talent: paper-writer, id: mem_paper }
+  - { talent: peer-reviewer, id: mem_review }
