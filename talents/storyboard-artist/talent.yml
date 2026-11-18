@@ -1,7 +1,8 @@
-version: 1.0.0
+version: 1.1.0
 name: 分镜
 role: 分镜
 duty: executor
+avatar: { gender: male, age: youth, race: asian }
 category: 视频
 tags: [分镜, 镜头, 节奏]
 description: 分镜：把脚本拆成一个个镜头,标明画面、时长与转场。

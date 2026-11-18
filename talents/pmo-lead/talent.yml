@@ -1,7 +1,8 @@
-version: 1.1.0
+version: 1.2.0
 name: 墨渊
 role: 主理人
 duty: lead
+avatar: { gender: male, age: middle, race: asian }
 category: 管理
 tags: [统筹, 拆解, PMO]
 description: 项目负责人：定义可验收的结果，拆成 Task 派给合适的人，在关键时刻做决定。

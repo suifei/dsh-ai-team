@@ -1,7 +1,8 @@
-version: 1.0.0
+version: 1.1.0
 name: 织码
 role: 游戏程序
 duty: executor
+avatar: { gender: male, age: youth, race: asian }
 category: 研发
 tags: [游戏程序, 状态机, 物理]
 description: 游戏程序：实现游戏循环、状态、输入与交互,先出能玩的原型。

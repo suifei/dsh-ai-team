@@ -308,6 +308,8 @@ window.__ModuleLoader__.load({
 			talentLoadFailed: '人才市场读取失败：{error}',
 			talentSkills: '技能：{skills}',
 			talentUser: '自建',
+			avatarTitle: '头像', avatarGender: '性别', avatarAge: '年龄', avatarRace: '人种', avatarHint: '头像由 avatar.onrpc.com 按名字生成；改名会换一张脸，参数不变。',
+			avatar_male: '男', avatar_female: '女', avatar_neutral: '中性', avatar_baby: '婴儿', avatar_teen: '少年', avatar_youth: '青年', avatar_middle: '中年', avatar_old: '老年', avatar_asian: '黄种人', avatar_white: '白人', avatar_black: '黑人', avatar_brown: '棕色人种', avatar_auto: '不指定',
 			profileTabBasic: '资料', profileTabModel: '模型', profileTabSkills: '技能', profileTabCollab: '协作', profileNotes: '备忘', profileNotesEmpty: '还没有备忘。', profileSkillsEmpty: '还没装技能；在下面填技能名加一个，或到人才市场招已带技能的人才。',
 			teamPickDetail: '人才简介', teamPickDetailEmpty: '在左边点一位人才，这里看简介；点「加入」放进右边的团队。', teamLeadMark: '负责人', projectTeamMembers: '团队成员 · {n} 位',
 			peopleModelBatch: '批量配置模型', peopleModelTitle: '配置模型', peopleModelHint: '选中的成员在其所在的全部项目里改用这个模型；之后仍可在成员资料里单独改。', peopleModelPick: '应用到 {n} 位', peopleModelAll: '全选', peopleModelNone: '全不选', peopleModelApply: '应用', peopleModelNeed: '先选模型', peopleModelDone: '已为 {people} 位成员配置 {model}（成功 {done} 处，失败 {failed} 处）。',
@@ -762,6 +764,8 @@ window.__ModuleLoader__.load({
 			talentLoadFailed: 'Could not load the talent market: {error}',
 			talentSkills: 'Skills: {skills}',
 			talentUser: 'Custom',
+			avatarTitle: 'Avatar', avatarGender: 'Gender', avatarAge: 'Age', avatarRace: 'Ethnicity', avatarHint: 'Drawn by avatar.onrpc.com from the name; renaming gives a new face with the same settings.',
+			avatar_male: 'Male', avatar_female: 'Female', avatar_neutral: 'Neutral', avatar_baby: 'Baby', avatar_teen: 'Teen', avatar_youth: 'Young', avatar_middle: 'Middle-aged', avatar_old: 'Senior', avatar_asian: 'Asian', avatar_white: 'White', avatar_black: 'Black', avatar_brown: 'Brown', avatar_auto: 'Any',
 			profileTabBasic: 'Profile', profileTabModel: 'Model', profileTabSkills: 'Skills', profileTabCollab: 'Collaboration', profileNotes: 'Notes', profileNotesEmpty: 'No notes yet.', profileSkillsEmpty: 'No skills yet; add one by name below, or hire a talent that comes with skills.',
 			teamPickDetail: 'Talent details', teamPickDetailEmpty: 'Pick a talent on the left to see its details; “Add” puts it into the team on the right.', teamLeadMark: 'Lead', projectTeamMembers: 'Team members · {n}',
 			peopleModelBatch: 'Set model for many', peopleModelTitle: 'Set model', peopleModelHint: 'The selected members switch to this model in every project they are in; each can still be changed in its profile.', peopleModelPick: 'Apply to {n}', peopleModelAll: 'All', peopleModelNone: 'None', peopleModelApply: 'Apply', peopleModelNeed: 'Pick a model first', peopleModelDone: 'Set {model} for {people} members ({done} ok, {failed} failed).',
@@ -1197,6 +1201,14 @@ window.__ModuleLoader__.load({
 			.at-streamjump:hover { color: var(--dsw-alias-label-primary); }
 			.at-msg { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
 			.at-avatar { flex: 0 0 auto; width: 24px; height: 24px; display: grid; place-items: center; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; background: var(--dsw-alias-bg-layer-3); color: var(--dsw-alias-label-secondary); font-size: 10px; font-weight: 500; }
+			.at-avatar.at-avatar-img { overflow: hidden; border-color: transparent; background: transparent; padding: 0; }
+			.at-avatar.at-avatar-img img { display: block; width: 100%; height: 100%; border-radius: 999px; }
+			.at-talenttop { display: flex; align-items: center; gap: 10px; min-width: 0; }
+			.at-talenttop > .at-talenthead { flex: 1 1 auto; min-width: 0; }
+			.at-avatarpick { display: flex; align-items: center; gap: 16px; padding: 10px 12px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 10px; background: var(--dsw-alias-bg-layer-1); }
+			.at-avatarpickrows { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+			.at-avatarpickrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+			.at-avatarpickrow > .at-panetitle { width: 36px; flex: none; }
 			.at-avatar-human { border-color: transparent; background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-inverted); }
 			.at-msgb { min-width: 0; flex: 1; }
 			.at-msgh { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
@@ -1456,7 +1468,7 @@ window.__ModuleLoader__.load({
 			.at-tcpick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 			.at-tcpanel { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 			.at-teamrows { display: flex; flex-direction: column; gap: 6px; }
-			.at-teamrow { display: grid; grid-template-columns: minmax(0, 1fr) 76px auto auto; gap: 8px; align-items: center; }
+			.at-teamrow { display: grid; grid-template-columns: 24px minmax(0, 1fr) 76px auto auto; gap: 8px; align-items: center; }
 			.at-teamrow > .at-modalmeta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.at-teamlead { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
 			.at-teampick { display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; }
@@ -1641,8 +1653,35 @@ window.__ModuleLoader__.load({
 				h('span', null, label));
 		}
 
-		function Avatar({ name, human }) {
-			return h('span', { className: cx('at-avatar', human && 'at-avatar-human'), 'aria-hidden': 'true' }, String(name ?? '?').slice(0, 1));
+		/**
+		 * 头像：成员 / 人才用 avatar.onrpc.com 按「名字@人才」画（参数见 lib/domain/avatar.js），Human 用首字母。
+		 * 只给名字时按当前项目成员表（AVATAR_INDEX）找参数；图片加载失败（离线、被拦）退回首字母。
+		 */
+		function Avatar({ name, human, avatar, seed, size = 24 }) {
+			const [brokenUrl, setBrokenUrl] = React.useState('');
+			const label = String(name ?? '?');
+			const style = size === 24 ? undefined : { width: size + 'px', height: size + 'px', fontSize: Math.round(size * 0.45) + 'px' };
+			const known = human ? null : AVATAR_INDEX.get(label);
+			const url = human ? '' : avatarUrl(seed ?? known?.seed ?? avatarSeed(label), avatar ?? known?.avatar ?? AVATAR_FALLBACK, size);
+			if (human || url === brokenUrl) return h('span', { className: cx('at-avatar', human && 'at-avatar-human'), style, 'aria-hidden': 'true' }, label.slice(0, 1));
+			return h('span', { className: 'at-avatar at-avatar-img', style, 'aria-hidden': 'true' },
+				h('img', { src: url, alt: '', loading: 'lazy', decoding: 'async', referrerPolicy: 'no-referrer', onError: () => setBrokenUrl(url) }));
+		}
+		/** 头像参数挑选（性别 / 年龄 / 人种），左边实时预览。人才新建、自定义成员、成员资料共用。 */
+		function AvatarPicker({ t, value, seed, onChange }) {
+			const current = { ...AVATAR_PICK_DEFAULT, ...(value || {}) };
+			return h('div', { className: 'at-avatarpick' },
+				h(Avatar, { name: seed, seed, avatar: current, size: 72 }),
+				h('div', { className: 'at-avatarpickrows' },
+					[['gender', 'avatarGender'], ['age', 'avatarAge'], ['race', 'avatarRace']].map(([key, label]) => h('div', { key, className: 'at-avatarpickrow' },
+						h('span', { className: 'at-panetitle' }, t(label)),
+						h('div', { className: 'at-mode at-addtabs', role: 'group', 'aria-label': t(label) }, AVATAR_CHOICES[key].map((option) => h('button', {
+							key: option,
+							type: 'button',
+							'aria-pressed': current[key] === option ? 'true' : 'false',
+							onClick: () => onChange({ ...current, [key]: option }),
+						}, t('avatar_' + option)))))),
+					h('div', { className: 'at-modalmeta' }, t('avatarHint'))));
 		}
 
 		function FollowToggle({ t, taskNo: no, following, onToggle, compact }) {
@@ -2029,6 +2068,7 @@ window.__ModuleLoader__.load({
 			const failure = agent.status === 'failed' ? (agent.lastFailure ?? null) : null;
 			return h('div', { className: 'at-agent', role: 'listitem' },
 				h('span', { className: 'at-dot at-dot-' + (agent.status ?? 'idle'), 'aria-hidden': 'true' }),
+				h(Avatar, { name: agent.name, size: 30 }),
 				h('div', { className: 'at-agentmeta' },
 					h('button', { className: 'at-agentname', type: 'button', onClick: () => onAgent(agent), title: agent.name }, agent.name),
 					h('div', { className: 'at-agentrole', title: agent.role ?? '' },
@@ -2172,7 +2212,7 @@ window.__ModuleLoader__.load({
 							h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => setPicked(new Set()) }, t('peopleModelNone'))),
 						h('div', { className: 'at-peoplecheck' }, people.map((person) => h('label', { key: person.name, className: 'at-checkcard' },
 							h('input', { type: 'checkbox', checked: picked.has(person.name), onChange: () => toggle(person.name) }),
-							h(Avatar, { name: person.name, human: false }),
+							h(Avatar, { name: person.name, human: false, size: 32 }),
 							h('span', null, h('b', null, person.name + (person.role ? ' · ' + person.role : '')),
 								h('small', null, (person.projects ?? []).map((row) => row.projectName).join('、')))))))));
 		}
@@ -2218,7 +2258,7 @@ window.__ModuleLoader__.load({
 						const localHere = localNames.has(person.name);
 						return h('div', { key: person.name, className: cx('at-pcard', person.failures > 0 && 'at-people-failed') },
 							h('div', { className: 'at-pcardhead' },
-								h(Avatar, { name: person.name, human: false }),
+								h(Avatar, { name: person.name, human: false, size: 40 }),
 								h('span', { className: 'at-peoplename' }, person.name),
 								person.role ? h('span', { className: 'at-people-role' }, person.role) : null),
 							h('div', { className: 'at-peoplebadges' }, badges.join(' · ')),
@@ -2836,12 +2876,14 @@ window.__ModuleLoader__.load({
 				: talent.source === 'user' ? withIco('user', t('talentUser'), 10)
 					: talent.source === 'official' ? withIco('cloud', t('talentOfficial'), 10) : null;
 			return [
-				h('div', { key: 'head', className: 'at-talenthead' },
+				h('div', { key: 'head', className: 'at-talenttop' },
+				h(Avatar, { name: talent.name, seed: avatarSeed(talent.name), avatar: talent.avatar ?? AVATAR_FALLBACK, size: 40 }),
+				h('div', { className: 'at-talenthead' },
 					h('span', { className: 'at-talentname' }, talent.name),
 					talent.role ? h('span', { className: 'at-talentrole' }, talent.role) : null,
 					talent.duty ? h('span', { className: 'at-talentduty' }, t(DUTY_LABEL[talent.duty])) : null,
 					lead ? h('span', { className: 'at-talentduty' }, withIco('check', t('teamLeadMark'), 10)) : null,
-					badge ? h('span', { className: 'at-talentduty' }, badge) : null),
+					badge ? h('span', { className: 'at-talentduty' }, badge) : null)),
 				talent.description ? h('div', { key: 'desc', className: 'at-talentdesc' }, talent.description) : null,
 				full && talent.personality ? h('div', { key: 'pers', className: 'at-modalmeta' }, talent.personality) : null,
 				talent.skills?.length ? h('div', { key: 'skills', className: 'at-modalmeta' }, tf(t, 'talentSkills', { skills: talent.skills.join('、') })) : null,
@@ -2956,6 +2998,8 @@ window.__ModuleLoader__.load({
 					h('label', { className: 'at-field' }, h('span', null, t('tcDuty')), h('select', { value: form.duty, onChange: set('duty') }, ['executor', 'qa', 'lead'].map((d) => h('option', { key: d, value: d }, t(DUTY_LABEL[d]))))),
 					h('label', { className: 'at-field' }, h('span', null, t('tcCategory')), h('input', { value: form.category, onChange: set('category') })),
 					h('label', { className: 'at-field' }, h('span', null, t('tcTags')), h('input', { value: form.tags, onChange: set('tags'), placeholder: t('tcTagsHint') }))),
+				h('div', { className: 'at-field' }, h('span', null, t('avatarTitle')),
+					h(AvatarPicker, { t, value: form.avatar, seed: avatarSeed(form.name), onChange: (avatar) => setForm((prev) => ({ ...prev, avatar })) })),
 				h('label', { className: 'at-field' }, h('span', null, t('tcPersonality')), h('textarea', { value: form.personality, onChange: set('personality'), placeholder: t('tcPersonalityHint') })),
 				h('div', { className: 'at-field' }, h('span', null, t('tcSkills')),
 					pending.length === 0 ? h('div', { className: 'at-modalmeta' }, t('tcEmpty')) : h('div', { className: 'at-tcskills' }, pending.map((sk) => h('span', { key: sk.name, className: 'at-tcskill' }, sk.name, h('button', { type: 'button', 'aria-label': t('tcRemove'), onClick: () => setPending((pp) => pp.filter((x) => x.name !== sk.name)) }, '×')))),
@@ -3019,7 +3063,7 @@ window.__ModuleLoader__.load({
 							'aria-selected': focused && focused.id === talent.id ? 'true' : 'false',
 							onClick: () => setFocus(talent.id),
 							onDoubleClick: () => add(talent),
-						}, h('span', null, talent.name, ' ', h('span', { className: 'at-pickrole' }, talent.role)), talent.duty ? h('span', { className: 'at-pickrole' }, t(DUTY_LABEL[talent.duty])) : null)))),
+						}, h('span', { className: 'at-talenttop' }, h(Avatar, { name: talent.name, seed: avatarSeed(talent.name), avatar: talent.avatar, size: 22 }), h('span', null, talent.name, ' ', h('span', { className: 'at-pickrole' }, talent.role))), talent.duty ? h('span', { className: 'at-pickrole' }, t(DUTY_LABEL[talent.duty])) : null)))),
 					h('div', { className: 'at-pane' },
 						h('div', { className: 'at-panetitle' }, t('teamPickDetail')),
 						focused ? h('div', { className: 'at-talent' },
@@ -3033,6 +3077,7 @@ window.__ModuleLoader__.load({
 						draft.members.length === 0 ? h('div', { className: 'at-modalmeta' }, t('teamEmptyPick')) : h('div', { className: 'at-teamrows' }, draft.members.map((m, i) => {
 							const talent = byId(m.talent) || { name: m.talent, role: '' };
 							return h('div', { key: i, className: 'at-teamrow' },
+								h(Avatar, { name: m.name || talent.name, seed: avatarSeed(m.name || talent.name), avatar: talent.avatar, size: 24 }),
 								h('input', { value: m.name, placeholder: talent.name, 'aria-label': t('teamName'), onChange: (e) => rename(i, e.target.value), onFocus: () => setFocus(m.talent) }),
 								h('span', { className: 'at-modalmeta' }, talent.role),
 								h('label', { className: 'at-teamlead' }, h('input', { type: 'radio', name: 'team-lead', checked: draft.lead === i, onChange: () => setDraft({ ...draft, lead: i }) }), t('teamLead')),
@@ -3233,6 +3278,37 @@ window.__ModuleLoader__.load({
 		}
 
 		// <member-copy>
+		// 头像（avatar.onrpc.com，hash-avatar 契约 v1）：按名字画，人才与按原名招来的成员是同一张脸。
+		const AVATAR_HOST = 'https://avatar.onrpc.com/v1/';
+		const AVATAR_CHOICES = { gender: ['male', 'female', 'neutral'], age: ['baby', 'teen', 'youth', 'middle', 'old'], race: ['asian', 'white', 'black', 'brown', 'auto'] };
+		/** 没设过头像、也查不到来源人才的成员：亚洲人、青年、性别不指定。 */
+		const AVATAR_FALLBACK = { gender: 'neutral', age: 'youth', race: 'asian' };
+		/** 自建时的初始选项：亚洲人、青年、男。 */
+		const AVATAR_PICK_DEFAULT = { gender: 'male', age: 'youth', race: 'asian' };
+		/** 当前项目成员名 → { seed, avatar }，给只拿到名字的地方（消息、人员池）用。 */
+		const AVATAR_INDEX = new Map();
+		/** 画像种子就是名字：人才和按原名招来的成员同一张脸；改名换脸，参数不变。 */
+		function avatarSeed(name) {
+			return String(name ?? '').trim() || '?';
+		}
+		function avatarUrl(seed, avatar, size) {
+			const pick = (key) => (AVATAR_CHOICES[key].includes(avatar && avatar[key]) ? avatar[key] : AVATAR_FALLBACK[key]);
+			const px = Math.max(16, Math.min(1024, Math.round((Number(size) || 24) * 2)));
+			return AVATAR_HOST + encodeURIComponent(String(seed ?? '')) + '.svg?gender=' + pick('gender') + '&age=' + pick('age') + '&race=' + pick('race') + '&size=' + px;
+		}
+		/** 成员的头像参数：自己设过的 > 来源人才的 > 默认（负责人按中年）。 */
+		function memberAvatarOf(agent, talents) {
+			if (agent && agent.avatar) return agent.avatar;
+			const talent = (Array.isArray(talents) ? talents : []).find((x) => x && x.id === (agent && agent.talent));
+			if (talent && talent.avatar) return talent.avatar;
+			return { ...AVATAR_FALLBACK, age: agent && agent.duty === 'lead' ? 'middle' : AVATAR_FALLBACK.age };
+		}
+		function rememberAvatars(agents, talents) {
+			AVATAR_INDEX.clear();
+			for (const agent of Array.isArray(agents) ? agents : []) {
+				if (agent && agent.kind !== 'human' && agent.name) AVATAR_INDEX.set(agent.name, { seed: avatarSeed(agent.name), avatar: memberAvatarOf(agent, talents) });
+			}
+		}
 		/**
 		 * 复制成员（#65：想要两个「玄策」一起写代码，只能手工重填一遍）。
 		 * 沿用角色、人格、运行配方、模型、输出上限与技能；不带笔记、会话与任务（那是原成员自己的经历）。
@@ -3256,6 +3332,7 @@ window.__ModuleLoader__.load({
 				maxTokens: Number.isSafeInteger(maxTokens) && maxTokens > 0 ? maxTokens : null,
 				skills: (Array.isArray(source?.skills) ? source.skills : []).filter((skill) => typeof skill === 'string' && skill.trim() !== ''),
 				sourceName: String(source?.name ?? ''),
+				avatar: source?.avatar ?? null,
 			};
 		}
 		/**
@@ -3281,6 +3358,7 @@ window.__ModuleLoader__.load({
 				sourceName: base,
 				talent: { id: String(talent?.id ?? ''), version: String(talent?.version ?? '') },
 				duty: ['lead', 'qa', 'executor'].includes(talent?.duty) ? talent.duty : null,
+				avatar: talent?.avatar ?? null,
 			};
 		}
 		/** 人才市场筛选：分类精确匹配；关键词在名字、岗位、分类、标签、说明、技能里找（不分大小写）。 */
@@ -3294,7 +3372,7 @@ window.__ModuleLoader__.load({
 			});
 		}
 		function blankTalentForm() {
-			return { name: '', role: '', duty: 'executor', category: '', tags: '', personality: '' };
+			return { name: '', role: '', duty: 'executor', category: '', tags: '', personality: '', avatar: { ...AVATAR_PICK_DEFAULT } };
 		}
 		/** 新建人才表单 → POST /api/talents 的请求体：标签按逗号/顿号/空白拆开，职责只认三种。 */
 		function talentFormToBody(form) {
@@ -3306,6 +3384,7 @@ window.__ModuleLoader__.load({
 				category: String((form && form.category) || '').trim(),
 				tags,
 				personality: String((form && form.personality) || '').trim(),
+				...(form && form.avatar ? { avatar: form.avatar } : {}),
 			};
 		}
 		/**
@@ -3315,7 +3394,7 @@ window.__ModuleLoader__.load({
 			const draft = (initial && initial.draft) || {};
 			const skills = Array.isArray(draft.skills) ? draft.skills : [];
 			return {
-				form: { name: String(draft.name || ''), role: String(draft.role || ''), duty: ['lead', 'qa', 'executor'].includes(draft.duty) ? draft.duty : 'executor', category: String(draft.category || ''), tags: (Array.isArray(draft.tags) ? draft.tags : []).join(', '), personality: String(draft.personality || '') },
+				form: { name: String(draft.name || ''), role: String(draft.role || ''), duty: ['lead', 'qa', 'executor'].includes(draft.duty) ? draft.duty : 'executor', category: String(draft.category || ''), tags: (Array.isArray(draft.tags) ? draft.tags : []).join(', '), personality: String(draft.personality || ''), avatar: draft.avatar ? { ...draft.avatar } : { ...AVATAR_PICK_DEFAULT } },
 				pending: skills.filter((x) => x && x.found).map((x) => ({ name: x.name, kind: 'member', fromProject: initial.projectId, fromMember: initial.memberId })),
 				missing: skills.filter((x) => x && !x.found).map((x) => x.name),
 				model: draft.model && (draft.model.provider || draft.model.model) ? draft.model : null,
@@ -3469,6 +3548,7 @@ window.__ModuleLoader__.load({
 			const [talentInit, setTalentInit] = React.useState(null);
 			const [mName, setMName] = React.useState('');
 			const [mRole, setMRole] = React.useState('');
+			const [mAvatar, setMAvatar] = React.useState(null);
 			const [mPrompt, setMPrompt] = React.useState('');
 			const [mProvider, setMProvider] = React.useState('');
 			const [mEffort, setMEffort] = React.useState('');
@@ -3481,6 +3561,7 @@ window.__ModuleLoader__.load({
 			const [profileAgent, setProfileAgent] = React.useState(null);
 			const [pName, setPName] = React.useState('');
 			const [pRole, setPRole] = React.useState('');
+			const [pAvatar, setPAvatar] = React.useState(null);
 			const [pPersonality, setPPersonality] = React.useState('');
 			const [pPreset, setPPreset] = React.useState('standard');
 			const [pProvider, setPProvider] = React.useState('');
@@ -3642,6 +3723,8 @@ window.__ModuleLoader__.load({
 				let alive = true;
 				const controller = typeof AbortController === 'function' ? new AbortController() : null;
 				// The package is @suifei/dsh-ai-team; the Host prefix is /ai-team.
+				// 头像要按成员的来源人才取参数：进工作台（切项目）时顺带取人才列表（没设过头像的老成员靠它）。
+				void loadTalents();
 				const query = projectId ? '?project=' + encodeURIComponent(projectId) : '';
 				async function load() {
 					const seq = ++loadSeqRef.current;
@@ -4306,6 +4389,7 @@ window.__ModuleLoader__.load({
 				setMModel(defaults.model ?? '');
 				setMEffort(defaults.reasoningEffort ?? '');
 				setMOwner((data?.agents ?? []).length === 0);
+				setMAvatar({ ...AVATAR_PICK_DEFAULT });
 				setMCopy(null);
 				setMError('');
 				setMTab('market');
@@ -4413,6 +4497,7 @@ window.__ModuleLoader__.load({
 				setMProvider(draft.provider || defaults.provider || '');
 				setMModel(draft.model || defaults.model || '');
 				setMEffort(draft.reasoningEffort || defaults.reasoningEffort || '');
+				setMAvatar(draft.avatar ? { ...draft.avatar } : { ...AVATAR_PICK_DEFAULT });
 				setMCopy(draft);
 				setMError('');
 				setMTab('custom');
@@ -4427,6 +4512,7 @@ window.__ModuleLoader__.load({
 				setMModel(draft.model);
 				setMEffort(draft.reasoningEffort);
 				setMOwner(false);
+				setMAvatar({ ...memberAvatarOf(source, talents) });
 				setMCopy(draft);
 				setMError('');
 				setAddOpen(true);
@@ -4459,6 +4545,7 @@ window.__ModuleLoader__.load({
 						...(mCopy?.personality ? { personality: mCopy.personality } : {}),
 						...(mCopy?.talent?.id ? { talent: mCopy.talent.id, talentVersion: mCopy.talent.version } : {}),
 						...(mCopy?.duty ? { duty: mCopy.duty } : {}),
+						...(mAvatar ? { avatar: mAvatar } : {}),
 					});
 					const memberId = added.member.id;
 					const patch = {
@@ -4552,6 +4639,7 @@ window.__ModuleLoader__.load({
 				setPTab('basic');
 				setPName(agent.name ?? '');
 				setPRole(agent.role ?? '');
+				setPAvatar({ ...memberAvatarOf(agent, talents) });
 				setPPersonality(agent.personality ?? '');
 				setPPreset(agent.preset ?? agent.config?.preset ?? 'standard');
 				setPProvider(agent.config?.provider ?? '');
@@ -4575,6 +4663,7 @@ window.__ModuleLoader__.load({
 						name: pName.trim(),
 						role: pRole.trim(),
 						personality: pPersonality,
+						...(pAvatar ? { avatar: pAvatar } : {}),
 						reason: 'workbench profile',
 					});
 					const config = profileAgent.config ?? {};
@@ -5059,6 +5148,8 @@ window.__ModuleLoader__.load({
 			const memberViewAgent = data.agents.find((agent) => agent.id === memberViewId) ?? null;
 			const memberViewTasks = memberViewAgent === null ? [] : tasks.filter((task) => task.ownerId === memberViewAgent.id || task.assigneeId === memberViewAgent.id);
 			const headerTitle = inPeople ? t('peopleTitle') : inInbox ? t('inboxTitle') : project ? '# ' + project.name : t('noProject');
+			// 只拿到名字的地方（消息、人员池、批量配置）按这张表找成员的头像参数。
+			rememberAvatars(data?.agents, talents);
 			const headerGoal = inPeople ? t('peopleGoal') : inInbox ? t('inboxGoal') : (project?.goal ?? '');
 			const unread = inboxUnread > 99 ? '99+' : inboxUnread;
 
@@ -5438,6 +5529,7 @@ window.__ModuleLoader__.load({
 									h('input', { value: mName, onChange: (event) => setMName(event.target.value), autoFocus: true })),
 								h('label', { className: 'at-field' }, h('span', null, t('memberRole')),
 									h('input', { value: mRole, onChange: (event) => setMRole(event.target.value) }))),
+							h(AvatarPicker, { key: 'av', t, value: mAvatar, seed: avatarSeed(mName), onChange: setMAvatar }),
 							h('label', { key: 'prompt', className: 'at-field' }, h('span', null, t('memberPrompt')),
 								h('textarea', {
 									value: mPrompt,
@@ -5471,7 +5563,7 @@ window.__ModuleLoader__.load({
 							'aria-label': t('memberProfileTitle'),
 							onSubmit: (event) => { event.preventDefault(); saveProfile(); },
 						},
-							h('h2', { className: 'at-modaltitle' }, withIco('user', tf(t, 'memberProfileTitleName', { name: profileAgent.name }), 16)),
+							h('h2', { className: 'at-modaltitle' }, h(Avatar, { name: profileAgent.name, size: 28 }), tf(t, 'memberProfileTitleName', { name: profileAgent.name })),
 							// 右上角按钮按用途分组：去看（任务 / 对话）· 复用（复制 / 存为人才）· 会话维护（重试 / 重置 / 重新蒸馏，黄）· 离开（红）· 取消 / 保存。
 							h('div', { className: 'at-modalactions' },
 								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => { const target = profileAgent; setProfileAgent(null); openMemberView(target); } }, withIco('board', t('memberTasks'), 12)),
@@ -5508,6 +5600,7 @@ window.__ModuleLoader__.load({
 									onClick: () => setPTab(id),
 								}, withIco(icon, t(key), 12)))),
 							pTab === 'basic' ? [
+								h(AvatarPicker, { key: 'av', t, value: pAvatar, seed: avatarSeed(pName.trim() || profileAgent.name), onChange: setPAvatar }),
 								h('div', { key: 'nr', className: 'at-fieldrow' },
 									h('label', { className: 'at-field' }, h('span', null, t('memberName')),
 										h('input', { value: pName, onChange: (event) => setPName(event.target.value), autoFocus: true })),

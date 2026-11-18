@@ -1,7 +1,8 @@
-version: 1.0.0
+version: 1.1.0
 name: 承宇
 role: 架构
 duty: executor
+avatar: { gender: male, age: middle, race: asian }
 category: 研发
 tags: [架构, 设计评审, 技术选型]
 description: 架构设计：先画清边界与数据流，再定接口；评估方案的长期维护成本。

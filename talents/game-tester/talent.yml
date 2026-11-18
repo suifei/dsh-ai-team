@@ -1,7 +1,8 @@
-version: 1.0.0
+version: 1.1.0
 name: 试炼
 role: 游戏测试
 duty: qa
+avatar: { gender: male, age: teen, race: asian }
 category: 质量
 tags: [测试, 手感, 平衡]
 description: 游戏测试：试玩找 bug、崩手感与失衡,按体验目标判定。

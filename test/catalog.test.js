@@ -207,7 +207,7 @@ test('2b: uniqueTalentId never reuses a taken id; talentFromMember carries role,
 	assert.equal(uniqueTalentId(catalog, 'editor'), 'editor-2');
 	assert.equal(uniqueTalentId(catalog, 'Bad Id'), '');
 	const member = { name: '青岚', role: '执行', personality: '先交付再汇报', notes: ['私人经历'], skills: ['delivery-checklist', '../etc', 'ok.v2'], config: { provider: 'qwen', model: 'q-max', reasoningEffort: 'high' } };
-	assert.deepEqual(talentFromMember(member, 'qa'), { name: '青岚', role: '执行', duty: 'qa', category: '', tags: [], personality: '先交付再汇报', model: { provider: 'qwen', model: 'q-max', reasoningEffort: 'high' }, skills: ['delivery-checklist', 'ok.v2'] });
+	assert.deepEqual(talentFromMember(member, 'qa'), { name: '青岚', role: '执行', duty: 'qa', category: '', tags: [], personality: '先交付再汇报', model: { provider: 'qwen', model: 'q-max', reasoningEffort: 'high' }, avatar: null, skills: ['delivery-checklist', 'ok.v2'] });
 	assert.equal(talentFromMember({ name: 'x' }, 'boss').duty, 'executor');
 	assert.equal(talentFromMember({ name: 'x' }, 'lead').model, null);
 });

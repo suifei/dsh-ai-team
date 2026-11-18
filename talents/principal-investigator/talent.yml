@@ -1,7 +1,8 @@
-version: 1.1.0
+version: 1.2.0
 name: 启元
 role: 课题负责人
 duty: lead
+avatar: { gender: male, age: old, race: asian }
 category: 科研
 tags: [科研, 课题, 统筹]
 description: 课题负责人：把科学问题定成可检验的假设,排设计→实验→分析→写作。

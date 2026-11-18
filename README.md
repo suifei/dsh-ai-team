@@ -12,7 +12,7 @@
   <a href="https://www.npmjs.com/package/@suifei/dsh-ai-team"><img alt="npm" src="https://img.shields.io/npm/v/@suifei/dsh-ai-team?color=2f6feb&label=npm"></a>
   <a href="https://github.com/suifei/dsh-ai-team/releases"><img alt="release" src="https://img.shields.io/github/v/release/suifei/dsh-ai-team?color=2f6feb"></a>
   <a href="./LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-2f6feb"></a>
-  <img alt="tests" src="https://img.shields.io/badge/tests-428%20passing-2ea043">
+  <img alt="tests" src="https://img.shields.io/badge/tests-433%20passing-2ea043">
   <img alt="dsh" src="https://img.shields.io/badge/DeepSeek%20Harness-plugin-6f42c1">
 </p>
 
@@ -30,6 +30,7 @@
 - **人才市场**（0.4.124–0.4.129）：9 个内置团队、44 位内置人才，各自带看家技能。可以招聘、复制为可编辑、自建人才并装技能，也能把项目成员「存为人才」；新建项目时选团队，或从人才里挑人组新团队。
 - **主理人只调度交付**（0.4.128）：主理人不看产出，只问负责人做全没有；内容由验收人把关。
 - **在线人才库**（0.4.130–0.4.131）：「同步在线库」从 [`@suifei/dsh-ai-team-catalog`](https://www.npmjs.com/package/@suifei/dsh-ai-team-catalog) 拉取最新的人才与团队。国内走 npmmirror 整包下载，约 1 秒同步完；逐个文件核对 sha256，失败不影响旧版本，可一键退回内置。
+- **头像**（0.4.135）：人才市场、团队、成员卡片都有头像，由 [avatar.onrpc.com](https://avatar.onrpc.com/) 按名字生成；内置人才预置了参数（默认亚洲人），自定义成员和人才可以选性别、年龄、人种。
 - **弹窗与人员池**（0.4.132–0.4.133）：
   - 弹窗占主页面的 90%，功能按钮固定在右上角。
   - 成员资料按「资料 / 模型 / 技能 / 协作」分页签。
@@ -50,7 +51,7 @@
 
 **人才市场**：成员来自可复用的「人才」，团队从人才里挑人组队。
 
-- 人才 `talents/<人才>/talent.yml`：名字、岗位、`duty`（职责：`lead` 主理人 / `qa` 验收 / `executor` 执行，决定拿哪份岗位规程）、性格、分类与标签、推荐模型，以及自带技能（`talents/<人才>/skills/<技能>/SKILL.md`）。内置 10 位：默认团队的 6 位，外加架构、评审、技术文档、安全审计。
+- 人才 `talents/<人才>/talent.yml`：名字、岗位、`duty`（职责：`lead` 主理人 / `qa` 验收 / `executor` 执行，决定拿哪份岗位规程）、头像参数 `avatar: { gender, age, race }`、性格、分类与标签、推荐模型，以及自带技能（`talents/<人才>/skills/<技能>/SKILL.md`）。内置 10 位：默认团队的 6 位，外加架构、评审、技术文档、安全审计。
 - 团队 `teams/<团队>/team.yml`：只引用人才（可覆盖名字、岗位、性格，追加技能），`skills/` 放这个团队的三份岗位规程（`ai-team-core` / `ai-team-qa` / `ai-team-executor`），`procedures` 可换成自己的规程。内置默认团队见 [`teams/default/`](teams/default/)。还预置了**逆向工程队** [`teams/reverse/`](teams/reverse/)：静态分析、动态调试、OLLVM 去混淆、移动端逆向、算法复刻与行为对账（`teamPreset: reverse` 启用）。此外预置了文档（`docs`）、视频（`video`）、游戏（`game`）、自媒体写作（`content`）、深度研究（`research`）、科学研究（`science`）、中小学教育软件（`education`）等团队,共 44 位人才可在人才市场挑选、组合或自建。
 - 「人员 → 添加成员」先打开人才市场：按分类、关键词挑一位，点「招聘」预填表单，改名、换模型后创建；也可以切到「自定义」从零填写。
 - 自建：人才放 `~/.dsh/ai-team/catalog/user/talents/<人才>/`，团队放 `~/.dsh/ai-team/catalog/user/teams/<团队>/`，同名覆盖内置；插件设置 `teamPreset` 选新项目用哪个团队。
