@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.131 - 2026-11-18
+
+**在线人才库走 npmmirror 整包；内容型弹窗放大到 90%，补单色图标**
+
+- 实机发现：npmmirror 的按文件接口只对白名单包开放（`cnpm/unpkg-white-list`），`@suifei/dsh-ai-team-catalog` 的 `/files/index.json` 返回 403，
+  0.4.130 的「同步在线库」实际每次都退到 jsDelivr（本机 `current.json` 记的是 `mirror: jsdelivr`，单次约 20 秒）。
+- **registry 型镜像改为下整包**：npmmirror、npmjs 与私有源（`DSH_AI_TEAM_CATALOG_MIRROR`）按 `<源>/<包>/<版本>` 取 `dist.tarball` 与 `dist.integrity`，
+  下载 tgz 后先核对 sha512 integrity，再在内存里解 tar（ustar + pax 长路径），之后照旧逐文件核对 `index.json` 的大小与 sha256。不需要白名单。
+  jsDelivr 仍按文件取，作为第二个镜像；npmjs 官方源作为第三个。镜像顺序：npmmirror → jsDelivr → npmjs。
+  真实镜像实测（`r51`）：npmmirror 0.6 秒、jsDelivr 21 秒、npmjs 1.7 秒，均同步 91 个文件。
+- **弹窗**：添加成员 / 人才市场、成员资料、新建项目、组队四个内容型弹窗改为插件页面的 90% 宽高（底部按钮贴底）；确认框、工作区路径、快捷键等小弹窗保持紧凑。
+- **图标**：沿用插件现有的单色线性图标（随文字颜色），补同步、退回、复制、招聘、在线、已改、自建、进化、人才市场、组队、新建项目等图标，用在弹窗标题、页签、按钮与标签上。
+- 测试：`test/catalog-sync.test.js` 的假镜像改为 registry（latest / manifest / tgz）+ CDN 两种形态；新增整包 integrity 不符换 CDN、pax 长路径解包。
+
 ## 0.4.130 - 2026-11-18
 
 **人才市场（第 3 步）：官方在线人才库同步**

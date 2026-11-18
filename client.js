@@ -1268,7 +1268,7 @@ window.__ModuleLoader__.load({
 			.at-msgimg { display: block; line-height: 0; }
 			.at-msgimg img { max-width: min(320px, 100%); max-height: 240px; width: auto; height: auto; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); object-fit: contain; background: var(--dsw-alias-bg-base); }
 			.at-mode { display: inline-flex; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); }
-			.at-mode button { min-height: 24px; padding: 0 8px; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; }
+			.at-mode button { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 0 8px; border: 0; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 11px; line-height: 16px; cursor: pointer; }
 			.at-mode button[aria-pressed="true"] { background: var(--dsw-alias-button-ghost-active-fill); color: var(--dsw-alias-label-primary); }
 			.at-hint { min-width: 0; color: var(--dsw-alias-label-caption); font-size: 10px; line-height: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.at-send { margin-left: auto; min-height: 28px; padding: 0 12px; border: 1px solid transparent; border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-inverted); font: inherit; font-size: 12px; line-height: 18px; cursor: pointer; white-space: nowrap; }
@@ -1324,7 +1324,7 @@ window.__ModuleLoader__.load({
 			.at-emptybody { max-width: 46ch; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
 			.at-empty .at-btn { align-self: center; margin-top: 8px; }
 			.at-empty-compact .at-btn { align-self: flex-start; }
-			.at-btn { min-height: 32px; display: inline-flex; align-items: center; justify-content: center; padding: 0 14px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-button-elevated-fill); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 18px; cursor: pointer; white-space: nowrap; }
+			.at-btn { min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; padding: 0 14px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-button-elevated-fill); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; line-height: 18px; cursor: pointer; white-space: nowrap; }
 			.at-btn:hover { background: var(--dsw-alias-interactive-bg-hover); }
 			.at-btn-primary { border-color: transparent; background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-inverted); }
 			.at-btn-primary:hover { background: var(--dsw-alias-button-primary-hover); }
@@ -1393,8 +1393,12 @@ window.__ModuleLoader__.load({
 			.at-fieldrow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 			.at-modalback { position: fixed; inset: 0; z-index: 80; display: flex; align-items: center; justify-content: center; padding: 20px; background: color-mix(in srgb, var(--dsw-alias-bg-base) 72%, transparent); }
 			.at-modal { width: min(420px, 100%); max-height: 86vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 12px; background: var(--dsw-alias-bg-layer-2); }
-			.at-modaltitle { margin: 0 0 2px; font-size: 15px; font-weight: 600; color: var(--dsw-alias-label-primary); }
-			.at-modal.at-modal-wide { width: min(640px, 100%); }
+			.at-modaltitle { display: flex; align-items: center; gap: 6px; margin: 0 0 2px; font-size: 15px; font-weight: 600; color: var(--dsw-alias-label-primary); }
+			.at-modaltitle svg, .at-btn svg, .at-talentduty svg, .at-mode button svg, .at-catalogstate svg { flex: none; }
+			/* 内容型弹窗（添加成员 / 人才市场、成员资料、新建项目、组队）：插件页面的 90% 宽高；确认框等小弹窗保持紧凑。 */
+			.at-modalback:has(> .at-modal-wide) { padding: 0; }
+			.at-modal.at-modal-wide { width: 90%; height: 90%; max-height: 90%; }
+			.at-modal-wide > .at-modalactions:last-child { margin-top: auto; }
 			.at-addtabs { align-self: flex-start; }
 			.at-tcskills { display: flex; flex-wrap: wrap; gap: 6px; }
 			.at-tcskill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: rgba(127,127,127,0.15); font-size: 12px; }
@@ -1408,6 +1412,7 @@ window.__ModuleLoader__.load({
 			.at-teampickrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
 			.at-teampickrow > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.at-market { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+			.at-catalogstate { display: inline-flex; align-items: center; gap: 5px; }
 			.at-catalogbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
 			.at-marketsearch { width: 100%; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; }
 			.at-marketcats { display: flex; flex-wrap: wrap; gap: 4px; }
@@ -1418,7 +1423,7 @@ window.__ModuleLoader__.load({
 			.at-talenthead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
 			.at-talentname { color: var(--dsw-alias-label-primary); font-size: 13px; font-weight: 600; }
 			.at-talentrole { color: var(--dsw-alias-label-secondary); font-size: 12px; }
-			.at-talentduty { padding: 0 6px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; color: var(--dsw-alias-label-tertiary); font-size: 10.5px; line-height: 16px; }
+			.at-talentduty { display: inline-flex; align-items: center; gap: 3px; padding: 0 6px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; color: var(--dsw-alias-label-tertiary); font-size: 10.5px; line-height: 16px; }
 			.at-talentdesc { color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
 			.at-talentfoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; }
 			.at-modalmeta { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
@@ -1548,8 +1553,24 @@ window.__ModuleLoader__.load({
 			if (name === 'layers') return h('svg', common, h('path', { d: 'M8 2.5 14 6 8 9.5 2 6Z' }), h('path', { d: 'M2 9.5 8 13l6-3.5' }));
 			if (name === 'chevron') return h('svg', common, h('path', { d: 'M6 3.5 10.5 8 6 12.5' }));
 			if (name === 'down') return h('svg', common, h('path', { d: 'M8 3v10M3.5 8.5 8 13l4.5-4.5' }));
+			if (name === 'sync') return h('svg', common, h('path', { d: 'M13 6.5A5 5 0 0 0 3.6 5' }), h('path', { d: 'M3.5 2.5V5H6' }), h('path', { d: 'M3 9.5A5 5 0 0 0 12.4 11' }), h('path', { d: 'M12.5 13.5V11H10' }));
+			if (name === 'undo') return h('svg', common, h('path', { d: 'M5.5 3.5 2.5 6.5l3 3' }), h('path', { d: 'M2.5 6.5H10a3.5 3.5 0 0 1 0 7H7' }));
+			if (name === 'copy') return h('svg', common, h('rect', { x: 5.5, y: 5.5, width: 8, height: 8, rx: 1.5 }), h('path', { d: 'M10.5 5.5V3.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2' }));
+			if (name === 'user') return h('svg', common, h('circle', { cx: 8, cy: 5.5, r: 2.8 }), h('path', { d: 'M2.5 13.5a5.5 5.5 0 0 1 11 0' }));
+			if (name === 'userPlus') return h('svg', common, h('circle', { cx: 6.5, cy: 5.5, r: 2.6 }), h('path', { d: 'M1.5 13.5a5 5 0 0 1 10 0' }), h('path', { d: 'M12.5 4v4M10.5 6h4' }));
+			if (name === 'users') return h('svg', common, h('circle', { cx: 6, cy: 5.5, r: 2.4 }), h('path', { d: 'M1.5 13.5a4.5 4.5 0 0 1 9 0' }), h('path', { d: 'M10 3.3a2.4 2.4 0 0 1 0 4.4M12 9.5a4.5 4.5 0 0 1 2.5 4' }));
+			if (name === 'cloud') return h('svg', common, h('path', { d: 'M4.5 12.5h7a3 3 0 0 0 .4-6 4 4 0 0 0-7.7.9 2.6 2.6 0 0 0 .3 5.1Z' }));
+			if (name === 'pen') return h('svg', common, h('path', { d: 'M10.5 3 13 5.5 6 12.5H3.5V10Z' }), h('path', { d: 'M9 4.5 11.5 7' }));
+			if (name === 'spark') return h('svg', common, h('path', { d: 'M8 2v3M8 11v3M2 8h3M11 8h3' }), h('path', { d: 'M8 5.5 9 7l1.5 1L9 9l-1 1.5L7 9 5.5 8 7 7Z' }));
+			if (name === 'store') return h('svg', common, h('path', { d: 'M2.5 6 3.5 3h9l1 3' }), h('path', { d: 'M2.5 6a1.8 1.8 0 0 0 3.7 0 1.8 1.8 0 0 0 3.6 0 1.8 1.8 0 0 0 3.7 0' }), h('path', { d: 'M3.5 8v5.5h9V8' }));
+			if (name === 'folderPlus') return h('svg', common, h('path', { d: 'M2.5 4.5a1 1 0 0 1 1-1h3l1.5 1.5h4.5a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1Z' }), h('path', { d: 'M8 7.5v3M6.5 9h3' }));
 			if (name === 'loop') return h('svg', { width: 18, height: 18, viewBox: '0 0 32 32', fill: 'none', 'aria-hidden': 'true', focusable: 'false' }, h('rect', { x: 2.5, y: 5.5, width: 21, height: 21, rx: 6.5, stroke: 'currentColor', strokeWidth: 2.6 }), h('circle', { cx: 23.5, cy: 16, r: 4.8, fill: 'var(--dsw-alias-state-business-primary)' }));
 			return null;
+		}
+
+		/** 图标 + 文字（按钮、标题、标签共用；图标单色随文字色）。 */
+		function withIco(name, label, size = 13) {
+			return [h(Ico, { key: 'i', name, size }), h('span', { key: 't' }, label)];
 		}
 
 		function StatusGlyph({ status }) {
@@ -2728,10 +2749,10 @@ window.__ModuleLoader__.load({
 			return h('div', { className: 'at-market' },
 				h('div', { className: 'at-modalmeta' }, t('talentHint')),
 				onSync ? h('div', { className: 'at-catalogbar' },
-					h('span', { className: 'at-modalmeta' }, catalog ? tf(t, 'catalogAt', { version: catalog.version, time: catalog.syncedAt ? new Date(catalog.syncedAt).toLocaleString() : '' }) : t('catalogNone')),
+					h('span', { className: 'at-modalmeta at-catalogstate' }, h(Ico, { name: 'cloud', size: 13 }), catalog ? tf(t, 'catalogAt', { version: catalog.version, time: catalog.syncedAt ? new Date(catalog.syncedAt).toLocaleString() : '' }) : t('catalogNone')),
 					h('span', { className: 'at-tcpick' },
-						catalog && onClear ? h('button', { type: 'button', className: 'at-btn at-btn-small', disabled: catalogBusy, onClick: onClear }, t('catalogClear')) : null,
-						h('button', { type: 'button', className: 'at-btn at-btn-small', title: t('catalogSyncHint'), disabled: catalogBusy, onClick: onSync }, catalogBusy ? t('catalogSyncing') : t('catalogSync')))) : null,
+						catalog && onClear ? h('button', { type: 'button', className: 'at-btn at-btn-small', disabled: catalogBusy, onClick: onClear }, withIco('undo', t('catalogClear'))) : null,
+						h('button', { type: 'button', className: 'at-btn at-btn-small', title: t('catalogSyncHint'), disabled: catalogBusy, onClick: onSync }, withIco('sync', catalogBusy ? t('catalogSyncing') : t('catalogSync'))))) : null,
 				catalogNote ? h('div', { className: 'at-modalmeta', role: 'status' }, catalogNote) : null,
 				h('input', { className: 'at-marketsearch', type: 'search', value: query, placeholder: t('talentSearch'), 'aria-label': t('talentSearch'), onChange: (event) => onQuery(event.target.value), autoFocus: true }),
 				categories.length > 1 ? h('div', { className: 'at-marketcats', role: 'group', 'aria-label': t('talentMarket') },
@@ -2750,15 +2771,15 @@ window.__ModuleLoader__.load({
 								h('span', { className: 'at-talentname' }, talent.name),
 								h('span', { className: 'at-talentrole' }, talent.role),
 								talent.duty ? h('span', { className: 'at-talentduty' }, t(DUTY_LABEL[talent.duty])) : null,
-								talent.forked ? h('span', { className: 'at-talentduty' }, t('talentForked')) : talent.source === 'user' ? h('span', { className: 'at-talentduty' }, t('talentUser')) : talent.source === 'official' ? h('span', { className: 'at-talentduty' }, t('talentOfficial')) : null),
+								talent.forked ? h('span', { className: 'at-talentduty' }, withIco('pen', t('talentForked'), 10)) : talent.source === 'user' ? h('span', { className: 'at-talentduty' }, withIco('user', t('talentUser'), 10)) : talent.source === 'official' ? h('span', { className: 'at-talentduty' }, withIco('cloud', t('talentOfficial'), 10)) : null),
 							talent.description ? h('div', { className: 'at-talentdesc' }, talent.description) : null,
 							talent.skills?.length ? h('div', { className: 'at-modalmeta' }, tf(t, 'talentSkills', { skills: talent.skills.join('、') })) : null,
 							h('div', { className: 'at-talentfoot' },
 								h('span', { className: 'at-modalmeta' }, [talent.category, ...(talent.tags ?? [])].filter(Boolean).join(' · ')),
 								h('span', { className: 'at-tcpick' },
-									talent.source !== 'user' && onFork ? h('button', { type: 'button', className: 'at-btn at-btn-small', title: t('talentForkHint'), onClick: () => onFork(talent) }, t('talentFork')) : null,
-									talent.forked && onRestore ? h('button', { type: 'button', className: 'at-btn at-btn-small', onClick: () => onRestore(talent) }, t('talentRestore')) : null,
-									h('button', { type: 'button', className: 'at-btn at-btn-primary', onClick: () => onHire(talent) }, t('talentHire'))))))),
+									talent.source !== 'user' && onFork ? h('button', { type: 'button', className: 'at-btn at-btn-small', title: t('talentForkHint'), onClick: () => onFork(talent) }, withIco('copy', t('talentFork'))) : null,
+									talent.forked && onRestore ? h('button', { type: 'button', className: 'at-btn at-btn-small', onClick: () => onRestore(talent) }, withIco('undo', t('talentRestore'))) : null,
+									h('button', { type: 'button', className: 'at-btn at-btn-primary', onClick: () => onHire(talent) }, withIco('userPlus', t('talentHire')))))))),
 				h('div', { className: 'at-modalactions' },
 					h('button', { className: 'at-btn', type: 'button', onClick: onCancel }, t('cancel'))));
 		}
@@ -5288,17 +5309,17 @@ window.__ModuleLoader__.load({
 					}) : null,
 					addOpen ? h(ModalBack, { onClose: () => setAddOpen(false) },
 						h('form', {
-							className: mTab === 'market' && !(mCopy && !mCopy.talent) ? 'at-modal at-modal-wide' : 'at-modal',
+							className: 'at-modal at-modal-wide',
 							role: 'dialog',
 							'aria-modal': 'true',
 							'aria-label': t('addAgentTitle'),
 							onSubmit: (event) => { event.preventDefault(); createAgent(); },
 						},
-							h('h2', { className: 'at-modaltitle' }, mCopy && !mCopy.talent ? t('memberCopy') : t('addAgentTitle')),
+							h('h2', { className: 'at-modaltitle' }, withIco(mCopy && !mCopy.talent ? 'copy' : 'userPlus', mCopy && !mCopy.talent ? t('memberCopy') : t('addAgentTitle'), 16)),
 							mCopy && !mCopy.talent ? null : h('div', { className: 'at-mode at-addtabs', role: 'group', 'aria-label': t('addAgentTitle') },
-								h('button', { type: 'button', 'aria-pressed': mTab === 'market' ? 'true' : 'false', onClick: () => setMTab('market') }, t('talentMarket')),
-								h('button', { type: 'button', 'aria-pressed': mTab === 'custom' ? 'true' : 'false', onClick: () => setMTab('custom') }, t('talentCustom')),
-								h('button', { type: 'button', 'aria-pressed': mTab === 'create' ? 'true' : 'false', onClick: () => setMTab('create') }, t('talentCreate'))),
+								h('button', { type: 'button', 'aria-pressed': mTab === 'market' ? 'true' : 'false', onClick: () => setMTab('market') }, withIco('store', t('talentMarket'), 12)),
+								h('button', { type: 'button', 'aria-pressed': mTab === 'custom' ? 'true' : 'false', onClick: () => setMTab('custom') }, withIco('pen', t('talentCustom'), 12)),
+								h('button', { type: 'button', 'aria-pressed': mTab === 'create' ? 'true' : 'false', onClick: () => setMTab('create') }, withIco('plus', t('talentCreate'), 12))),
 							mTab === 'market' && !(mCopy && !mCopy.talent) ? h(TalentMarket, {
 								t,
 								talents,
@@ -5351,13 +5372,13 @@ window.__ModuleLoader__.load({
 								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: mBusy || !mName.trim() }, mBusy ? t('memberAdding') : t('memberCreate')))])) : null,
 					profileAgent ? h(ModalBack, { onClose: () => setProfileAgent(null) },
 						h('form', {
-							className: 'at-modal',
+							className: 'at-modal at-modal-wide',
 							role: 'dialog',
 							'aria-modal': 'true',
 							'aria-label': t('memberProfileTitle'),
 							onSubmit: (event) => { event.preventDefault(); saveProfile(); },
 						},
-							h('h2', { className: 'at-modaltitle' }, tf(t, 'memberProfileTitleName', { name: profileAgent.name })),
+							h('h2', { className: 'at-modaltitle' }, withIco('user', tf(t, 'memberProfileTitleName', { name: profileAgent.name }), 16)),
 							h('div', { className: 'at-modalmeta' },
 							tf(t, 'memberProfileMeta', {
 								status: t(AGENT_STATUS[profileAgent.status] ?? 'agentIdle'),
@@ -5372,7 +5393,7 @@ window.__ModuleLoader__.load({
 								? h('div', { className: 'at-tcskills', 'aria-label': t('memberSkills') },
 									h('span', { className: 'at-modalmeta' }, t('memberSkills') + '：'),
 									profileAgent.skills.map((name) => h('span', { key: name, className: 'at-tcskill' }, name,
-										h('button', { type: 'button', className: 'at-btn at-btn-small', title: t('skillEvolveHint'), onClick: () => void evolveSkill(profileAgent, name) }, t('skillEvolve')))))
+										h('button', { type: 'button', className: 'at-btn at-btn-small', title: t('skillEvolveHint'), onClick: () => void evolveSkill(profileAgent, name) }, withIco('spark', t('skillEvolve'), 12)))))
 								: null,
 							pEvolve ? h('div', { className: 'at-modalmeta', role: 'status' }, pEvolve) : null,
 							profileAgent.notes?.length ? h('div', { className: 'at-modalmeta' }, t('memberNotes') + '：' + profileAgent.notes.slice(-3).join('；')) : null,
@@ -5458,13 +5479,13 @@ window.__ModuleLoader__.load({
 								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: workspaceBusy || !workspaceDraft.trim() }, workspaceBusy ? t('saving') : t('workspaceSave'))))) : null,
 					newOpen ? h(ModalBack, { onClose: () => setNewOpen(false) },
 						h('form', {
-							className: 'at-modal',
+							className: 'at-modal at-modal-wide',
 							role: 'dialog',
 							'aria-modal': 'true',
 							'aria-label': t('newProjectTitle'),
 							onSubmit: (event) => { event.preventDefault(); createProject(); },
 						},
-							h('h2', { className: 'at-modaltitle' }, t('newProjectTitle')),
+							h('h2', { className: 'at-modaltitle' }, withIco('folderPlus', t('newProjectTitle'), 16)),
 							h('label', { className: 'at-field' }, h('span', null, t('projectName')),
 								h('input', { value: nName, onChange: (event) => setNName(event.target.value), autoFocus: true })),
 							h('label', { className: 'at-field' }, h('span', null, t('projectGoal')),
@@ -5487,7 +5508,7 @@ window.__ModuleLoader__.load({
 								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: nBusy || !nName.trim() || !nWorkspace.trim() }, nBusy ? t('saving') : t('projectCreate'))))) : null,
 					teamComposeOpen ? h(ModalBack, { onClose: () => setTeamComposeOpen(false) },
 						h('div', { className: 'at-modal at-modal-wide', role: 'dialog', 'aria-modal': 'true', 'aria-label': t('teamComposeTitle') },
-							h('h2', { className: 'at-modaltitle' }, t('teamComposeTitle')),
+							h('h2', { className: 'at-modaltitle' }, withIco('users', t('teamComposeTitle'), 16)),
 							h(TeamComposer, { t, talents, onSaved: (team) => { setTeamComposeOpen(false); void loadTeams(team && team.id); }, onCancel: () => setTeamComposeOpen(false) }))) : null,
 					dialog ? h(WorkbenchDialog, { key: dialogSeqRef.current, t, dialog, onDismiss: () => setDialog(null) }) : null,
 					shortcutsOpen ? h(ModalBack, { onClose: () => setShortcutsOpen(false) },
