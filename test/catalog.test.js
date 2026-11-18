@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { openLedger } from '../lib/ledger/writer.js';
 import { TeamService } from '../lib/host/service.js';
 import { seedDefaultRoster } from '../lib/host/default-roster.js';
-import { catalogRoots, forkTalent, listTalents, loadCatalog, parseTalent, parseTeam, procedureText, resolveTeam } from '../lib/domain/catalog.js';
+import { catalogRoots, forkTalent, listTalents, listTeams, loadCatalog, parseTalent, parseTeam, procedureText, resolveTeam } from '../lib/domain/catalog.js';
 import { findSkill, findSkillText, loadSkillContext } from '../lib/runtime/skill-loader.js';
 
 // 人才市场（2026-11-18）：人才 talents/<人才>/ → 团队 teams/<团队>/（只引用人才）→ 项目成员（账本实例）。
@@ -231,4 +231,13 @@ test('2c: forkTalent copies a bundled talent with its skills into the user root 
 		assert.deepEqual([hit.root, hit.path, hit.name], [copy.dir, join(copy.dir, 'skills', 'delivery-checklist', 'SKILL.md'), 'delivery-checklist']);
 		assert.equal(await findSkill([copy.dir], '../etc'), null);
 	});
+});
+
+test('listTeams gives each member the talent description, category and skills for the new-project member cards', () => {
+	const team = listTeams(loadCatalog()).find((x) => x.id === 'default');
+	const maker = team.members.find((m) => m.id === 'mem_maker');
+	assert.equal(maker.talent, 'executor');
+	assert.ok(maker.description.length > 0);
+	assert.ok(maker.skills.includes('delivery-checklist'));
+	assert.equal(typeof maker.category, 'string');
 });
