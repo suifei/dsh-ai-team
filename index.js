@@ -73,7 +73,7 @@ import { messageContent, normalizeAttachments } from './lib/domain/rich-message.
 import { readAttachment, uploadAttachment } from './lib/host/attachment-routes.js';
 import { createDiagLogger, defaultDiagDir, installDiagSink } from './lib/diaglog.js';
 import { CATALOG_PACKAGE, clearOfficialCatalog, officialStatus, syncOfficialCatalog } from './lib/domain/catalog-sync.js';
-import { renderAvatarSvg } from './lib/domain/avatar.js';
+import { AVATAR_PACKAGE, avatarOptions, renderAvatarSvg, startAvatarLib } from './lib/domain/avatar.js';
 import { DEFAULT_TEAM, catalogRoots, deleteTalent, deleteTeam, forkTalent, installSkill, listInstallableSkills, listTalents, listTeams, loadCatalog, readSkillText, resolveTeam, talentFromMember, talentIdFrom, uniqueTalentId, uniqueTeamId, userCatalogDir, writeTalent, writeTeam } from './lib/domain/catalog.js';
 
 export const name = 'ai-team';
@@ -389,6 +389,8 @@ export function apply(ctx, config = {}) {
 	ctx.effect(() => {
 		const webServer = serviceOf(ctx, 'webServer');
 		if (webServer === undefined) return () => {};
+		// 头像库不随插件打包：先用本机缓存，后台从 npm 取 latest（lib/domain/avatar.js）。
+		const avatarLib = startAvatarLib({ dshHome: dshHome(), diag });
 
 		let booted = null;
 		let bootError = null;
@@ -2385,13 +2387,20 @@ export function apply(ctx, config = {}) {
 						return send(res, { talents: listTalents(talentCatalog(diag)) });
 					}
 					// 第 3 步：官方在线人才库。状态 / 同步（npmmirror → jsDelivr，逐文件 sha256 校验后整体替换）/ 清除（退回内置）。
-					// 头像：@suifei/hash-avatar 本机出 SVG（与 avatar.onrpc.com 契约 v1 同图）；同参同图，可长缓存。
+					// 头像：运行时从 npm 取来的 @suifei/hash-avatar 在本机出 SVG。界面地址带库版本（v=），
+					// 同版本同参同图，可长缓存；库换版本地址就变。库还没就绪回 503，界面退回首字母。
+					if (req.method === 'GET' && url.pathname === '/ai-team/api/avatar/meta') {
+						const lib = await avatarLib.ready(Number(url.searchParams.get('wait') ?? 0) || 0);
+						return send(res, { package: AVATAR_PACKAGE, version: lib?.version ?? null, contract: lib?.contract ?? null, syncedAt: lib?.syncedAt ?? null, ready: lib !== null, options: avatarOptions(lib) });
+					}
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/avatar.svg') {
+						await avatarLib.ready();
 						const q = url.searchParams;
-						const svg = renderAvatarSvg(q.get('name') ?? '', { gender: q.get('gender'), age: q.get('age'), race: q.get('race'), size: q.get('size') });
+						const svg = renderAvatarSvg(q.get('name') ?? '', { gender: q.get('gender'), age: q.get('age'), race: q.get('race'), art: q.get('art'), size: q.get('size') });
+						if (svg === null) return send(res, { error: { code: 'E_UNAVAILABLE', message: `${AVATAR_PACKAGE} 还没取到（离线或镜像不可达）` } }, 503);
 						res.statusCode = 200;
 						res.setHeader('content-type', 'image/svg+xml; charset=utf-8');
-						res.setHeader('cache-control', 'private, max-age=31536000, immutable');
+						res.setHeader('cache-control', q.get('v') ? 'private, max-age=31536000, immutable' : 'private, max-age=3600');
 						res.setHeader('x-content-type-options', 'nosniff');
 						return res.end(svg);
 					}
@@ -3269,6 +3278,7 @@ export function apply(ctx, config = {}) {
 			// composition: a racing parent-agent dispose left the previous
 			// session-controller graph half-disposed and broke plugin toggles.
 			disposed = true;
+			try { avatarLib.dispose(); } catch { /* already disposed */ }
 			try { removeDiagSink(); } catch { /* sink already replaced */ }
 			try { disposeShellGuard(); } catch { /* already disposed */ }
 			try { disposeStopGuard(); } catch { /* already disposed */ }
