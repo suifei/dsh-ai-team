@@ -6,31 +6,80 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer } from 'node:http';
+import { createHash } from 'node:crypto';
+import { gzipSync, gunzipSync } from 'node:zlib';
 import { BUNDLED_CATALOG_DIR, catalogRoots, listTalents, loadCatalog, resolveTeam } from '../lib/domain/catalog.js';
-import { buildIndex, catalogMirrors, compareVersions, CATALOG_PACKAGE, clearOfficialCatalog, isCatalogPath, MIRRORS, officialStatus, sha256, syncOfficialCatalog, validateIndex } from '../lib/domain/catalog-sync.js';
+import { buildIndex, catalogMirrors, compareVersions, CATALOG_PACKAGE, clearOfficialCatalog, isCatalogPath, MIRRORS, officialStatus, sha256, syncOfficialCatalog, untar, validateIndex } from '../lib/domain/catalog-sync.js';
 
 const PKG = CATALOG_PACKAGE;
 
-/** 假镜像：versions = { '1.0.0': { 'path': 'content' } }，按 npmmirror 路由回 latest 与 files/。 */
+/** 测试用 tar 打包（ustar；长路径走 pax 头），与 npm pack 同形：文件都在 package/ 下。 */
+function tarOf(files) {
+	const blocks = [];
+	const header = (name, size, type) => {
+		const block = Buffer.alloc(512);
+		block.write(name.slice(0, 100), 0, 'utf8');
+		block.write('0000644\0', 100); block.write('0000000\0', 108); block.write('0000000\0', 116);
+		block.write(size.toString(8).padStart(11, '0') + '\0', 124);
+		block.write('00000000000\0', 136);
+		block.write('        ', 148);
+		block.write(type, 156);
+		block.write('ustar\0', 257); block.write('00', 263);
+		let sum = 0; for (const byte of block) sum += byte;
+		block.write(sum.toString(8).padStart(6, '0') + '\0 ', 148);
+		return block;
+	};
+	const pad = (buf) => Buffer.concat([buf, Buffer.alloc((512 - (buf.length % 512)) % 512)]);
+	for (const [path, content] of Object.entries(files)) {
+		const name = `package/${path}`;
+		const body = Buffer.from(content);
+		if (Buffer.byteLength(name) > 100) {
+			const rec = ` path=${name}\n`;
+			let len = rec.length + 2; while (String(len).length + rec.length !== len) len = String(len).length + rec.length;
+			const pax = Buffer.from(`${len}${rec}`);
+			blocks.push(header('PaxHeader', pax.length, 'x'), pad(pax));
+		}
+		blocks.push(header(name, body.length, '0'), pad(body));
+	}
+	blocks.push(Buffer.alloc(1024));
+	return gzipSync(Buffer.concat(blocks));
+}
+
+/**
+ * 假镜像：versions = { '1.0.0': { 'path': 'content' } }。registry 路由（latest / 版本 manifest / tgz，与 npmmirror、npmjs 同形）
+ * 与 CDN 路由（/cdn/<pkg>@<v>/<path>，jsDelivr 同形）。state.index[v] 覆盖包里的 index.json；state.badIntegrity 让 registry 给错 integrity。
+ */
 async function mirrorServer(state) {
 	const hits = [];
+	const filesOf = (v) => {
+		const files = state.versions[v];
+		if (!files) return undefined;
+		return state.index?.[v] ? { ...files, 'index.json': JSON.stringify(state.index[v]) } : files;
+	};
+	let base = '';
 	const server = createServer((req, res) => {
 		const url = decodeURIComponent(req.url);
 		hits.push(url);
-		if (url === `/${PKG}/latest`) {
-			res.setHeader('content-type', 'application/json');
-			return res.end(JSON.stringify({ name: PKG, version: state.latest }));
+		const json = (body) => { res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(body)); };
+		if (url === `/${PKG}/latest`) return json({ name: PKG, version: state.latest });
+		const manifest = url.match(new RegExp(`^/${PKG.replace('/', '\\/')}/(\\d+\\.\\d+\\.\\d+)$`));
+		if (manifest && filesOf(manifest[1])) {
+			const tgz = tarOf(filesOf(manifest[1]));
+			return json({ name: PKG, version: manifest[1], dist: { tarball: `${base}/tgz/${manifest[1]}.tgz`, integrity: state.badIntegrity ? 'sha512-AAAA' : 'sha512-' + createHash('sha512').update(tgz).digest('base64') } });
 		}
-		const m = url.match(new RegExp(`^/${PKG.replace('/', '\\/')}/([^/]+)/files/(.+)$`));
-		const files = m ? state.versions[m[1]] : undefined;
-		if (files && m[2] === 'index.json' && state.index?.[m[1]]) return res.end(JSON.stringify(state.index[m[1]]));
-		if (files && m[2] in files) return res.end(files[m[2]]);
+		const tgz = url.match(/^\/tgz\/(.+)\.tgz$/);
+		if (tgz && filesOf(tgz[1])) return res.end(tarOf(filesOf(tgz[1])));
+		if (url === '/cdn-latest') return json({ version: state.latest });
+		const cdn = url.match(/^\/cdn\/@suifei\/dsh-ai-team-catalog@([^/]+)\/(.+)$/);
+		const files = cdn ? filesOf(cdn[1]) : undefined;
+		if (files && cdn[2] in files) return res.end(files[cdn[2]]);
 		res.statusCode = 404;
 		res.end('not found');
 	});
 	await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-	const base = `http://127.0.0.1:${server.address().port}`;
-	return { base, hits, mirrors: catalogMirrors({ DSH_AI_TEAM_CATALOG_MIRROR: base }), close: () => new Promise((r) => server.close(r)) };
+	base = `http://127.0.0.1:${server.address().port}`;
+	const cdn = { name: 'cdn', kind: 'cdn', latest: () => `${base}/cdn-latest`, file: (pkg, version, path) => `${base}/cdn/${pkg}@${version}/${path}` };
+	return { base, hits, cdn, mirrors: catalogMirrors({ DSH_AI_TEAM_CATALOG_MIRROR: base }), close: () => new Promise((r) => server.close(r)) };
 }
 
 const talentYml = (name, version = '1.0.0') => `version: ${version}\nname: ${name}\nrole: 执行\nduty: executor\ncategory: 测试\npersonality: 只做测试\nskills: [drill]\n`;
@@ -52,8 +101,8 @@ test('isCatalogPath only admits talent.yml / team.yml / skills markdown under ta
 	assert.equal(compareVersions('0.4.130', '0.4.129'), 1);
 	assert.equal(compareVersions('1.0.0', '1.0.0'), 0);
 	assert.ok(Number.isNaN(compareVersions('x', '1.0.0')));
-	assert.deepEqual(MIRRORS.map((m) => m.name), ['npmmirror', 'jsdelivr']);
-	assert.equal(MIRRORS[0].file(PKG, '1.0.0', 'index.json'), `https://registry.npmmirror.com/${PKG}/1.0.0/files/index.json`);
+	assert.deepEqual(MIRRORS.map((m) => `${m.name}:${m.kind}`), ['npmmirror:registry', 'jsdelivr:cdn', 'npmjs:registry']);
+	assert.equal(MIRRORS[0].manifest(PKG, '1.0.0'), `https://registry.npmmirror.com/${PKG}/1.0.0`, 'npmmirror 按文件接口只对白名单包开放（403），走整包');
 	assert.equal(MIRRORS[1].file(PKG, '1.0.0', 'teams/default/team.yml'), `https://cdn.jsdelivr.net/npm/${PKG}@1.0.0/teams/default/team.yml`);
 	assert.equal(catalogMirrors({}), MIRRORS);
 	assert.equal(catalogMirrors({ DSH_AI_TEAM_CATALOG_MIRROR: 'file:///etc' }), MIRRORS, '只认 http(s)');
@@ -166,6 +215,25 @@ test('a bundled talent newer than the stale online copy wins; user copies still 
 	writeFileSync(join(official, 'current.json'), '{bad');
 	assert.equal(officialStatus(home), null);
 	assert.ok(existsSync(join(official, '1.0.0')));
+});
+
+test('registry mirrors fetch the whole tgz and check its integrity; a bad registry falls back to the CDN mirror; untar reads pax long paths', async (t) => {
+	const long = `talents/${'a'.repeat(60)}/skills/${'b'.repeat(40)}/SKILL.md`;
+	const files = untar(gunzipSync(tarOf({ 'index.json': '{}', [long]: 'x' })));
+	assert.deepEqual([...files.keys()], ['index.json', long]);
+	const home = await mkdtemp(join(tmpdir(), 'ai-team-sync-tgz-'));
+	const src = await mkdtemp(join(tmpdir(), 'ai-team-sync-tgz-src-'));
+	const state = { latest: '1.0.0', versions: {}, index: {}, badIntegrity: true };
+	state.versions['1.0.0'] = withIndex(src, { 'talents/online-only/talent.yml': talentYml('只在线有') }, '1.0.0');
+	const mirror = await mirrorServer(state);
+	t.after(async () => { await mirror.close(); await rm(home, { recursive: true, force: true }); await rm(src, { recursive: true, force: true }); });
+	const result = await syncOfficialCatalog({ dshHome: home, pluginVersion: '0.4.130', mirrors: [...mirror.mirrors, mirror.cdn] });
+	assert.deepEqual([result.updated, result.mirror, result.files], [true, 'cdn', 1], 'registry integrity 不符就换 CDN');
+	assert.ok(mirror.hits.some((u) => u.startsWith('/tgz/')) && mirror.hits.some((u) => u.startsWith('/cdn/')));
+	state.badIntegrity = false;
+	await assert.rejects(syncOfficialCatalog({ dshHome: home, pluginVersion: '0.4.130', mirrors: [mirror.cdn], fetchImpl: async () => new Response('', { status: 503 }) }), /取不到在线人才库版本/);
+	const fresh = await syncOfficialCatalog({ dshHome: home, pluginVersion: '0.4.130', mirrors: mirror.mirrors, force: true });
+	assert.deepEqual([fresh.updated, fresh.mirror], [true, 'custom']);
 });
 
 test('routes: GET /api/catalog, POST /api/catalog/sync against a mirror, the market shows online talents, clear goes back to built-in', async (t) => {
