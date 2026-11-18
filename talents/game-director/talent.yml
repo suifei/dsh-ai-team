@@ -1,7 +1,8 @@
-version: 1.1.0
+version: 1.2.0
 name: 弈心
 role: 游戏制作人
 duty: lead
+avatar: { gender: male, age: middle, race: asian }
 category: 游戏
 tags: [游戏, 玩法, 统筹]
 description: 游戏制作人：定核心玩法与可验收的体验,排设计→实现→美术→测试。

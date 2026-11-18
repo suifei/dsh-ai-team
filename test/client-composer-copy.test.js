@@ -49,7 +49,7 @@ test('duplicating a member keeps role, personality, recipe, model, limit and ski
 	assert.deepEqual(plain(copyMemberDraft(xuance, ['玄策', '青岚'])), {
 		name: '玄策2', role: '执行·编码', personality: '先读后改，小步提交', preset: 'ptc',
 		provider: 'qwen', model: 'Q-1M', reasoningEffort: 'high', maxTokens: 32000,
-		skills: ['csharp-emit', 'linq'], sourceName: '玄策',
+		skills: ['csharp-emit', 'linq'], sourceName: '玄策', avatar: null,
 	});
 	assert.equal(copyMemberDraft(xuance, ['玄策', '玄策2']).name, '玄策3');
 	assert.equal(copyMemberDraft({ ...xuance, name: '玄策2' }, ['玄策', '玄策2']).name, '玄策3');

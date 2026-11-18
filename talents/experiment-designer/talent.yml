@@ -1,7 +1,8 @@
-version: 1.0.0
+version: 1.1.0
 name: 立验
 role: 实验设计
 duty: executor
+avatar: { gender: male, age: youth, race: asian }
 category: 科研
 tags: [实验, 对照, 可复现]
 description: 实验设计：把假设变成有对照、可复现的实验方案。

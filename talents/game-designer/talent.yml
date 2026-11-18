@@ -1,7 +1,8 @@
-version: 1.0.0
+version: 1.1.0
 name: 筑梦
 role: 玩法设计
 duty: executor
+avatar: { gender: male, age: youth, race: asian }
 category: 游戏
 tags: [玩法, 关卡, 数值]
 description: 玩法设计：设计核心循环、关卡与数值,让玩家有正反馈。

@@ -15,7 +15,7 @@ const talents = listTalents(loadCatalog());
 test('hiring a talent prefills the add-member draft with role, duty, personality, skills and the talent@version', () => {
 	const reviewer = talents.find((talent) => talent.id === 'code-reviewer');
 	const draft = plain(market.hireTalentDraft(reviewer, ['墨渊', '玄策']));
-	assert.deepEqual([draft.name, draft.role, draft.duty, draft.talent, draft.preset, draft.maxTokens], ['评审官', '评审', 'qa', { id: 'code-reviewer', version: '1.0.0' }, 'standard', null]);
+	assert.deepEqual([draft.name, draft.role, draft.duty, draft.talent, draft.preset, draft.maxTokens], ['评审官', '评审', 'qa', { id: 'code-reviewer', version: '1.1.0' }, 'standard', null]);
 	assert.equal(draft.personality, reviewer.personality);
 	// 名字已被占用时加序号；推荐模型随草稿带入。
 	const again = plain(market.hireTalentDraft({ ...reviewer, skills: ['diff-scan', ''], model: { provider: 'qwen', model: 'q-max', reasoningEffort: 'high' } }, ['评审官', '评审官2']));
@@ -35,7 +35,7 @@ test('the market filters by category and by a keyword over name, role, tags, des
 });
 
 test('新建人才表单 → POST 体：标签按逗号/顿号/空白拆开，职责只认三种，字段 trim', () => {
-	assert.deepEqual(plain(market.blankTalentForm()), { name: '', role: '', duty: 'executor', category: '', tags: '', personality: '' });
+	assert.deepEqual(plain(market.blankTalentForm()), { name: '', role: '', duty: 'executor', category: '', tags: '', personality: '', avatar: { gender: 'male', age: 'youth', race: 'asian' } });
 	const body = plain(market.talentFormToBody({ name: '  小教练 ', role: ' 口语陪练 ', duty: 'qa', category: '教育', tags: '英语, 口语、听力  写作', personality: ' 多鼓励 ' }));
 	assert.deepEqual(body, { name: '小教练', role: '口语陪练', duty: 'qa', category: '教育', tags: ['英语', '口语', '听力', '写作'], personality: '多鼓励' });
 	// 非法职责兜底 executor；空表单安全。
@@ -45,7 +45,7 @@ test('新建人才表单 → POST 体：标签按逗号/顿号/空白拆开，�
 
 test('存为人才：服务端草稿 → 新建人才页初值；找得到的技能按「从成员拷」暂存，找不到的单列', () => {
 	const init = plain(market.talentCreatorInit({ projectId: 'prj_a', memberId: 'mem_x', draft: { name: '青岚', role: '执行', duty: 'executor', tags: ['a', 'b'], personality: 'p', model: { provider: 'qwen', model: 'q', reasoningEffort: '' }, skills: [{ name: 'delivery-checklist', found: true }, { name: 'ghost', found: false }] } }));
-	assert.deepEqual(init.form, { name: '青岚', role: '执行', duty: 'executor', category: '', tags: 'a, b', personality: 'p' });
+	assert.deepEqual(init.form, { name: '青岚', role: '执行', duty: 'executor', category: '', tags: 'a, b', personality: 'p', avatar: { gender: 'male', age: 'youth', race: 'asian' } });
 	assert.deepEqual(init.pending, [{ name: 'delivery-checklist', kind: 'member', fromProject: 'prj_a', fromMember: 'mem_x' }]);
 	assert.deepEqual(init.missing, ['ghost']);
 	assert.equal(init.model.provider, 'qwen');

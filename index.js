@@ -73,6 +73,7 @@ import { messageContent, normalizeAttachments } from './lib/domain/rich-message.
 import { readAttachment, uploadAttachment } from './lib/host/attachment-routes.js';
 import { createDiagLogger, defaultDiagDir, installDiagSink } from './lib/diaglog.js';
 import { CATALOG_PACKAGE, clearOfficialCatalog, officialStatus, syncOfficialCatalog } from './lib/domain/catalog-sync.js';
+import { renderAvatarSvg } from './lib/domain/avatar.js';
 import { DEFAULT_TEAM, catalogRoots, deleteTalent, deleteTeam, forkTalent, installSkill, listInstallableSkills, listTalents, listTeams, loadCatalog, readSkillText, resolveTeam, talentFromMember, talentIdFrom, uniqueTalentId, uniqueTeamId, userCatalogDir, writeTalent, writeTeam } from './lib/domain/catalog.js';
 
 export const name = 'ai-team';
@@ -2384,6 +2385,16 @@ export function apply(ctx, config = {}) {
 						return send(res, { talents: listTalents(talentCatalog(diag)) });
 					}
 					// 第 3 步：官方在线人才库。状态 / 同步（npmmirror → jsDelivr，逐文件 sha256 校验后整体替换）/ 清除（退回内置）。
+					// 头像：@suifei/hash-avatar 本机出 SVG（与 avatar.onrpc.com 契约 v1 同图）；同参同图，可长缓存。
+					if (req.method === 'GET' && url.pathname === '/ai-team/api/avatar.svg') {
+						const q = url.searchParams;
+						const svg = renderAvatarSvg(q.get('name') ?? '', { gender: q.get('gender'), age: q.get('age'), race: q.get('race'), size: q.get('size') });
+						res.statusCode = 200;
+						res.setHeader('content-type', 'image/svg+xml; charset=utf-8');
+						res.setHeader('cache-control', 'private, max-age=31536000, immutable');
+						res.setHeader('x-content-type-options', 'nosniff');
+						return res.end(svg);
+					}
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/catalog') {
 						return send(res, { package: CATALOG_PACKAGE, official: publicOfficial(officialStatus(dshHome())) });
 					}

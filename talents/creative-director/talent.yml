@@ -1,7 +1,8 @@
-version: 1.1.0
+version: 1.2.0
 name: 镜心
 role: 创意总监
 duty: lead
+avatar: { gender: female, age: middle, race: asian }
 category: 视频
 tags: [视频, 创意, 统筹]
 description: 创意总监：定片子给谁看、要达到什么效果，排脚本→分镜→剪辑并把关调性。

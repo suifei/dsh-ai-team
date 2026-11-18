@@ -1,7 +1,8 @@
-version: 1.0.0
+version: 1.1.0
 name: 课纲
 role: 课程设计
 duty: executor
+avatar: { gender: female, age: middle, race: asian }
 category: 教育
 tags: [课纲, 知识点, 梯度]
 description: 课程设计：按课标拆知识点,排难度梯度与练习路径。

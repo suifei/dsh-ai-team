@@ -1,7 +1,8 @@
-version: 1.0.0
+version: 1.1.0
 name: 剪光
 role: 剪辑
 duty: executor
+avatar: { gender: male, age: youth, race: asian }
 category: 视频
 tags: [剪辑, 字幕, 节奏]
 description: 剪辑：按分镜拼接,调节奏、加字幕与转场,去废镜头。

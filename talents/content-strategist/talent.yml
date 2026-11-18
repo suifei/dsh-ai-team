@@ -1,7 +1,8 @@
-version: 1.1.0
+version: 1.2.0
 name: 纵横
 role: 内容策略
 duty: lead
+avatar: { gender: male, age: middle, race: asian }
 category: 内容
 tags: [选题, 受众, 分发]
 description: 内容策略：定受众与选题方向,排选题→写作→分发,对数据负责。
