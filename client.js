@@ -308,7 +308,7 @@ window.__ModuleLoader__.load({
 			talentLoadFailed: '人才市场读取失败：{error}',
 			talentSkills: '技能：{skills}',
 			talentUser: '自建',
-			profileTabBasic: '资料', profileTabModel: '模型', profileTabSkills: '技能', profileTabCollab: '协作', profileNotes: '备忘',
+			profileTabBasic: '资料', profileTabModel: '模型', profileTabSkills: '技能', profileTabCollab: '协作', profileNotes: '备忘', profileNotesEmpty: '还没有备忘。', profileSkillsEmpty: '还没装技能；在下面填技能名加一个，或到人才市场招已带技能的人才。',
 			teamPickDetail: '人才简介', teamPickDetailEmpty: '在左边点一位人才，这里看简介；点「加入」放进右边的团队。', teamLeadMark: '负责人', projectTeamMembers: '团队成员 · {n} 位',
 			peopleModelBatch: '批量配置模型', peopleModelTitle: '配置模型', peopleModelHint: '选中的成员在其所在的全部项目里改用这个模型；之后仍可在成员资料里单独改。', peopleModelPick: '应用到 {n} 位', peopleModelAll: '全选', peopleModelNone: '全不选', peopleModelApply: '应用', peopleModelNeed: '先选模型', peopleModelDone: '已为 {people} 位成员配置 {model}（成功 {done} 处，失败 {failed} 处）。',
 			talentOfficial: '在线', catalogNone: '在线人才库：未同步（当前用插件内置）', catalogAt: '在线人才库：v{version} · {time} 同步', catalogSync: '同步在线库', catalogSyncing: '同步中…', catalogSyncHint: '从官方在线人才库（npmmirror / jsDelivr）取最新的人才与团队；逐文件校验，失败不影响现有的。你自建或改过的人才不受影响。', catalogUpdated: '已同步到 v{version}（{files} 个文件）。', catalogLatest: '已是最新 v{version}。', catalogFailed: '同步失败：{error}', catalogClear: '退回内置', catalogClearConfirm: '删掉本机的在线人才库，退回插件内置版本？你自建或改过的人才不受影响。',
@@ -762,7 +762,7 @@ window.__ModuleLoader__.load({
 			talentLoadFailed: 'Could not load the talent market: {error}',
 			talentSkills: 'Skills: {skills}',
 			talentUser: 'Custom',
-			profileTabBasic: 'Profile', profileTabModel: 'Model', profileTabSkills: 'Skills', profileTabCollab: 'Collaboration', profileNotes: 'Notes',
+			profileTabBasic: 'Profile', profileTabModel: 'Model', profileTabSkills: 'Skills', profileTabCollab: 'Collaboration', profileNotes: 'Notes', profileNotesEmpty: 'No notes yet.', profileSkillsEmpty: 'No skills yet; add one by name below, or hire a talent that comes with skills.',
 			teamPickDetail: 'Talent details', teamPickDetailEmpty: 'Pick a talent on the left to see its details; “Add” puts it into the team on the right.', teamLeadMark: 'Lead', projectTeamMembers: 'Team members · {n}',
 			peopleModelBatch: 'Set model for many', peopleModelTitle: 'Set model', peopleModelHint: 'The selected members switch to this model in every project they are in; each can still be changed in its profile.', peopleModelPick: 'Apply to {n}', peopleModelAll: 'All', peopleModelNone: 'None', peopleModelApply: 'Apply', peopleModelNeed: 'Pick a model first', peopleModelDone: 'Set {model} for {people} members ({done} ok, {failed} failed).',
 			talentOfficial: 'Online', catalogNone: 'Online catalog: not synced (using the built-in one)', catalogAt: 'Online catalog: v{version} · synced {time}', catalogSync: 'Sync online catalog', catalogSyncing: 'Syncing…', catalogSyncHint: 'Fetch the latest talents and teams from the official online catalog (npmmirror / jsDelivr); every file is verified, and a failed sync leaves the current one untouched. Your own and edited talents are not affected.', catalogUpdated: 'Synced to v{version} ({files} files).', catalogLatest: 'Already up to date (v{version}).', catalogFailed: 'Sync failed: {error}', catalogClear: 'Use built-in', catalogClearConfirm: 'Delete the local online catalog and go back to the built-in one? Your own and edited talents are not affected.',
@@ -1403,11 +1403,22 @@ window.__ModuleLoader__.load({
 			.at-modalback:has(> .at-modal-wide) { padding: 0; }
 			.at-modal.at-modal-wide { width: 90%; height: 90%; max-height: 90%; }
 			/* 所有弹窗：标题栏固定在顶部，功能按钮在右上角；内容再长也不用滚到底找按钮。 */
-			.at-modal { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: start; column-gap: 12px; row-gap: 10px; padding-top: 0; }
+			.at-modal { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-auto-rows: max-content; align-content: start; column-gap: 0; row-gap: 12px; padding-top: 0; }
 			.at-modal > * { grid-column: 1 / -1; min-width: 0; }
 			.at-modal > .at-addtabs { justify-self: start; }
+			.at-modal .at-addtabs { padding: 2px; gap: 2px; border-radius: 8px; background: var(--dsw-alias-bg-base); }
+			.at-modal .at-addtabs button { min-height: 28px; padding: 0 12px; border-radius: 6px; font-size: 12px; }
+			.at-modal .at-addtabs button[aria-pressed="true"] { background: var(--dsw-alias-bg-layer-2); box-shadow: 0 0 0 1px var(--dsw-alias-border-l2); }
+			.at-profilebasic { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 12px 16px; align-items: start; }
+			.at-profilebasic textarea { min-height: 280px; }
+			.at-profilebasic .at-notesbox { max-height: 280px; }
+			.at-checkcard { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 8px; background: var(--dsw-alias-bg-layer-1); cursor: pointer; }
+			.at-checkcard:has(input:checked) { border-color: var(--dsw-alias-state-business-primary); background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 7%, transparent); }
+			.at-checkcard input { flex: none; accent-color: var(--dsw-alias-state-business-primary); }
+			.at-checkcard > span { display: flex; flex-direction: column; min-width: 0; font-size: 12px; line-height: 17px; }
+			.at-checkcard small { color: var(--dsw-alias-label-tertiary); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.at-modal > .at-modaltitle { grid-column: 1; grid-row: 1; position: sticky; top: 0; z-index: 3; align-self: stretch; margin: 0; padding: 14px 0 10px; background: var(--dsw-alias-bg-layer-2); border-bottom: 1px solid var(--dsw-alias-border-l1); }
-			.at-modal > .at-modalactions { grid-column: 2; grid-row: 1; position: sticky; top: 0; z-index: 3; align-self: stretch; align-items: center; margin: 0; padding: 8px 0; background: var(--dsw-alias-bg-layer-2); border-bottom: 1px solid var(--dsw-alias-border-l1); }
+			.at-modal > .at-modalactions { grid-column: 2; grid-row: 1; position: sticky; top: 0; z-index: 3; align-self: stretch; align-items: center; margin: 0; padding: 8px 0 8px 12px; background: var(--dsw-alias-bg-layer-2); border-bottom: 1px solid var(--dsw-alias-border-l1); }
 			.at-actsep { width: 1px; align-self: stretch; margin: 6px 2px; background: var(--dsw-alias-border-l2); }
 			.at-btn-danger { color: var(--dsw-alias-state-error-primary); border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent); }
 			.at-btn-danger:hover { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); }
@@ -1436,8 +1447,8 @@ window.__ModuleLoader__.load({
 			.at-pcard .at-peoplebadges { margin-left: 0; }
 			.at-pcardhead { display: flex; align-items: center; gap: 8px; min-width: 0; }
 			.at-pcardfoot { display: flex; justify-content: flex-end; gap: 6px; margin-top: auto; }
-			.at-peoplecheck { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px; }
-			@media (max-width: 900px) { .at-split, .at-teamcomposer, .at-fieldgrid3 { grid-template-columns: minmax(0, 1fr); } }
+			.at-peoplecheck { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+			@media (max-width: 900px) { .at-split, .at-teamcomposer, .at-fieldgrid3, .at-profilebasic { grid-template-columns: minmax(0, 1fr); } }
 			.at-addtabs { align-self: flex-start; }
 			.at-tcskills { display: flex; flex-wrap: wrap; gap: 6px; }
 			.at-tcskill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: rgba(127,127,127,0.15); font-size: 12px; }
@@ -1445,7 +1456,8 @@ window.__ModuleLoader__.load({
 			.at-tcpick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
 			.at-tcpanel { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 			.at-teamrows { display: flex; flex-direction: column; gap: 6px; }
-			.at-teamrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center; }
+			.at-teamrow { display: grid; grid-template-columns: minmax(0, 1fr) 76px auto auto; gap: 8px; align-items: center; }
+			.at-teamrow > .at-modalmeta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.at-teamlead { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; white-space: nowrap; }
 			.at-teampick { display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; }
 			.at-teampickrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
@@ -2158,9 +2170,11 @@ window.__ModuleLoader__.load({
 							h('span', { className: 'at-panetitle' }, t('peopleTitle') + ' · ' + picked.size + '/' + people.length),
 							h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => setPicked(new Set(people.map((p) => p.name))) }, t('peopleModelAll')),
 							h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => setPicked(new Set()) }, t('peopleModelNone'))),
-						h('div', { className: 'at-peoplecheck' }, people.map((person) => h('label', { key: person.name, className: 'at-check' },
+						h('div', { className: 'at-peoplecheck' }, people.map((person) => h('label', { key: person.name, className: 'at-checkcard' },
 							h('input', { type: 'checkbox', checked: picked.has(person.name), onChange: () => toggle(person.name) }),
-							h('span', null, person.name + (person.role ? ' · ' + person.role : ''))))))));
+							h(Avatar, { name: person.name, human: false }),
+							h('span', null, h('b', null, person.name + (person.role ? ' · ' + person.role : '')),
+								h('small', null, (person.projects ?? []).map((row) => row.projectName).join('、')))))))));
 		}
 
 		/**
@@ -2946,14 +2960,14 @@ window.__ModuleLoader__.load({
 				h('div', { className: 'at-field' }, h('span', null, t('tcSkills')),
 					pending.length === 0 ? h('div', { className: 'at-modalmeta' }, t('tcEmpty')) : h('div', { className: 'at-tcskills' }, pending.map((sk) => h('span', { key: sk.name, className: 'at-tcskill' }, sk.name, h('button', { type: 'button', 'aria-label': t('tcRemove'), onClick: () => setPending((pp) => pp.filter((x) => x.name !== sk.name)) }, '×')))),
 					h('div', { className: 'at-tcpick' },
-						h('button', { type: 'button', className: 'at-btn', onClick: () => setPick(pick === 'existing' ? '' : 'existing') }, t('tcAddExisting')),
-						h('button', { type: 'button', className: 'at-btn', onClick: () => setPick(pick === 'write' ? '' : 'write') }, t('tcWriteOwn')),
-						h('label', { className: 'at-btn' }, t('tcImport'), h('input', { type: 'file', accept: '.md,text/markdown,text/plain', style: { display: 'none' }, onChange: importFile }))),
+						h('button', { type: 'button', className: 'at-btn', onClick: () => setPick(pick === 'existing' ? '' : 'existing') }, withIco('store', t('tcAddExisting'))),
+						h('button', { type: 'button', className: 'at-btn', onClick: () => setPick(pick === 'write' ? '' : 'write') }, withIco('pen', t('tcWriteOwn'))),
+						h('label', { className: 'at-btn' }, withIco('folderPlus', t('tcImport')), h('input', { type: 'file', accept: '.md,text/markdown,text/plain', style: { display: 'none' }, onChange: importFile }))),
 					pick === 'existing' ? h('div', { className: 'at-tcpanel' }, h('select', { value: pickFrom, onChange: (e) => setPickFrom(e.target.value) }, h('option', { value: '' }, t('tcPick')), installable.map((sk) => h('option', { key: sk.talent + '::' + sk.name, value: sk.talent + '::' + sk.name }, sk.name + ' — ' + sk.talentName))), h('button', { type: 'button', className: 'at-btn at-btn-primary', onClick: addExisting }, t('tcAdd'))) : null,
 					pick === 'write' ? h('div', { className: 'at-tcpanel' }, h('input', { value: skName, placeholder: t('tcSkillName'), onChange: (e) => setSkName(e.target.value) }), h('textarea', { value: skBody, placeholder: t('tcSkillBody'), onChange: (e) => setSkBody(e.target.value) }), h('button', { type: 'button', className: 'at-btn at-btn-primary', onClick: addWritten }, t('tcAdd'))) : null),
 				error ? h('div', { className: 'at-modalerror', role: 'alert' }, error) : null,
 				h('div', { className: 'at-modalactions' },
-					h('button', { type: 'button', className: 'at-btn', onClick: onCancel }, t('cancel')),
+					h('button', { type: 'button', className: 'at-btn', onClick: onCancel }, withIco('close', t('cancel'))),
 					h('button', { type: 'button', className: 'at-btn at-btn-primary', disabled: !form.name.trim() || busy, onClick: save }, withIco('check', busy ? t('tcSaving') : t('tcSave')))));
 		}
 		function TeamComposer({ t, talents, onSaved, onCancel }) {
@@ -5419,18 +5433,18 @@ window.__ModuleLoader__.load({
 							}) : mTab === 'create' && !(mCopy && !mCopy.talent) ? h(TalentCreator, { key: talentInit && talentInit.memberId ? 'm:' + talentInit.memberId : 'blank', t, initial: talentInit, onSaved: () => { loadTalents(); setTalentInit(null); setMTab('market'); }, onCancel: () => { setAddOpen(false); setTalentInit(null); } }) : [
 							mCopy?.talent ? h('div', { key: 'from', className: 'at-modalmeta' }, tf(t, 'memberHireFrom', { name: mCopy.sourceName, version: mCopy.talent.version })) : null,
 							mCopy && !mCopy.talent ? h('div', { key: 'from', className: 'at-modalmeta' }, tf(t, 'memberCopyFrom', { name: mCopy.sourceName })) : null,
-							h('label', { key: 'name', className: 'at-field' }, h('span', null, t('memberName')),
-								h('input', { value: mName, onChange: (event) => setMName(event.target.value), autoFocus: true })),
-							h('label', { key: 'role', className: 'at-field' }, h('span', null, t('memberRole')),
-								h('input', { value: mRole, onChange: (event) => setMRole(event.target.value) })),
+							h('div', { key: 'nr', className: 'at-fieldrow' },
+								h('label', { className: 'at-field' }, h('span', null, t('memberName')),
+									h('input', { value: mName, onChange: (event) => setMName(event.target.value), autoFocus: true })),
+								h('label', { className: 'at-field' }, h('span', null, t('memberRole')),
+									h('input', { value: mRole, onChange: (event) => setMRole(event.target.value) }))),
 							h('label', { key: 'prompt', className: 'at-field' }, h('span', null, t('memberPrompt')),
 								h('textarea', {
 									value: mPrompt,
 									onChange: (event) => setMPrompt(event.target.value),
 									placeholder: t('memberPromptHint'),
 								})),
-							h(ModelFields, {
-								key: 'model',
+							h('div', { key: 'model', className: 'at-fieldgrid3' }, h(ModelFields, {
 								t,
 								catalog: modelCatalog,
 								provider: mProvider,
@@ -5440,15 +5454,15 @@ window.__ModuleLoader__.load({
 								onProvider: setMProvider,
 								onModel: setMModel,
 								error: modelCatalogError,
-							}),
+							})),
 							h('label', { key: 'owner', className: 'at-check' },
 								h('input', { type: 'checkbox', checked: mOwner, onChange: (event) => setMOwner(event.target.checked) }),
 								h('span', null, t('memberOwner'))),
 							h('div', { key: 'perm', className: 'at-modalmeta' }, t('permissionNote')),
 							mError ? h('div', { key: 'err', className: 'at-modalerror', role: 'alert' }, mError) : null,
 							h('div', { key: 'actions', className: 'at-modalactions' },
-								h('button', { className: 'at-btn', type: 'button', onClick: () => setAddOpen(false), disabled: mBusy }, t('cancel')),
-								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: mBusy || !mName.trim() }, mBusy ? t('memberAdding') : t('memberCreate')))])) : null,
+								h('button', { className: 'at-btn', type: 'button', onClick: () => setAddOpen(false), disabled: mBusy }, withIco('close', t('cancel'))),
+								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: mBusy || !mName.trim() }, withIco('userPlus', mBusy ? t('memberAdding') : t('memberCreate'))))])) : null,
 					profileAgent ? h(ModalBack, { onClose: () => setProfileAgent(null) },
 						h('form', {
 							className: 'at-modal at-modal-wide',
@@ -5499,13 +5513,14 @@ window.__ModuleLoader__.load({
 										h('input', { value: pName, onChange: (event) => setPName(event.target.value), autoFocus: true })),
 									h('label', { className: 'at-field' }, h('span', null, t('memberRole')),
 										h('input', { value: pRole, onChange: (event) => setPRole(event.target.value) }))),
-								h('label', { key: 'pers', className: 'at-field' }, h('span', null, t('memberPersonality')),
-									h('textarea', { value: pPersonality, rows: 6, onChange: (event) => setPPersonality(event.target.value) })),
-								h('div', { key: 'notes', className: 'at-field' }, h('span', null, t('profileNotes')),
-									profileAgent.notes?.length ? h('div', { className: 'at-notesbox' }, profileAgent.notes.slice(-3).join('\n\n')) : null,
-									h('div', { className: 'at-inlineadd' },
-										h('input', { value: pNote, onChange: (event) => setPNote(event.target.value), placeholder: t('notePlaceholder') }),
-										h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: addNote, disabled: !pNote.trim() }, withIco('plus', t('addNote'), 12)))),
+								h('div', { key: 'pn', className: 'at-profilebasic' },
+									h('label', { className: 'at-field' }, h('span', null, t('memberPersonality')),
+										h('textarea', { value: pPersonality, rows: 12, onChange: (event) => setPPersonality(event.target.value) })),
+									h('div', { className: 'at-field' }, h('span', null, t('profileNotes')),
+										h('div', { className: 'at-inlineadd' },
+											h('input', { value: pNote, onChange: (event) => setPNote(event.target.value), placeholder: t('notePlaceholder') }),
+											h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: addNote, disabled: !pNote.trim() }, withIco('plus', t('addNote'), 12))),
+										profileAgent.notes?.length ? h('div', { className: 'at-notesbox' }, profileAgent.notes.slice(-3).reverse().join('\n\n')) : h('div', { className: 'at-modalmeta' }, t('profileNotesEmpty')))),
 							] : null,
 							pTab === 'model' ? h('div', { className: 'at-fieldgrid3' },
 								h('label', { className: 'at-field' }, h('span', null, t('memberPreset')),
@@ -5533,7 +5548,7 @@ window.__ModuleLoader__.load({
 									? h('div', { key: 'list', className: 'at-tcskills', 'aria-label': t('memberSkills') },
 										profileAgent.skills.map((name) => h('span', { key: name, className: 'at-tcskill' }, name,
 											h('button', { type: 'button', className: 'at-btn at-btn-small', title: t('skillEvolveHint'), onClick: () => void evolveSkill(profileAgent, name) }, withIco('spark', t('skillEvolve'), 12)))))
-									: null,
+									: h('div', { key: 'none', className: 'at-modalmeta' }, t('profileSkillsEmpty')),
 								pEvolve ? h('div', { key: 'ev', className: 'at-modalmeta', role: 'status' }, pEvolve) : null,
 								h('div', { key: 'add', className: 'at-inlineadd' },
 									h('input', { value: pSkill, onChange: (event) => setPSkill(event.target.value), placeholder: t('skillPlaceholder') }),
