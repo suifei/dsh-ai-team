@@ -38,8 +38,18 @@
   - 人员池是成员卡片，可以一次给多位成员批量配置模型。
 
 <p align="center">
-  <img src="https://github.com/suifei/dsh-ai-team/releases/download/v0.4.133/talent-market-online.png" width="860" alt="人才市场：同步在线库后按分类筛选" /><br/>
-  <sub>人才市场：同步在线库后按分类挑人</sub>
+  <img src="https://github.com/suifei/dsh-ai-team/releases/download/v0.4.135/talent-market-avatars.png" width="860" alt="人才市场：每位人才都有头像，同步在线库后按分类挑人" /><br/>
+  <sub>人才市场：每位人才都有自己的头像，同步在线库后按分类挑人</sub>
+</p>
+
+<p align="center">
+  <img src="https://github.com/suifei/dsh-ai-team/releases/download/v0.4.135/project-members-avatars.png" width="860" alt="项目主对话：左栏成员与消息都带头像" /><br/>
+  <sub>项目里：左栏成员和对话消息都带头像</sub>
+</p>
+
+<p align="center">
+  <img src="https://github.com/suifei/dsh-ai-team/releases/download/v0.4.135/member-profile-avatar.png" width="860" alt="成员资料：挑选头像的性别、年龄、人种" /><br/>
+  <sub>成员资料：头像可选性别、年龄、人种，左侧实时预览</sub>
 </p>
 
 <p align="center">
