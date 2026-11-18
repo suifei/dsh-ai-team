@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { apply } from '../index.js';
 
 // 宿主边界上的两处缺陷（2026-11-15 代码审视）：
@@ -126,5 +127,53 @@ test('a composition disposed before boot settles releases its ledgers and wires 
 		assert.equal(result.status, 200, JSON.stringify(result.body));
 		assert.equal(result.body.ok, true);
 		await second.dispose();
+	});
+});
+
+// GHSA-rw5w-8w2v-8rc5 根治：不靠逐条点名，而是从 index.js 源码里取出全部接口路径（=== 字面量与 .match 正则），
+// 每个路径、每种方法在栅栏拒绝时都必须回 401/403，且栅栏先于任何处理被问到。以后新增接口、
+// 新注册的路由只要绕过栅栏，这条就会失败。
+function everyApiPath() {
+	const source = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+	const literals = [...source.matchAll(/url\.pathname === '([^']+)'/g)].map((m) => m[1]);
+	const patterns = [...source.matchAll(/url\.pathname\.match\(\/\^(.+?)\$\/\)/g)].map((m) => m[1].replace(/\(\[\^\/\]\+\)/g, 'x1').replaceAll('\\/', '/'));
+	return { literals: [...new Set(literals)], patterns: [...new Set(patterns)] };
+}
+
+test('GHSA-rw5w-8w2v-8rc5: every registered route and every API path in index.js is fenced before any handling, for every method', async () => {
+	const { literals, patterns } = everyApiPath();
+	assert.ok(literals.length >= 20 && patterns.length >= 8, `found ${literals.length} literal and ${patterns.length} pattern paths`);
+	assert.ok(patterns.every((path) => path.startsWith('/ai-team/') && !/[\\()[\]^$]/.test(path)), patterns.join(' '));
+	const paths = ['/ai-team', '/ai-team/', '/ai-team/client.js', '/ai-team/no-such-route', ...literals, ...patterns];
+	await withHome(async () => {
+		for (const rejection of [401, 403]) {
+			let asked = 0;
+			const fenced = makeCtx({ connection: { get rejection() { asked += 1; return rejection; } } });
+			apply(fenced.ctx);
+			assert.ok(fenced.routes.length >= 1);
+			for (const route of fenced.routes) {
+				for (const path of paths) {
+					for (const method of ['GET', 'POST', 'PUT', 'DELETE']) {
+						const before = asked;
+						const result = await call(route, method, `${path}?project=x1&name=x`, method === 'GET' ? undefined : { type: 'stream.post', payload: {} });
+						assert.equal(result.status, rejection, `${method} ${path} must be rejected`);
+						assert.equal(result.body.error.code, rejection === 401 ? 'E_UNAUTHENTICATED' : 'E_FORBIDDEN', `${method} ${path}`);
+						assert.equal(asked - before, 1, `${method} ${path} asks the fence exactly once`);
+					}
+				}
+			}
+			await fenced.dispose();
+		}
+		// 栅栏服务缺席：同样全部拒绝（503），不放行。
+		const missing = makeCtx({ connection: null });
+		apply(missing.ctx);
+		for (const route of missing.routes) {
+			for (const path of paths) {
+				const result = await call(route, 'POST', path, { type: 'stream.post', payload: {} });
+				assert.equal(result.status, 503, `POST ${path} without a fence`);
+				assert.equal(result.body.error.code, 'E_TRUST_FENCE_UNAVAILABLE');
+			}
+		}
+		await missing.dispose();
 	});
 });
