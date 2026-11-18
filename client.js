@@ -308,6 +308,7 @@ window.__ModuleLoader__.load({
 			talentLoadFailed: '人才市场读取失败：{error}',
 			talentSkills: '技能：{skills}',
 			talentUser: '自建',
+			talentOfficial: '在线', catalogNone: '在线人才库：未同步（当前用插件内置）', catalogAt: '在线人才库：v{version} · {time} 同步', catalogSync: '同步在线库', catalogSyncing: '同步中…', catalogSyncHint: '从官方在线人才库（npmmirror / jsDelivr）取最新的人才与团队；逐文件校验，失败不影响现有的。你自建或改过的人才不受影响。', catalogUpdated: '已同步到 v{version}（{files} 个文件）。', catalogLatest: '已是最新 v{version}。', catalogFailed: '同步失败：{error}', catalogClear: '退回内置', catalogClearConfirm: '删掉本机的在线人才库，退回插件内置版本？你自建或改过的人才不受影响。',
 			talentFork: '复制为可编辑', talentForkHint: '把这位内置人才复制成你自己的副本（同名遮盖内置），之后可装技能、进化技能；已招的成员下次激活就用副本。', talentForked: '已改', talentRestore: '恢复内置', talentRestoreConfirm: '删掉「{name}」的可编辑副本，恢复内置版？副本里装的、进化过的技能都会丢弃。', skillEvolve: '进化', skillEvolveHint: '让这位成员用 SkillOpt 优化这份技能：诊断最弱一维、改写、评审官盲评，好就保留，不好回退。', skillEvolveSent: '已私信 {name} 进化技能「{skill}」。', skillEvolveForked: '内置人才「{talent}」已复制为可编辑副本，并已私信 {name} 进化技能「{skill}」。', skillEvolveFailed: '技能进化没发出去：{error}',
 			talentHint: '挑一位人才预填表单，改名、换模型后再招进项目；自建人才放在 ~/.dsh/ai-team/catalog/user/talents/。',
 			memberHireFrom: '招自人才市场「{name}」v{version}：带入岗位、职责、人格与技能，可先修改再创建。',
@@ -759,6 +760,7 @@ window.__ModuleLoader__.load({
 			talentLoadFailed: 'Could not load the talent market: {error}',
 			talentSkills: 'Skills: {skills}',
 			talentUser: 'Custom',
+			talentOfficial: 'Online', catalogNone: 'Online catalog: not synced (using the built-in one)', catalogAt: 'Online catalog: v{version} · synced {time}', catalogSync: 'Sync online catalog', catalogSyncing: 'Syncing…', catalogSyncHint: 'Fetch the latest talents and teams from the official online catalog (npmmirror / jsDelivr); every file is verified, and a failed sync leaves the current one untouched. Your own and edited talents are not affected.', catalogUpdated: 'Synced to v{version} ({files} files).', catalogLatest: 'Already up to date (v{version}).', catalogFailed: 'Sync failed: {error}', catalogClear: 'Use built-in', catalogClearConfirm: 'Delete the local online catalog and go back to the built-in one? Your own and edited talents are not affected.',
 			talentFork: 'Make editable', talentForkHint: 'Copy this built-in talent into your own copy (same id, shadows the built-in) so you can install and evolve its skills; hired members use the copy on their next activation.', talentForked: 'Edited', talentRestore: 'Restore built-in', talentRestoreConfirm: 'Delete your editable copy of “{name}” and restore the built-in? Skills installed or evolved in the copy are discarded.', skillEvolve: 'Evolve', skillEvolveHint: 'Have this member optimize the skill with SkillOpt: diagnose the weakest dimension, rewrite, blind review by the reviewer; kept if better, reverted if not.', skillEvolveSent: 'Asked {name} to evolve the skill “{skill}”.', skillEvolveForked: 'Built-in talent “{talent}” was copied into an editable copy, and {name} was asked to evolve the skill “{skill}”.', skillEvolveFailed: 'Could not start skill evolution: {error}',
 			talentHint: 'Pick a talent to prefill the form, rename it or change the model, then hire. Your own talents live in ~/.dsh/ai-team/catalog/user/talents/.',
 			memberHireFrom: 'Hired from the talent market: “{name}” v{version}. Role, duty, personality and skills are filled in; edit before creating.',
@@ -1406,6 +1408,7 @@ window.__ModuleLoader__.load({
 			.at-teampickrow { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-width: 0; }
 			.at-teampickrow > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.at-market { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+			.at-catalogbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
 			.at-marketsearch { width: 100%; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; }
 			.at-marketcats { display: flex; flex-wrap: wrap; gap: 4px; }
 			.at-marketcat { min-height: 22px; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 11px; cursor: pointer; }
@@ -2719,11 +2722,17 @@ window.__ModuleLoader__.load({
 
 		const DUTY_LABEL = { lead: 'dutyLead', qa: 'dutyQa', executor: 'dutyExecutor' };
 		/** 「添加成员」弹窗的人才市场页：分类、搜索、卡片；点「招聘」按人才预填表单。 */
-		function TalentMarket({ t, talents, error, query, onQuery, category, onCategory, onHire, onFork, onRestore, onCancel }) {
+		function TalentMarket({ t, talents, error, query, onQuery, category, onCategory, onHire, onFork, onRestore, onCancel, catalog, catalogBusy, catalogNote, onSync, onClear }) {
 			const categories = [...new Set((talents ?? []).map((talent) => talent.category).filter(Boolean))];
 			const shown = filterTalents(talents, query, category);
 			return h('div', { className: 'at-market' },
 				h('div', { className: 'at-modalmeta' }, t('talentHint')),
+				onSync ? h('div', { className: 'at-catalogbar' },
+					h('span', { className: 'at-modalmeta' }, catalog ? tf(t, 'catalogAt', { version: catalog.version, time: catalog.syncedAt ? new Date(catalog.syncedAt).toLocaleString() : '' }) : t('catalogNone')),
+					h('span', { className: 'at-tcpick' },
+						catalog && onClear ? h('button', { type: 'button', className: 'at-btn at-btn-small', disabled: catalogBusy, onClick: onClear }, t('catalogClear')) : null,
+						h('button', { type: 'button', className: 'at-btn at-btn-small', title: t('catalogSyncHint'), disabled: catalogBusy, onClick: onSync }, catalogBusy ? t('catalogSyncing') : t('catalogSync')))) : null,
+				catalogNote ? h('div', { className: 'at-modalmeta', role: 'status' }, catalogNote) : null,
 				h('input', { className: 'at-marketsearch', type: 'search', value: query, placeholder: t('talentSearch'), 'aria-label': t('talentSearch'), onChange: (event) => onQuery(event.target.value), autoFocus: true }),
 				categories.length > 1 ? h('div', { className: 'at-marketcats', role: 'group', 'aria-label': t('talentMarket') },
 					['', ...categories].map((name) => h('button', {
@@ -2741,7 +2750,7 @@ window.__ModuleLoader__.load({
 								h('span', { className: 'at-talentname' }, talent.name),
 								h('span', { className: 'at-talentrole' }, talent.role),
 								talent.duty ? h('span', { className: 'at-talentduty' }, t(DUTY_LABEL[talent.duty])) : null,
-								talent.forked ? h('span', { className: 'at-talentduty' }, t('talentForked')) : talent.source === 'user' ? h('span', { className: 'at-talentduty' }, t('talentUser')) : null),
+								talent.forked ? h('span', { className: 'at-talentduty' }, t('talentForked')) : talent.source === 'user' ? h('span', { className: 'at-talentduty' }, t('talentUser')) : talent.source === 'official' ? h('span', { className: 'at-talentduty' }, t('talentOfficial')) : null),
 							talent.description ? h('div', { className: 'at-talentdesc' }, talent.description) : null,
 							talent.skills?.length ? h('div', { className: 'at-modalmeta' }, tf(t, 'talentSkills', { skills: talent.skills.join('、') })) : null,
 							h('div', { className: 'at-talentfoot' },
@@ -3309,6 +3318,9 @@ window.__ModuleLoader__.load({
 			const [mTab, setMTab] = React.useState('market');
 			const [talents, setTalents] = React.useState(null);
 			const [talentError, setTalentError] = React.useState('');
+			const [catalogInfo, setCatalogInfo] = React.useState(null);
+			const [catalogBusy, setCatalogBusy] = React.useState(false);
+			const [catalogNote, setCatalogNote] = React.useState('');
 			const [talentQuery, setTalentQuery] = React.useState('');
 			const [talentCategory, setTalentCategory] = React.useState('');
 			// 「存为人才」：成员草稿（服务端生成），预填新建人才页。
@@ -4188,7 +4200,9 @@ window.__ModuleLoader__.load({
 				setTalentQuery('');
 				setTalentCategory('');
 				setAddOpen(true);
+				setCatalogNote('');
 				loadTalents();
+				loadCatalogInfo();
 			}
 			/** 每次打开弹窗现取：用户刚改了 talent.yml 也能立刻看到。 */
 			async function loadTalents() {
@@ -4201,6 +4215,45 @@ window.__ModuleLoader__.load({
 				} catch (error) {
 					setTalents([]);
 					setTalentError(error?.message ?? String(error));
+				}
+			}
+			/** 第 3 步：在线人才库的本机状态（版本、同步时间）。 */
+			async function loadCatalogInfo() {
+				try {
+					const response = await fetch('/ai-team/api/catalog', { headers: { accept: 'application/json' } });
+					const body = await response.json().catch(() => null);
+					if (response.ok) setCatalogInfo(body?.official ?? null);
+				} catch {}
+			}
+			/** 同步官方在线人才库：成功后重读人才列表；失败保留现有的并提示原因。 */
+			async function syncCatalog() {
+				setCatalogBusy(true);
+				setCatalogNote('');
+				try {
+					const response = await fetch('/ai-team/api/catalog/sync', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+					const body = await response.json().catch(() => null);
+					if (body && 'official' in body) setCatalogInfo(body.official ?? null);
+					if (!response.ok) throw new Error(body?.error?.message ?? ('HTTP ' + response.status));
+					setCatalogNote(body.updated ? tf(t, 'catalogUpdated', { version: body.version, files: body.files }) : tf(t, 'catalogLatest', { version: body.version }));
+					await loadTalents();
+				} catch (error) {
+					setCatalogNote(tf(t, 'catalogFailed', { error: error?.message ?? String(error) }));
+				} finally {
+					setCatalogBusy(false);
+				}
+			}
+			async function clearCatalog() {
+				if (!(await askConfirm(t('catalogClear'), t('catalogClearConfirm')))) return;
+				setCatalogBusy(true);
+				try {
+					await fetch('/ai-team/api/catalog/clear', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+					setCatalogInfo(null);
+					setCatalogNote('');
+					await loadTalents();
+				} catch (error) {
+					setCatalogNote(tf(t, 'catalogFailed', { error: error?.message ?? String(error) }));
+				} finally {
+					setCatalogBusy(false);
 				}
 			}
 			/** 2c：内置人才 fork 成可编辑副本（同 id 遮盖内置，已招成员下次激活读副本）。 */
@@ -5257,6 +5310,11 @@ window.__ModuleLoader__.load({
 								onHire: hireTalent,
 								onFork: (talent) => void forkTalent(talent),
 								onRestore: (talent) => void restoreTalent(talent),
+								catalog: catalogInfo,
+								catalogBusy,
+								catalogNote,
+								onSync: () => void syncCatalog(),
+								onClear: () => void clearCatalog(),
 								onCancel: () => setAddOpen(false),
 							}) : mTab === 'create' && !(mCopy && !mCopy.talent) ? h(TalentCreator, { key: talentInit && talentInit.memberId ? 'm:' + talentInit.memberId : 'blank', t, initial: talentInit, onSaved: () => { loadTalents(); setTalentInit(null); setMTab('market'); }, onCancel: () => { setAddOpen(false); setTalentInit(null); } }) : [
 							mCopy?.talent ? h('div', { key: 'from', className: 'at-modalmeta' }, tf(t, 'memberHireFrom', { name: mCopy.sourceName, version: mCopy.talent.version })) : null,

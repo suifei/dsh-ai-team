@@ -72,6 +72,7 @@ import { isInformationalThreadMention } from './lib/domain/inbox.js';
 import { messageContent, normalizeAttachments } from './lib/domain/rich-message.js';
 import { readAttachment, uploadAttachment } from './lib/host/attachment-routes.js';
 import { createDiagLogger, defaultDiagDir, installDiagSink } from './lib/diaglog.js';
+import { CATALOG_PACKAGE, clearOfficialCatalog, officialStatus, syncOfficialCatalog } from './lib/domain/catalog-sync.js';
 import { DEFAULT_TEAM, catalogRoots, deleteTalent, deleteTeam, forkTalent, installSkill, listInstallableSkills, listTalents, listTeams, loadCatalog, readSkillText, resolveTeam, talentFromMember, talentIdFrom, uniqueTalentId, uniqueTeamId, userCatalogDir, writeTalent, writeTeam } from './lib/domain/catalog.js';
 
 export const name = 'ai-team';
@@ -190,6 +191,11 @@ function lazyShellService(ctx) {
 			return typeof service.execute === 'function' ? service.execute(spec) : service.run(spec);
 		},
 	};
+}
+
+/** 在线库状态给界面：不暴露本机绝对路径。 */
+function publicOfficial(status) {
+	return status === null ? null : { version: status.version, syncedAt: status.syncedAt, mirror: status.mirror, files: status.files };
 }
 
 function send(res, body, status = 200) {
@@ -2377,6 +2383,26 @@ export function apply(ctx, config = {}) {
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/talents') {
 						return send(res, { talents: listTalents(talentCatalog(diag)) });
 					}
+					// 第 3 步：官方在线人才库。状态 / 同步（npmmirror → jsDelivr，逐文件 sha256 校验后整体替换）/ 清除（退回内置）。
+					if (req.method === 'GET' && url.pathname === '/ai-team/api/catalog') {
+						return send(res, { package: CATALOG_PACKAGE, official: publicOfficial(officialStatus(dshHome())) });
+					}
+					if (req.method === 'POST' && url.pathname === '/ai-team/api/catalog/sync') {
+						const body = await readJson(req);
+						try {
+							const result = await syncOfficialCatalog({ dshHome: dshHome(), pluginVersion: VERSION, force: body?.force === true });
+							diag?.append({ ev: 'catalog.sync', updated: result.updated, version: result.version, previous: result.previous ?? null, files: result.files ?? null, mirror: result.mirror ?? null });
+							return send(res, { ok: true, ...result, official: publicOfficial(officialStatus(dshHome())) });
+						} catch (error) {
+							diag?.append({ ev: 'catalog.sync.fail', message: error.message });
+							return send(res, { error: { code: 'E_UPSTREAM', message: error.message }, official: publicOfficial(officialStatus(dshHome())) }, 502);
+						}
+					}
+					if (req.method === 'POST' && url.pathname === '/ai-team/api/catalog/clear') {
+						clearOfficialCatalog(dshHome());
+						diag?.append({ ev: 'catalog.clear' });
+						return send(res, { ok: true, official: null });
+					}
 					// 团队列表（新建项目选团队、组队面板）；defaultTeam 是插件设置里的默认团队。
 					if (req.method === 'GET' && url.pathname === '/ai-team/api/teams') {
 						return send(res, { teams: listTeams(talentCatalog(diag)), defaultTeam: config?.teamPreset || DEFAULT_TEAM });
@@ -2401,7 +2427,7 @@ export function apply(ctx, config = {}) {
 						const body = await readJson(req);
 						const entry = talentCatalog(diag).teams.get(talentIdFrom(body?.id ?? ''));
 						if (entry === undefined) return send(res, { error: { code: 'NOT_FOUND', message: 'team not found' } }, 404);
-						if (entry.source !== 'user') return send(res, { error: { code: 'E_READONLY', message: '内置团队只读，不能删除' } }, 409);
+						if (entry.source !== 'user') return send(res, { error: { code: 'E_READONLY', message: '内置 / 在线团队只读，不能删除' } }, 409);
 						deleteTeam(userCatalogDir(dshHome()), entry.id);
 						diag?.append({ ev: 'team.delete', id: entry.id });
 						return send(res, { ok: true });
@@ -2458,7 +2484,7 @@ export function apply(ctx, config = {}) {
 						const cat = talentCatalog(diag);
 						const t = cat.talents.get(talentIdFrom(body?.id ?? ''));
 						if (t === undefined) return send(res, { error: { code: 'NOT_FOUND', message: 'talent not found' } }, 404);
-						if (t.source !== 'user') return send(res, { error: { code: 'E_READONLY', message: '内置人才只读，不能删除；它只会被同名的自定义人才遮盖' } }, 409);
+						if (t.source !== 'user') return send(res, { error: { code: 'E_READONLY', message: '内置 / 在线人才只读，不能删除；它只会被同名的自定义人才遮盖' } }, 409);
 						deleteTalent(userCatalogDir(dshHome()), t.id);
 						diag?.append({ ev: 'talent.delete', id: t.id });
 						return send(res, { ok: true });
@@ -2507,7 +2533,7 @@ export function apply(ctx, config = {}) {
 						const cat = talentCatalog(diag);
 						const t = cat.talents.get(decodeURIComponent(talentSkillRoute[1]));
 						if (t === undefined) return send(res, { error: { code: 'NOT_FOUND', message: 'talent not found' } }, 404);
-						if (t.source !== 'user') return send(res, { error: { code: 'E_READONLY', message: '内置人才只读；先 fork 成可编辑副本再装技能' } }, 409);
+						if (t.source !== 'user') return send(res, { error: { code: 'E_READONLY', message: '内置 / 在线人才只读；先 fork 成可编辑副本再装技能' } }, 409);
 						let markdown = typeof body?.markdown === 'string' ? body.markdown : null;
 						if (markdown === null && typeof body?.fromTalent === 'string' && typeof body?.fromSkill === 'string') {
 							const src = cat.talents.get(body.fromTalent);

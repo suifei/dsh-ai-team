@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { openLedger } from '../lib/ledger/writer.js';
 import { TeamService } from '../lib/host/service.js';
 import { seedDefaultRoster } from '../lib/host/default-roster.js';
-import { bundledHasTalent, catalogRoots, forkTalent, listTalents, loadCatalog, parseTalent, parseTeam, procedureText, resolveTeam } from '../lib/domain/catalog.js';
+import { catalogRoots, forkTalent, listTalents, loadCatalog, parseTalent, parseTeam, procedureText, resolveTeam } from '../lib/domain/catalog.js';
 import { findSkill, findSkillText, loadSkillContext } from '../lib/runtime/skill-loader.js';
 
 // 人才市场（2026-11-18）：人才 talents/<人才>/ → 团队 teams/<团队>/（只引用人才）→ 项目成员（账本实例）。
@@ -216,8 +216,6 @@ test('2c: forkTalent copies a bundled talent with its skills into the user root 
 	await withUser(async ({ user, catalog }) => {
 		const bundled = catalog().talents.get('executor');
 		assert.equal(bundled.source, 'bundled');
-		assert.equal(bundledHasTalent('executor'), true);
-		assert.equal(bundledHasTalent('nobody'), false);
 		const first = forkTalent(user, bundled);
 		assert.deepEqual(first, { forked: true, dir: join(user, 'talents', 'executor') });
 		const copy = catalog().talents.get('executor');
