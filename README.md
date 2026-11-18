@@ -12,7 +12,7 @@
   <a href="https://www.npmjs.com/package/@suifei/dsh-ai-team"><img alt="npm" src="https://img.shields.io/npm/v/@suifei/dsh-ai-team?color=2f6feb&label=npm"></a>
   <a href="https://github.com/suifei/dsh-ai-team/releases"><img alt="release" src="https://img.shields.io/github/v/release/suifei/dsh-ai-team?color=2f6feb"></a>
   <a href="./LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-2f6feb"></a>
-  <img alt="tests" src="https://img.shields.io/badge/tests-433%20passing-2ea043">
+  <img alt="tests" src="https://img.shields.io/badge/tests-435%20passing-2ea043">
   <img alt="dsh" src="https://img.shields.io/badge/DeepSeek%20Harness-plugin-6f42c1">
 </p>
 
@@ -30,7 +30,7 @@
 - **人才市场**（0.4.124–0.4.129）：9 个内置团队、44 位内置人才，各自带看家技能。可以招聘、复制为可编辑、自建人才并装技能，也能把项目成员「存为人才」；新建项目时选团队，或从人才里挑人组新团队。
 - **主理人只调度交付**（0.4.128）：主理人不看产出，只问负责人做全没有；内容由验收人把关。
 - **在线人才库**（0.4.130–0.4.131）：「同步在线库」从 [`@suifei/dsh-ai-team-catalog`](https://www.npmjs.com/package/@suifei/dsh-ai-team-catalog) 拉取最新的人才与团队。国内走 npmmirror 整包下载，约 1 秒同步完；逐个文件核对 sha256，失败不影响旧版本，可一键退回内置。
-- **头像**（0.4.135）：人才市场、团队、成员卡片都有头像，由 [avatar.onrpc.com](https://avatar.onrpc.com/) 按名字生成；内置人才预置了参数（默认亚洲人），自定义成员和人才可以选性别、年龄、人种。
+- **头像**（0.4.135）：人才市场、团队、成员卡片都有头像，由 [`@suifei/hash-avatar`](https://www.npmjs.com/package/@suifei/hash-avatar) 在本机按名字生成（与 [avatar.onrpc.com](https://avatar.onrpc.com/) 同图，不连外网）；内置人才预置了参数（默认亚洲人），自定义成员和人才可以选性别、年龄、人种。
 - **弹窗与人员池**（0.4.132–0.4.133）：
   - 弹窗占主页面的 90%，功能按钮固定在右上角。
   - 成员资料按「资料 / 模型 / 技能 / 协作」分页签。

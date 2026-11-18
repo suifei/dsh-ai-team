@@ -308,7 +308,7 @@ window.__ModuleLoader__.load({
 			talentLoadFailed: '人才市场读取失败：{error}',
 			talentSkills: '技能：{skills}',
 			talentUser: '自建',
-			avatarTitle: '头像', avatarGender: '性别', avatarAge: '年龄', avatarRace: '人种', avatarHint: '头像由 avatar.onrpc.com 按名字生成；改名会换一张脸，参数不变。',
+			avatarTitle: '头像', avatarGender: '性别', avatarAge: '年龄', avatarRace: '人种', avatarHint: '头像按名字在本机生成（hash-avatar）；改名会换一张脸，参数不变。',
 			avatar_male: '男', avatar_female: '女', avatar_neutral: '中性', avatar_baby: '婴儿', avatar_teen: '少年', avatar_youth: '青年', avatar_middle: '中年', avatar_old: '老年', avatar_asian: '黄种人', avatar_white: '白人', avatar_black: '黑人', avatar_brown: '棕色人种', avatar_auto: '不指定',
 			profileTabBasic: '资料', profileTabModel: '模型', profileTabSkills: '技能', profileTabCollab: '协作', profileNotes: '备忘', profileNotesEmpty: '还没有备忘。', profileSkillsEmpty: '还没装技能；在下面填技能名加一个，或到人才市场招已带技能的人才。',
 			teamPickDetail: '人才简介', teamPickDetailEmpty: '在左边点一位人才，这里看简介；点「加入」放进右边的团队。', teamLeadMark: '负责人', projectTeamMembers: '团队成员 · {n} 位',
@@ -764,7 +764,7 @@ window.__ModuleLoader__.load({
 			talentLoadFailed: 'Could not load the talent market: {error}',
 			talentSkills: 'Skills: {skills}',
 			talentUser: 'Custom',
-			avatarTitle: 'Avatar', avatarGender: 'Gender', avatarAge: 'Age', avatarRace: 'Ethnicity', avatarHint: 'Drawn by avatar.onrpc.com from the name; renaming gives a new face with the same settings.',
+			avatarTitle: 'Avatar', avatarGender: 'Gender', avatarAge: 'Age', avatarRace: 'Ethnicity', avatarHint: 'Drawn locally from the name (hash-avatar); renaming gives a new face with the same settings.',
 			avatar_male: 'Male', avatar_female: 'Female', avatar_neutral: 'Neutral', avatar_baby: 'Baby', avatar_teen: 'Teen', avatar_youth: 'Young', avatar_middle: 'Middle-aged', avatar_old: 'Senior', avatar_asian: 'Asian', avatar_white: 'White', avatar_black: 'Black', avatar_brown: 'Brown', avatar_auto: 'Any',
 			profileTabBasic: 'Profile', profileTabModel: 'Model', profileTabSkills: 'Skills', profileTabCollab: 'Collaboration', profileNotes: 'Notes', profileNotesEmpty: 'No notes yet.', profileSkillsEmpty: 'No skills yet; add one by name below, or hire a talent that comes with skills.',
 			teamPickDetail: 'Talent details', teamPickDetailEmpty: 'Pick a talent on the left to see its details; “Add” puts it into the team on the right.', teamLeadMark: 'Lead', projectTeamMembers: 'Team members · {n}',
@@ -1654,8 +1654,8 @@ window.__ModuleLoader__.load({
 		}
 
 		/**
-		 * 头像：成员 / 人才用 avatar.onrpc.com 按「名字@人才」画（参数见 lib/domain/avatar.js），Human 用首字母。
-		 * 只给名字时按当前项目成员表（AVATAR_INDEX）找参数；图片加载失败（离线、被拦）退回首字母。
+		 * 头像：成员 / 人才按名字由插件本机画（/ai-team/api/avatar.svg，参数见 lib/domain/avatar.js），Human 用首字母。
+		 * 只给名字时按当前项目成员表（AVATAR_INDEX）找参数；图片加载失败时退回首字母。
 		 */
 		function Avatar({ name, human, avatar, seed, size = 24 }) {
 			const [brokenUrl, setBrokenUrl] = React.useState('');
@@ -3278,8 +3278,8 @@ window.__ModuleLoader__.load({
 		}
 
 		// <member-copy>
-		// 头像（avatar.onrpc.com，hash-avatar 契约 v1）：按名字画，人才与按原名招来的成员是同一张脸。
-		const AVATAR_HOST = 'https://avatar.onrpc.com/v1/';
+		// 头像：插件本机按名字画（@suifei/hash-avatar 契约 v1，与 avatar.onrpc.com 同图），人才与按原名招来的成员是同一张脸。
+		const AVATAR_ROUTE = '/ai-team/api/avatar.svg';
 		const AVATAR_CHOICES = { gender: ['male', 'female', 'neutral'], age: ['baby', 'teen', 'youth', 'middle', 'old'], race: ['asian', 'white', 'black', 'brown', 'auto'] };
 		/** 没设过头像、也查不到来源人才的成员：亚洲人、青年、性别不指定。 */
 		const AVATAR_FALLBACK = { gender: 'neutral', age: 'youth', race: 'asian' };
@@ -3294,7 +3294,7 @@ window.__ModuleLoader__.load({
 		function avatarUrl(seed, avatar, size) {
 			const pick = (key) => (AVATAR_CHOICES[key].includes(avatar && avatar[key]) ? avatar[key] : AVATAR_FALLBACK[key]);
 			const px = Math.max(16, Math.min(1024, Math.round((Number(size) || 24) * 2)));
-			return AVATAR_HOST + encodeURIComponent(String(seed ?? '')) + '.svg?gender=' + pick('gender') + '&age=' + pick('age') + '&race=' + pick('race') + '&size=' + px;
+			return AVATAR_ROUTE + '?name=' + encodeURIComponent(String(seed ?? '')) + '&gender=' + pick('gender') + '&age=' + pick('age') + '&race=' + pick('race') + '&size=' + px;
 		}
 		/** 成员的头像参数：自己设过的 > 来源人才的 > 默认（负责人按中年）。 */
 		function memberAvatarOf(agent, talents) {

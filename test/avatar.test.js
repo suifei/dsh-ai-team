@@ -4,7 +4,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_AVATAR, parseAvatar } from '../lib/domain/avatar.js';
+import { createRequire } from 'node:module';
+import { createServer } from 'node:http';
+import { DEFAULT_AVATAR, parseAvatar, renderAvatarSvg } from '../lib/domain/avatar.js';
 import { listTalents, listTeams, loadCatalog, parseTalent, resolveTeam, talentFromMember, writeTalent } from '../lib/domain/catalog.js';
 import { applyEvent, initialState } from '../lib/ledger/fold.js';
 
@@ -74,4 +76,45 @@ test('service: member.add keeps the avatar, an avatar-only profile update is a c
 	await assert.rejects(service.dispatch({ type: 'member.profile.update', actor: human, projectId: 'prj_av', payload: { memberId: 'a1', avatar: { gender: 'male', age: 'old', race: 'white' } } }), /required/);
 	await assert.rejects(service.dispatch({ type: 'member.add', actor: human, projectId: 'prj_av', payload: { id: 'a2', name: '乙', avatar: { age: 'elder' } } }), (error) => error.code === 'E_INVALID_ARGUMENT' || /avatar\.age/.test(error.message));
 	assert.equal(service.state.members.a2, undefined);
+});
+
+test('renderAvatarSvg draws locally with hash-avatar v1: same picture as the library, loose params fall back, ring only at 128px+', () => {
+	const HashAvatar = createRequire(import.meta.url)('@suifei/hash-avatar');
+	assert.equal(HashAvatar.version, 'v1');
+	assert.equal(renderAvatarSvg('墨渊', { gender: 'male', age: 'middle', race: 'asian', size: 64 }), HashAvatar.svg('墨渊', { gender: 'male', age: 'middle', race: 'asian', size: 64, fingerprint: false }));
+	assert.equal(renderAvatarSvg('墨渊', { gender: 'robot', age: null, race: 'x', size: 'abc' }), HashAvatar.svg('墨渊', { ...DEFAULT_AVATAR, size: 64, fingerprint: false }));
+	assert.equal(renderAvatarSvg('墨渊', { size: 144 }), HashAvatar.svg('墨渊', { ...DEFAULT_AVATAR, size: 144, fingerprint: true }));
+	assert.match(renderAvatarSvg('', { size: 99999 }), /width="1024"/);
+});
+
+test('GET /ai-team/api/avatar.svg serves the SVG from the plugin itself, cacheable, no network', async (t) => {
+	const { apply } = await import('../index.js');
+	const routes = [];
+	const root = mkdtempSync(join(tmpdir(), 'ai-team-avatar-route-'));
+	const prevHome = process.env.DSH_HOME;
+	process.env.DSH_HOME = root;
+	const ctx = {
+		effect(fn) { fn(); },
+		on() { return () => {}; },
+		get(id) {
+			if (id === 'connection') return { requestRejection: () => undefined };
+			if (id === 'webServer') return { register(route) { routes.push(route); return () => {}; } };
+			if (id === 'permissionPresets') return { catalog: () => ({ defaultPreset: 'danger-full-access', options: [], defaultOptions: [] }), resolve: () => ({ sandbox: 'danger-full-access', approval: 'never' }) };
+			if (id === 'sandboxPolicy') return { defaultMode: 'danger-full-access', overrideOf: () => 'danger-full-access' };
+			return undefined;
+		},
+	};
+	apply(ctx);
+	const server = createServer((req, res) => routes[0].handler(req, res));
+	await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+	t.after(async () => {
+		await new Promise((r) => server.close(r));
+		if (prevHome === undefined) delete process.env.DSH_HOME; else process.env.DSH_HOME = prevHome;
+		rmSync(root, { recursive: true, force: true });
+	});
+	const r = await fetch(`http://127.0.0.1:${server.address().port}/ai-team/api/avatar.svg?name=${encodeURIComponent('青岚')}&gender=female&age=youth&race=asian&size=80`);
+	assert.equal(r.status, 200);
+	assert.match(r.headers.get('content-type'), /^image\/svg\+xml/);
+	assert.match(r.headers.get('cache-control'), /immutable/);
+	assert.equal(await r.text(), renderAvatarSvg('青岚', { gender: 'female', age: 'youth', race: 'asian', size: 80 }));
 });

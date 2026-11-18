@@ -2,14 +2,14 @@
 
 ## 0.4.135 - 2026-11-18
 
-**头像：人才市场、团队、成员卡片都有头像（avatar.onrpc.com）**
+**头像：人才市场、团队、成员卡片都有头像（@suifei/hash-avatar，本机生成）**
 
-- 头像由 [avatar.onrpc.com](https://avatar.onrpc.com/)（hash-avatar 契约 v1）按名字画，参数是性别 / 年龄 / 人种。人才和按原名招来的成员是同一张脸；改名换脸，参数不变。图片加载失败（离线、被拦）退回首字母。
+- 头像由插件依赖 [`@suifei/hash-avatar`](https://www.npmjs.com/package/@suifei/hash-avatar)（契约 v1）在本机按名字画，经 `GET /ai-team/api/avatar.svg` 出 SVG，不连外网；与 [avatar.onrpc.com](https://avatar.onrpc.com/) 同参同图（实测逐字节一致）。参数是性别 / 年龄 / 人种。人才和按原名招来的成员是同一张脸；改名换脸，参数不变。显示不到 64px 时去掉外圈指纹。图片加载失败时退回首字母。
 - **44 位内置人才都预置了头像参数**，默认亚洲人；负责人多为中年，执行、验收多为青年，性别按名字分配。`talent.yml` 新增可选字段 `avatar: { gender, age, race }`，取值 `male|female|neutral`、`baby|teen|youth|middle|old`、`asian|white|black|brown|auto`；写错的人才文件按 `catalog.load.fail` 跳过。内置人才版本各升一个小版本，盖过在线库 1.0.0 的旧副本。
 - **出现头像的地方**：人才市场卡片、新建项目的团队成员卡片、组队的人才列表与已选成员、左栏成员、消息、人员池卡片、批量配置模型、成员资料标题。
 - **自定义可选**：添加成员 · 自定义、新建人才、成员资料 · 资料页有头像挑选（性别 / 年龄 / 人种，左边实时预览）。招聘时带上人才的头像，复制成员带上原成员的，存为人才带上成员的。
 - 账本：`project/member-added`、`member/profile-updated` 可带 `avatar`；`member.profile.update` 允许只改头像，写错的值返回 `E_INVALID_ARGUMENT`。没设过头像的老成员按来源人才的参数画。
-- 测试：`test/avatar.test.js`（参数校验、内置人才全带头像、自建人才 / 存为人才、账本、服务层命令）；全量 433。实机截图核对（`.ptc/rounds/r54-steps.json`，`shots-r54/`），宿主页面里头像图片实际加载成功。
+- 测试：`test/avatar.test.js`（参数校验、内置人才全带头像、自建人才 / 存为人才、账本、服务层命令、本机渲染与 `avatar.svg` 路由）；全量 435。实机截图核对（`.ptc/rounds/r54-steps.json`，`shots-r54/`），宿主页面里头像图片实际加载成功。
 
 ## 0.4.134 - 2026-11-18
 

@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "~3.19.0",
+    "@suifei/hash-avatar": "~1.0.1",
     "yaml": "~2.9.1"
   },
   "files": [
