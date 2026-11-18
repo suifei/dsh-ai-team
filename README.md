@@ -49,6 +49,33 @@
 
 完整记录见 [CHANGELOG](./CHANGELOG.md)。
 
+### 顺带做了个头像库：hash-avatar
+
+为了让人才市场里的每位人才都有一张自己的脸，我们另做了一个开源库 **[`@suifei/hash-avatar`](https://www.npmjs.com/package/@suifei/hash-avatar)**（[GitHub](https://github.com/suifei/hash-avatar)）。文渊阁的头像就是它在本机生成的。
+
+<p align="center">
+  <img src="https://avatar.onrpc.com/v1/%E5%A2%A8%E6%B8%8A.svg?gender=male&age=middle&race=asian&size=96" width="72" alt="墨渊" />
+  <img src="https://avatar.onrpc.com/v1/%E9%9D%92%E5%B2%9A.svg?gender=female&age=youth&race=asian&size=96" width="72" alt="青岚" />
+  <img src="https://avatar.onrpc.com/v1/%E7%99%BD%E7%A0%9A.svg?gender=female&age=youth&race=asian&size=96" width="72" alt="白砚" />
+  <img src="https://avatar.onrpc.com/v1/%E7%8E%84%E7%AD%96.svg?gender=male&age=youth&race=asian&size=96" width="72" alt="玄策" />
+  <img src="https://avatar.onrpc.com/v1/%E7%9F%A5%E5%BE%AE.svg?gender=female&age=youth&race=asian&size=96" width="72" alt="知微" />
+  <img src="https://avatar.onrpc.com/v1/%E8%A7%82%E6%BE%9C.svg?gender=female&age=youth&race=asian&size=96" width="72" alt="观澜" />
+</p>
+
+- **由名字或 email 确定**：输入经 SHA-256 决定五官、发型和配色；同一个名字永远是同一张脸。外圈 128 个刻度画出哈希的前 128 位，两个不同输入撞上同一张图的概率低于 UUIDv4 撞车。
+- **性别、年龄、人种只是渲染参数**，不进哈希，所以换参数后还是认得出同一个人：`gender=male|female|neutral`、`age=baby|teen|youth|middle|old`、`race=asian|white|black|brown|auto`。
+- **零依赖、同步、浏览器和 Node 都能用**，一张约 0.1 ms、约 6 KB 的 SVG；Apache-2.0。
+- **不写代码也能用**：`https://avatar.onrpc.com/<名字>.svg?gender=female&age=youth&race=asian` 直接当图片地址。
+
+```sh
+npm i @suifei/hash-avatar
+```
+
+```js
+const HashAvatar = require('@suifei/hash-avatar');
+const svg = HashAvatar.svg('墨渊', { gender: 'male', age: 'middle', race: 'asian', size: 128 });
+```
+
 **人才市场**：成员来自可复用的「人才」，团队从人才里挑人组队。
 
 - 人才 `talents/<人才>/talent.yml`：名字、岗位、`duty`（职责：`lead` 主理人 / `qa` 验收 / `executor` 执行，决定拿哪份岗位规程）、头像参数 `avatar: { gender, age, race }`、性格、分类与标签、推荐模型，以及自带技能（`talents/<人才>/skills/<技能>/SKILL.md`）。内置 10 位：默认团队的 6 位，外加架构、评审、技术文档、安全审计。
