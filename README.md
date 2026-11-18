@@ -12,7 +12,7 @@
   <a href="https://www.npmjs.com/package/@suifei/dsh-ai-team"><img alt="npm" src="https://img.shields.io/npm/v/@suifei/dsh-ai-team?color=2f6feb&label=npm"></a>
   <a href="https://github.com/suifei/dsh-ai-team/releases"><img alt="release" src="https://img.shields.io/github/v/release/suifei/dsh-ai-team?color=2f6feb"></a>
   <a href="./LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-2f6feb"></a>
-  <img alt="tests" src="https://img.shields.io/badge/tests-82%20passing-2ea043">
+  <img alt="tests" src="https://img.shields.io/badge/tests-428%20passing-2ea043">
   <img alt="dsh" src="https://img.shields.io/badge/DeepSeek%20Harness-plugin-6f42c1">
 </p>
 
@@ -24,6 +24,29 @@
 新 Project 自带一组可改的默认成员：**墨渊（主理人）**、**青岚（执行）**、**白砚（验收）**、**玄策（编程）**、**知微（UX 设计）**、**观澜（业务）**。名字、职责、个性、模型都可以改；模型提供商和模型名称直接读取 DSH 的 `llm` 目录，不需要手填 id。
 
 主理人只调度交付：产出只交给对应角色，主理人不看、不核对成果内容，只问负责人做全没有——没做全催继续，做全了交给下一位；内容对不对由验收人把关，主理人不能验收或退回别人的产出。
+
+## 最近更新
+
+- **人才市场**（0.4.124–0.4.129）：9 个内置团队、44 位内置人才，各自带看家技能。可以招聘、复制为可编辑、自建人才并装技能，也能把项目成员「存为人才」；新建项目时选团队，或从人才里挑人组新团队。
+- **主理人只调度交付**（0.4.128）：主理人不看产出，只问负责人做全没有；内容由验收人把关。
+- **在线人才库**（0.4.130–0.4.131）：「同步在线库」从 [`@suifei/dsh-ai-team-catalog`](https://www.npmjs.com/package/@suifei/dsh-ai-team-catalog) 拉取最新的人才与团队。国内走 npmmirror 整包下载，约 1 秒同步完；逐个文件核对 sha256，失败不影响旧版本，可一键退回内置。
+- **弹窗与人员池**（0.4.132–0.4.133）：
+  - 弹窗占主页面的 90%，功能按钮固定在右上角。
+  - 成员资料按「资料 / 模型 / 技能 / 协作」分页签。
+  - 新建项目时展示团队成员卡片；组队是三栏：人才列表 → 简介 → 已选成员。
+  - 人员池是成员卡片，可以一次给多位成员批量配置模型。
+
+<p align="center">
+  <img src="https://github.com/suifei/dsh-ai-team/releases/download/v0.4.133/talent-market-online.png" width="860" alt="人才市场：同步在线库后按分类筛选" /><br/>
+  <sub>人才市场：同步在线库后按分类挑人</sub>
+</p>
+
+<p align="center">
+  <img src="https://github.com/suifei/dsh-ai-team/releases/download/v0.4.133/new-project-team-cards.png" width="860" alt="新建项目：选团队后展示成员卡片" /><br/>
+  <sub>新建项目：选团队后右侧展示每位成员的卡片</sub>
+</p>
+
+完整记录见 [CHANGELOG](./CHANGELOG.md)。
 
 **人才市场**：成员来自可复用的「人才」，团队从人才里挑人组队。
 
@@ -106,7 +129,8 @@ dsh --profile ai-team --no-open --port 33271
 - **收件箱**：跨 Project 聚合；顶部「待你处理 · N」一键进入；只放真正需要 Human 的决策/失败，Agent 的进度汇报留在 Thread/动态，不制造“打开 Task 后无事可做”。
 - **直接对话**：点击成员名字直接打开该 Agent 的 DSH 原生 Session；没有 session 会先激活；打不开时落到成员资料，资料里有「直接对话」按钮。
 - **成员任务**：成员资料里点「他的任务」，查看他 owner/assignee 的 Task。
-- **成员资料**：点「⋯」改名、职责、personality、provider/model、运行配方、notes、skills、re-distill、离队/人才库。
+- **成员资料**：点「⋯」打开，按「资料 / 模型 / 技能 / 协作」分页签：改名、职责、个性、备忘；运行配方、提供商 / 模型 / 推理等级；技能与「进化」；交接人与私信。右上角是他的任务、直接对话、复制成员、存为人才、重置会话、重新蒸馏、离开团队。
+- **人员池**：按人汇总各项目里的成员卡片（负载、所在项目、跳转）；「批量配置模型」一次给勾选的成员在其所在的全部项目设同一模型，卡片上的「配置模型」只改这一位。
 
 ---
 
