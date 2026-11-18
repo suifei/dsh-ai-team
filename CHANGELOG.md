@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.136 - 2026-11-19
+
+**头像库运行时从 npm 取最新版，不再随插件打包**
+
+- `@suifei/hash-avatar` 从插件依赖里去掉。插件运行时从 npm 取 latest：只走 registry 型镜像（npmmirror → npmjs），整包核对 registry 给的 sha512 integrity，取出 `src/hash-avatar.js` 先试画一张再换上；缓存在 `~/.dsh/ai-team/vendor/hash-avatar/<版本>/`，只留当前版本。下载与解包复用在线人才库同步的同一套实现。库更新了插件不用重发。
+- 什么时候查新版：启动只装本机缓存，不联网；界面第一次取头像时才查，之后每 6 小时最多查一次。首次使用会等库下载完（最多 15 秒）；离线又没有缓存时头像接口回 503，界面退回首字母，60 秒内不重试。
+- 可选值以当前加载的库为准：新增 `GET /ai-team/api/avatar/meta`（库版本、性别 / 年龄 / 种族 / 画风、种族分组）。挑选界面的种族改成按分组的下拉（人类、奇幻与神话、动物、科幻与奇物，没归组的进「其它」），新增画风下拉；1.3.0 的 88 个种族、10 种画风都配了中文名，库以后新增的取值先显示原 id。校验（talent.yml、成员资料）同样按库的取值，写错仍拒绝；头像参数可带可选的 `art`。
+- 图片地址带库版本（`v=`），同版本可长缓存，换版本自动刷新；显示不到 64px 时去掉外圈指纹和动效。
+- 诊断日志：`avatar.lib.load` / `avatar.lib.missing` / `avatar.lib.update` / `avatar.lib.current` / `avatar.lib.sync.fail`。
+- README：加 Star 徽章、欢迎 Star 与「参与贡献」一节。
+- 测试：`test/avatar.test.js` 新增运行时取库（假 registry：首次下载、同版本不动、换新版、integrity 不符 / 缺文件 / 不是头像库都拒绝且不动旧版、重启读缓存不联网）、节流与离线、`avatar/meta` 与 `avatar.svg` 路由、界面地址与挑选；测试打 tar 包的函数挪到 `test/tar-helper.js` 共用。全量 439。实机：隔离宿主从 npmmirror 取到 1.3.0（88 个种族、10 种画风），人才市场与挑选界面截图核对（`.ptc/rounds/r57-steps.json`，`shots-r57/`）。
+
 ## 0.4.135 - 2026-11-18
 
 **头像：人才市场、团队、成员卡片都有头像（@suifei/hash-avatar，本机生成）**

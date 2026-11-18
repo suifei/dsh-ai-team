@@ -308,7 +308,8 @@ window.__ModuleLoader__.load({
 			talentLoadFailed: '人才市场读取失败：{error}',
 			talentSkills: '技能：{skills}',
 			talentUser: '自建',
-			avatarTitle: '头像', avatarGender: '性别', avatarAge: '年龄', avatarRace: '人种', avatarHint: '头像按名字在本机生成（hash-avatar）；改名会换一张脸，参数不变。',
+			avatarTitle: '头像', avatarGender: '性别', avatarAge: '年龄', avatarRace: '种族', avatarArt: '画风', avatarHint: '头像按名字在本机生成（hash-avatar，自动更新到 npm 最新版）；改名会换一张脸，参数不变。',
+			avatar_southasian: '南亚人', avatar_seasian: '东南亚人', avatar_mideast: '中东人', avatar_latino: '拉丁裔', avatar_indigenous: '原住民', avatar_pacific: '太平洋岛民', avatar_elf: '精灵', avatar_orc: '兽人', avatar_goblin: '哥布林', avatar_troll: '巨魔', avatar_vampire: '吸血鬼', avatar_zombie: '僵尸', avatar_mummy: '木乃伊', avatar_oni: '鬼', avatar_tengu: '天狗', avatar_demon: '恶魔', avatar_angel: '天使', avatar_fairy: '仙子', avatar_mermaid: '人鱼', avatar_jinn: '灯神', avatar_dragon: '龙', avatar_kitsune: '九尾狐', avatar_qilin: '麒麟', avatar_phoenix: '凤凰', avatar_unicorn: '独角兽', avatar_nian: '年兽', avatar_tanuki: '狸猫', avatar_yeti: '雪怪', avatar_werewolf: '狼人', avatar_golem: '魔像', avatar_ghost: '幽灵', avatar_skeleton: '骷髅', avatar_slime: '史莱姆', avatar_cat: '猫', avatar_dog: '狗', avatar_fox: '狐狸', avatar_wolf: '狼', avatar_tiger: '老虎', avatar_lion: '狮子', avatar_leopard: '豹', avatar_panda: '熊猫', avatar_redpanda: '小熊猫', avatar_bear: '熊', avatar_koala: '考拉', avatar_raccoon: '浣熊', avatar_rabbit: '兔子', avatar_mouse: '老鼠', avatar_hamster: '仓鼠', avatar_hedgehog: '刺猬', avatar_capybara: '水豚', avatar_monkey: '猴子', avatar_ox: '牛', avatar_horse: '马', avatar_zebra: '斑马', avatar_giraffe: '长颈鹿', avatar_deer: '鹿', avatar_goat: '山羊', avatar_sheep: '绵羊', avatar_pig: '猪', avatar_elephant: '大象', avatar_snake: '蛇', avatar_frog: '青蛙', avatar_octopus: '章鱼', avatar_owl: '猫头鹰', avatar_penguin: '企鹅', avatar_rooster: '公鸡', avatar_chick: '小鸡', avatar_duck: '鸭子', avatar_parrot: '鹦鹉', avatar_bee: '蜜蜂', avatar_cyborg: '赛博格', avatar_android: '仿生人', avatar_hologram: '全息影像', avatar_robot: '机器人', avatar_ai: 'AI', avatar_alien: '外星人', avatar_insectoid: '虫族', avatar_mushroom: '蘑菇', avatar_pumpkin: '南瓜', avatar_snowman: '雪人', avatar_cactus: '仙人掌', avatar_star: '星星', avatar_any: '随机', avatar_art_flat: '扁平', avatar_art_pixel: '像素', avatar_art_ink: '水墨', avatar_art_comic: '漫画', avatar_art_sketch: '素描', avatar_art_neon: '霓虹', avatar_art_pop: '波普', avatar_art_mood: '心情', avatar_art_watercolor: '水彩', avatar_art_glitch: '故障', avatar_group_human: '人类', avatar_group_fantasy: '奇幻与神话', avatar_group_animal: '动物', avatar_group_scifi: '科幻与奇物', avatar_group_other: '其它',
 			avatar_male: '男', avatar_female: '女', avatar_neutral: '中性', avatar_baby: '婴儿', avatar_teen: '少年', avatar_youth: '青年', avatar_middle: '中年', avatar_old: '老年', avatar_asian: '黄种人', avatar_white: '白人', avatar_black: '黑人', avatar_brown: '棕色人种', avatar_auto: '不指定',
 			profileTabBasic: '资料', profileTabModel: '模型', profileTabSkills: '技能', profileTabCollab: '协作', profileNotes: '备忘', profileNotesEmpty: '还没有备忘。', profileSkillsEmpty: '还没装技能；在下面填技能名加一个，或到人才市场招已带技能的人才。',
 			teamPickDetail: '人才简介', teamPickDetailEmpty: '在左边点一位人才，这里看简介；点「加入」放进右边的团队。', teamLeadMark: '负责人', projectTeamMembers: '团队成员 · {n} 位',
@@ -764,7 +765,8 @@ window.__ModuleLoader__.load({
 			talentLoadFailed: 'Could not load the talent market: {error}',
 			talentSkills: 'Skills: {skills}',
 			talentUser: 'Custom',
-			avatarTitle: 'Avatar', avatarGender: 'Gender', avatarAge: 'Age', avatarRace: 'Ethnicity', avatarHint: 'Drawn locally from the name (hash-avatar); renaming gives a new face with the same settings.',
+			avatarTitle: 'Avatar', avatarGender: 'Gender', avatarAge: 'Age', avatarRace: 'Kind', avatarArt: 'Style', avatarHint: 'Drawn locally from the name (hash-avatar, kept at the latest npm release); renaming gives a new face with the same settings.',
+			avatar_art_flat: 'Flat', avatar_art_pixel: 'Pixel', avatar_art_ink: 'Ink', avatar_art_comic: 'Comic', avatar_art_sketch: 'Sketch', avatar_art_neon: 'Neon', avatar_art_pop: 'Pop', avatar_art_mood: 'Mood', avatar_art_watercolor: 'Watercolor', avatar_art_glitch: 'Glitch', avatar_group_human: 'Human', avatar_group_fantasy: 'Fantasy', avatar_group_animal: 'Animal', avatar_group_scifi: 'Sci-fi', avatar_group_other: 'Other',
 			avatar_male: 'Male', avatar_female: 'Female', avatar_neutral: 'Neutral', avatar_baby: 'Baby', avatar_teen: 'Teen', avatar_youth: 'Young', avatar_middle: 'Middle-aged', avatar_old: 'Senior', avatar_asian: 'Asian', avatar_white: 'White', avatar_black: 'Black', avatar_brown: 'Brown', avatar_auto: 'Any',
 			profileTabBasic: 'Profile', profileTabModel: 'Model', profileTabSkills: 'Skills', profileTabCollab: 'Collaboration', profileNotes: 'Notes', profileNotesEmpty: 'No notes yet.', profileSkillsEmpty: 'No skills yet; add one by name below, or hire a talent that comes with skills.',
 			teamPickDetail: 'Talent details', teamPickDetailEmpty: 'Pick a talent on the left to see its details; “Add” puts it into the team on the right.', teamLeadMark: 'Lead', projectTeamMembers: 'Team members · {n}',
@@ -1209,6 +1211,7 @@ window.__ModuleLoader__.load({
 			.at-avatarpickrows { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 			.at-avatarpickrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 			.at-avatarpickrow > .at-panetitle { width: 36px; flex: none; }
+			.at-avatarselect { height: 30px; min-width: 120px; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 8px; background: var(--dsw-alias-bg-layer-1); color: inherit; font: inherit; }
 			.at-avatar-human { border-color: transparent; background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-inverted); }
 			.at-msgb { min-width: 0; flex: 1; }
 			.at-msgh { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
@@ -1667,20 +1670,38 @@ window.__ModuleLoader__.load({
 			return h('span', { className: 'at-avatar at-avatar-img', style, 'aria-hidden': 'true' },
 				h('img', { src: url, alt: '', loading: 'lazy', decoding: 'async', referrerPolicy: 'no-referrer', onError: () => setBrokenUrl(url) }));
 		}
-		/** 头像参数挑选（性别 / 年龄 / 人种），左边实时预览。人才新建、自定义成员、成员资料共用。 */
+		/**
+		 * 头像参数挑选，左边实时预览。性别、年龄是分段按钮；种族按库的 GROUPS 分组下拉，画风下拉——
+		 * 取值来自当前加载的 hash-avatar（/ai-team/api/avatar/meta），库新增的取值没配中文名时显示原 id。
+		 * 人才新建、自定义成员、成员资料共用。
+		 */
 		function AvatarPicker({ t, value, seed, onChange }) {
 			const current = { ...AVATAR_PICK_DEFAULT, ...(value || {}) };
+			const options = AVATAR_META.options;
+			const set = (key, option) => onChange(avatarPickNext(current, key, option));
+			const segmented = (key, label) => h('div', { key, className: 'at-avatarpickrow' },
+				h('span', { className: 'at-panetitle' }, t(label)),
+				h('div', { className: 'at-mode at-addtabs', role: 'group', 'aria-label': t(label) }, (key === 'gender' ? options.genders : options.ages).map((option) => h('button', {
+					key: option,
+					type: 'button',
+					'aria-pressed': current[key] === option ? 'true' : 'false',
+					onClick: () => set(key, option),
+				}, avatarLabel(t, option)))));
+			const groups = Object.entries(options.groups);
 			return h('div', { className: 'at-avatarpick' },
 				h(Avatar, { name: seed, seed, avatar: current, size: 72 }),
 				h('div', { className: 'at-avatarpickrows' },
-					[['gender', 'avatarGender'], ['age', 'avatarAge'], ['race', 'avatarRace']].map(([key, label]) => h('div', { key, className: 'at-avatarpickrow' },
-						h('span', { className: 'at-panetitle' }, t(label)),
-						h('div', { className: 'at-mode at-addtabs', role: 'group', 'aria-label': t(label) }, AVATAR_CHOICES[key].map((option) => h('button', {
-							key: option,
-							type: 'button',
-							'aria-pressed': current[key] === option ? 'true' : 'false',
-							onClick: () => onChange({ ...current, [key]: option }),
-						}, t('avatar_' + option)))))),
+					segmented('gender', 'avatarGender'),
+					segmented('age', 'avatarAge'),
+					h('div', { className: 'at-avatarpickrow' },
+						h('span', { className: 'at-panetitle' }, t('avatarRace')),
+						h('select', { className: 'at-avatarselect', 'aria-label': t('avatarRace'), value: current.race, onChange: (event) => set('race', event.target.value) },
+							groups.length > 1
+								? groups.map(([group, list]) => h('optgroup', { key: group, label: avatarLabel(t, group, 'avatar_group_') }, list.map((race) => h('option', { key: race, value: race }, avatarLabel(t, race)))))
+								: options.races.map((race) => h('option', { key: race, value: race }, avatarLabel(t, race)))),
+						options.arts.length > 1 ? h('span', { className: 'at-panetitle' }, t('avatarArt')) : null,
+						options.arts.length > 1 ? h('select', { className: 'at-avatarselect', 'aria-label': t('avatarArt'), value: current.art || options.arts[0], onChange: (event) => set('art', event.target.value) },
+							options.arts.map((art) => h('option', { key: art, value: art }, avatarLabel(t, art, 'avatar_art_')))) : null),
 					h('div', { className: 'at-modalmeta' }, t('avatarHint'))));
 		}
 
@@ -3278,9 +3299,31 @@ window.__ModuleLoader__.load({
 		}
 
 		// <member-copy>
-		// 头像：插件本机按名字画（@suifei/hash-avatar 契约 v1，与 avatar.onrpc.com 同图），人才与按原名招来的成员是同一张脸。
+		// 头像：插件本机按名字画（@suifei/hash-avatar 运行时从 npm 取 latest），人才与按原名招来的成员是同一张脸。
 		const AVATAR_ROUTE = '/ai-team/api/avatar.svg';
-		const AVATAR_CHOICES = { gender: ['male', 'female', 'neutral'], age: ['baby', 'teen', 'youth', 'middle', 'old'], race: ['asian', 'white', 'black', 'brown', 'auto'] };
+		/** 库还没报上来之前认的取值（与 lib/domain/avatar.js 的 BASE_OPTIONS 同）。 */
+		const AVATAR_BASE_OPTIONS = { genders: ['male', 'female', 'neutral'], ages: ['baby', 'teen', 'youth', 'middle', 'old'], races: ['asian', 'white', 'black', 'brown', 'auto'], groups: { human: ['asian', 'white', 'black', 'brown', 'auto'] }, arts: ['flat'] };
+		/** 当前头像库：版本进图片地址（换版本即换地址，旧缓存不挡新图），可选值给挑选界面。由 /ai-team/api/avatar/meta 填。 */
+		const AVATAR_META = { version: '', options: AVATAR_BASE_OPTIONS };
+		function setAvatarMeta(body) {
+			const o = body && body.options;
+			const list = (value, fallback) => (Array.isArray(value) && value.length > 0 ? value.filter((x) => typeof x === 'string') : fallback);
+			const groups = o && o.groups && typeof o.groups === 'object' ? Object.fromEntries(Object.entries(o.groups).filter(([, v]) => Array.isArray(v) && v.length > 0)) : {};
+			AVATAR_META.version = body && typeof body.version === 'string' ? body.version : '';
+			AVATAR_META.options = o ? { genders: list(o.genders, AVATAR_BASE_OPTIONS.genders), ages: list(o.ages, AVATAR_BASE_OPTIONS.ages), races: list(o.races, AVATAR_BASE_OPTIONS.races), groups: Object.keys(groups).length > 0 ? groups : AVATAR_BASE_OPTIONS.groups, arts: list(o.arts, AVATAR_BASE_OPTIONS.arts) } : AVATAR_BASE_OPTIONS;
+			return AVATAR_META;
+		}
+		/** 选项的显示名：有翻译用翻译，库新增、还没配名字的显示原 id。 */
+		function avatarLabel(t, key, prefix = 'avatar_') {
+			const text = typeof t === 'function' ? t(prefix + key) : '';
+			return typeof text === 'string' && text !== '' && !text.endsWith(prefix + key) ? text : key;
+		}
+		/** 挑选后的新参数；画风选回库的第一个（默认 flat）就不写进参数。 */
+		function avatarPickNext(current, key, option) {
+			const next = { ...current, [key]: option };
+			if (key === 'art' && option === AVATAR_META.options.arts[0]) delete next.art;
+			return next;
+		}
 		/** 没设过头像、也查不到来源人才的成员：亚洲人、青年、性别不指定。 */
 		const AVATAR_FALLBACK = { gender: 'neutral', age: 'youth', race: 'asian' };
 		/** 自建时的初始选项：亚洲人、青年、男。 */
@@ -3292,9 +3335,13 @@ window.__ModuleLoader__.load({
 			return String(name ?? '').trim() || '?';
 		}
 		function avatarUrl(seed, avatar, size) {
-			const pick = (key) => (AVATAR_CHOICES[key].includes(avatar && avatar[key]) ? avatar[key] : AVATAR_FALLBACK[key]);
+			const o = AVATAR_META.options;
+			const lists = { gender: o.genders, age: o.ages, race: o.races };
+			const pick = (key) => (lists[key].includes(avatar && avatar[key]) ? avatar[key] : AVATAR_FALLBACK[key]);
 			const px = Math.max(16, Math.min(1024, Math.round((Number(size) || 24) * 2)));
-			return AVATAR_ROUTE + '?name=' + encodeURIComponent(String(seed ?? '')) + '&gender=' + pick('gender') + '&age=' + pick('age') + '&race=' + pick('race') + '&size=' + px;
+			const art = avatar && o.arts.includes(avatar.art) && avatar.art !== o.arts[0] ? '&art=' + avatar.art : '';
+			const version = AVATAR_META.version ? '&v=' + encodeURIComponent(AVATAR_META.version) : '';
+			return AVATAR_ROUTE + '?name=' + encodeURIComponent(String(seed ?? '')) + '&gender=' + pick('gender') + '&age=' + pick('age') + '&race=' + pick('race') + art + '&size=' + px + version;
 		}
 		/** 成员的头像参数：自己设过的 > 来源人才的 > 默认（负责人按中年）。 */
 		function memberAvatarOf(agent, talents) {
@@ -3538,6 +3585,8 @@ window.__ModuleLoader__.load({
 			// 人才市场（「添加成员」弹窗第一页）：可招聘的人才、筛选条件与当前页。
 			const [mTab, setMTab] = React.useState('market');
 			const [talents, setTalents] = React.useState(null);
+			// 头像库 meta 到了就重画一遍（图片地址带上库版本、挑选界面换成库的可选值）。
+			const [, setAvatarRev] = React.useState(0);
 			const [talentError, setTalentError] = React.useState('');
 			const [catalogInfo, setCatalogInfo] = React.useState(null);
 			const [catalogBusy, setCatalogBusy] = React.useState(false);
@@ -3725,6 +3774,8 @@ window.__ModuleLoader__.load({
 				// The package is @suifei/dsh-ai-team; the Host prefix is /ai-team.
 				// 头像要按成员的来源人才取参数：进工作台（切项目）时顺带取人才列表（没设过头像的老成员靠它）。
 				void loadTalents();
+				// 头像库版本与可选值（首次启动时服务端会等库下载完，最多 15 秒）。
+				void loadAvatarMeta();
 				const query = projectId ? '?project=' + encodeURIComponent(projectId) : '';
 				async function load() {
 					const seq = ++loadSeqRef.current;
@@ -4402,6 +4453,17 @@ window.__ModuleLoader__.load({
 				loadCatalogInfo();
 			}
 			/** 每次打开弹窗现取：用户刚改了 talent.yml 也能立刻看到。 */
+			async function loadAvatarMeta() {
+				try {
+					const response = await fetch('/ai-team/api/avatar/meta?wait=15000', { headers: { accept: 'application/json' } });
+					const body = await response.json().catch(() => null);
+					if (!response.ok || !body) return;
+					setAvatarMeta(body);
+					setAvatarRev((n) => n + 1);
+				} catch {
+					// 取不到就用默认可选值；图片照样按名字取，失败退回首字母。
+				}
+			}
 			async function loadTalents() {
 				setTalentError('');
 				try {

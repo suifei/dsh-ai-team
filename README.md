@@ -12,9 +12,12 @@
   <a href="https://www.npmjs.com/package/@suifei/dsh-ai-team"><img alt="npm" src="https://img.shields.io/npm/v/@suifei/dsh-ai-team?color=2f6feb&label=npm"></a>
   <a href="https://github.com/suifei/dsh-ai-team/releases"><img alt="release" src="https://img.shields.io/github/v/release/suifei/dsh-ai-team?color=2f6feb"></a>
   <a href="./LICENSE"><img alt="license" src="https://img.shields.io/badge/license-MIT-2f6feb"></a>
-  <img alt="tests" src="https://img.shields.io/badge/tests-435%20passing-2ea043">
+  <img alt="tests" src="https://img.shields.io/badge/tests-439%20passing-2ea043">
   <img alt="dsh" src="https://img.shields.io/badge/DeepSeek%20Harness-plugin-6f42c1">
+  <a href="https://github.com/suifei/dsh-ai-team/stargazers"><img alt="GitHub stars" src="https://img.shields.io/github/stars/suifei/dsh-ai-team?style=social"></a>
 </p>
+
+<p align="center">觉得有用？点右上角 ⭐ <a href="https://github.com/suifei/dsh-ai-team">Star</a> 支持一下，也欢迎 <a href="https://github.com/suifei/dsh-ai-team/issues">提 issue</a> 和 <a href="https://github.com/suifei/dsh-ai-team/pulls">发 PR</a>。</p>
 
 > 文渊阁，藏修、校勘、纂辑之地。  
 > 在这里，Human 不在环里逐条调度，而是在环上定方向、守信任、做最后那一步。
@@ -30,7 +33,7 @@
 - **人才市场**（0.4.124–0.4.129）：9 个内置团队、44 位内置人才，各自带看家技能。可以招聘、复制为可编辑、自建人才并装技能，也能把项目成员「存为人才」；新建项目时选团队，或从人才里挑人组新团队。
 - **主理人只调度交付**（0.4.128）：主理人不看产出，只问负责人做全没有；内容由验收人把关。
 - **在线人才库**（0.4.130–0.4.131）：「同步在线库」从 [`@suifei/dsh-ai-team-catalog`](https://www.npmjs.com/package/@suifei/dsh-ai-team-catalog) 拉取最新的人才与团队。国内走 npmmirror 整包下载，约 1 秒同步完；逐个文件核对 sha256，失败不影响旧版本，可一键退回内置。
-- **头像**（0.4.135）：人才市场、团队、成员卡片都有头像，由 [`@suifei/hash-avatar`](https://www.npmjs.com/package/@suifei/hash-avatar) 在本机按名字生成（与 [avatar.onrpc.com](https://avatar.onrpc.com/) 同图，不连外网）；内置人才预置了参数（默认亚洲人），自定义成员和人才可以选性别、年龄、人种。
+- **头像**（0.4.135–0.4.136）：人才市场、团队、成员卡片都有头像，由 [`@suifei/hash-avatar`](https://www.npmjs.com/package/@suifei/hash-avatar) 在本机按名字生成。这个库**不随插件打包**：插件运行时从 npm 取最新版并缓存在本机，库更新了插件不用重发，新增的种族、画风直接出现在挑选界面里。内置人才预置了参数（默认亚洲人），自定义成员和人才可以选性别、年龄、种族（人类 / 奇幻 / 动物 / 科幻共 88 种）和画风（扁平、像素、水墨等 10 种）。
 - **弹窗与人员池**（0.4.132–0.4.133）：
   - 弹窗占主页面的 90%，功能按钮固定在右上角。
   - 成员资料按「资料 / 模型 / 技能 / 协作」分页签。
@@ -61,7 +64,7 @@
 
 ### 顺带做了个头像库：hash-avatar
 
-为了让人才市场里的每位人才都有一张自己的脸，我们另做了一个开源库 **[`@suifei/hash-avatar`](https://www.npmjs.com/package/@suifei/hash-avatar)**（[GitHub](https://github.com/suifei/hash-avatar)）。文渊阁的头像就是它在本机生成的。
+为了让人才市场里的每位人才都有一张自己的脸，我们另做了一个开源库 **[`@suifei/hash-avatar`](https://www.npmjs.com/package/@suifei/hash-avatar)**（[GitHub](https://github.com/suifei/hash-avatar)）<a href="https://github.com/suifei/hash-avatar/stargazers"><img alt="hash-avatar stars" src="https://img.shields.io/github/stars/suifei/hash-avatar?style=social" align="absmiddle"></a>，同样欢迎 Star。文渊阁的头像就是它在本机生成的。
 
 <p align="center">
   <img src="https://avatar.onrpc.com/v1/%E5%A2%A8%E6%B8%8A.svg?gender=male&age=middle&race=asian&size=96" width="72" alt="墨渊" />
@@ -73,7 +76,7 @@
 </p>
 
 - **由名字或 email 确定**：输入经 SHA-256 决定五官、发型和配色；同一个名字永远是同一张脸。外圈 128 个刻度画出哈希的前 128 位，两个不同输入撞上同一张图的概率低于 UUIDv4 撞车。
-- **性别、年龄、人种只是渲染参数**，不进哈希，所以换参数后还是认得出同一个人：`gender=male|female|neutral`、`age=baby|teen|youth|middle|old`、`race=asian|white|black|brown|auto`。
+- **性别、年龄、种族、画风只是渲染参数**，不进哈希，所以换参数后还是认得出同一个人：`gender=male|female|neutral`、`age=baby|teen|youth|middle|old`；`race` 有人类、奇幻与神话、动物、科幻与奇物四组共 88 种（如 `asian`、`elf`、`fox`、`robot`）；`art` 有 `flat`、`pixel`、`ink`、`comic`、`watercolor` 等 10 种画风。
 - **零依赖、同步、浏览器和 Node 都能用**，一张约 0.1 ms、约 6 KB 的 SVG；Apache-2.0。
 - **不写代码也能用**：`https://avatar.onrpc.com/<名字>.svg?gender=female&age=youth&race=asian` 直接当图片地址。
 
@@ -306,6 +309,15 @@ round-19  DeepSeek + Zhipu 双 provider
 - SSE 分桶用两个真实 provider 的独立订阅端验证，不是两个浏览器窗口；
 - distilly / darwin 不内置，有则用、无则不用；`huashu-nuwa` 已被 Team 技能目录排除。
 - desktop profile 由插件 patch 固定为 `danger-full-access / never`，只应在可信机器使用。
+
+## 参与贡献
+
+欢迎 ⭐ [Star](https://github.com/suifei/dsh-ai-team)，这是对我们最直接的鼓励。
+
+- **用着有问题、有想法**：到 [Issues](https://github.com/suifei/dsh-ai-team/issues) 说一声，附上截图或诊断日志最好。
+- **想动手改**：Fork 后开分支提 [PR](https://github.com/suifei/dsh-ai-team/pulls)，改行为的代码请配测试，`node --test` 全绿再提交。
+- **贡献人才和团队**：新的人才（`talents/<人才>/talent.yml`）和团队（`teams/<团队>/team.yml`）都欢迎，合并后会随在线人才库发给所有用户。
+- **头像库**：[hash-avatar](https://github.com/suifei/hash-avatar) 同样欢迎 Star 和贡献新的种族、画风。
 
 ---
 
