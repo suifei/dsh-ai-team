@@ -62,7 +62,7 @@ test('client wiring: both reply boxes auto-fit, the profile dialog offers duplic
 	assert.match(source, /useFitTextarea\(boxRef, draft\);/);
 	assert.match(source, /useFitTextarea\(replyRef, reply\);/);
 	assert.equal(source.match(/onMouseUp: \(event\) => rememberTextareaDrag\(event\.currentTarget\)/g)?.length, 2);
-	assert.match(source, /openCopyAgent\(source\); \}, disabled: pBusy \}, t\('memberCopy'\)\)/);
+	assert.match(source, /openCopyAgent\(source\); \}, disabled: pBusy \}, withIco\('copy', t\('memberCopy'\), 12\)\)/);
 	const create = source.slice(source.indexOf('async function createAgent()'), source.indexOf("say(t('memberAdded'))"));
 	assert.match(create, /personality: mCopy\.personality/);
 	assert.match(create, /preset: mCopy\.preset/);

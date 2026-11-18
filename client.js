@@ -308,6 +308,9 @@ window.__ModuleLoader__.load({
 			talentLoadFailed: '人才市场读取失败：{error}',
 			talentSkills: '技能：{skills}',
 			talentUser: '自建',
+			profileTabBasic: '资料', profileTabModel: '模型', profileTabSkills: '技能', profileTabCollab: '协作', profileNotes: '备忘',
+			teamPickDetail: '人才简介', teamPickDetailEmpty: '在左边点一位人才，这里看简介；点「加入」放进右边的团队。', teamLeadMark: '负责人', projectTeamMembers: '团队成员 · {n} 位',
+			peopleModelBatch: '批量配置模型', peopleModelTitle: '配置模型', peopleModelHint: '选中的成员在其所在的全部项目里改用这个模型；之后仍可在成员资料里单独改。', peopleModelPick: '应用到 {n} 位', peopleModelAll: '全选', peopleModelNone: '全不选', peopleModelApply: '应用', peopleModelNeed: '先选模型', peopleModelDone: '已为 {people} 位成员配置 {model}（成功 {done} 处，失败 {failed} 处）。',
 			talentOfficial: '在线', catalogNone: '在线人才库：未同步（当前用插件内置）', catalogAt: '在线人才库：v{version} · {time} 同步', catalogSync: '同步在线库', catalogSyncing: '同步中…', catalogSyncHint: '从官方在线人才库（npmmirror / jsDelivr）取最新的人才与团队；逐文件校验，失败不影响现有的。你自建或改过的人才不受影响。', catalogUpdated: '已同步到 v{version}（{files} 个文件）。', catalogLatest: '已是最新 v{version}。', catalogFailed: '同步失败：{error}', catalogClear: '退回内置', catalogClearConfirm: '删掉本机的在线人才库，退回插件内置版本？你自建或改过的人才不受影响。',
 			talentFork: '复制为可编辑', talentForkHint: '把这位内置人才复制成你自己的副本（同名遮盖内置），之后可装技能、进化技能；已招的成员下次激活就用副本。', talentForked: '已改', talentRestore: '恢复内置', talentRestoreConfirm: '删掉「{name}」的可编辑副本，恢复内置版？副本里装的、进化过的技能都会丢弃。', skillEvolve: '进化', skillEvolveHint: '让这位成员用 SkillOpt 优化这份技能：诊断最弱一维、改写、评审官盲评，好就保留，不好回退。', skillEvolveSent: '已私信 {name} 进化技能「{skill}」。', skillEvolveForked: '内置人才「{talent}」已复制为可编辑副本，并已私信 {name} 进化技能「{skill}」。', skillEvolveFailed: '技能进化没发出去：{error}',
 			talentHint: '挑一位人才预填表单，改名、换模型后再招进项目；自建人才放在 ~/.dsh/ai-team/catalog/user/talents/。',
@@ -408,6 +411,7 @@ window.__ModuleLoader__.load({
 			people: '人员',
 			peopleTitle: '人员池',
 			peopleEmpty: '还没有成员；先在项目里添加。',
+			peopleGoal: '按人汇总各项目里的成员：看负载、配置模型、跳到所在项目。',
 			peopleProjects: '{n} 个项目',
 			refresh: '刷新',
 			peopleActiveTasks: '{n} 个活跃任务',
@@ -428,9 +432,7 @@ window.__ModuleLoader__.load({
 			teamBusyN: '在做 ×{n}',
 			pendingAcceptanceN: '待验收 ×{n}',
 			archivedCount: '已归档 {n}',
-			personModelBtn: '统一配置模型',
-			personModelTitle: '为「{name}」选择 LLM 端点（应用到其所有项目）',
-			personModelDone: '已把「{name}」配置为 {model}（成功 {done} 处，失败 {failed} 处）。',
+			personModelBtn: '配置模型',
 			modelCatalogEmpty: '模型目录为空：请先在 DSH 设置里配置可用的 LLM 端点。',
 			q1Title: '需要你',
 			q2Title: '团队在做',
@@ -760,6 +762,9 @@ window.__ModuleLoader__.load({
 			talentLoadFailed: 'Could not load the talent market: {error}',
 			talentSkills: 'Skills: {skills}',
 			talentUser: 'Custom',
+			profileTabBasic: 'Profile', profileTabModel: 'Model', profileTabSkills: 'Skills', profileTabCollab: 'Collaboration', profileNotes: 'Notes',
+			teamPickDetail: 'Talent details', teamPickDetailEmpty: 'Pick a talent on the left to see its details; “Add” puts it into the team on the right.', teamLeadMark: 'Lead', projectTeamMembers: 'Team members · {n}',
+			peopleModelBatch: 'Set model for many', peopleModelTitle: 'Set model', peopleModelHint: 'The selected members switch to this model in every project they are in; each can still be changed in its profile.', peopleModelPick: 'Apply to {n}', peopleModelAll: 'All', peopleModelNone: 'None', peopleModelApply: 'Apply', peopleModelNeed: 'Pick a model first', peopleModelDone: 'Set {model} for {people} members ({done} ok, {failed} failed).',
 			talentOfficial: 'Online', catalogNone: 'Online catalog: not synced (using the built-in one)', catalogAt: 'Online catalog: v{version} · synced {time}', catalogSync: 'Sync online catalog', catalogSyncing: 'Syncing…', catalogSyncHint: 'Fetch the latest talents and teams from the official online catalog (npmmirror / jsDelivr); every file is verified, and a failed sync leaves the current one untouched. Your own and edited talents are not affected.', catalogUpdated: 'Synced to v{version} ({files} files).', catalogLatest: 'Already up to date (v{version}).', catalogFailed: 'Sync failed: {error}', catalogClear: 'Use built-in', catalogClearConfirm: 'Delete the local online catalog and go back to the built-in one? Your own and edited talents are not affected.',
 			talentFork: 'Make editable', talentForkHint: 'Copy this built-in talent into your own copy (same id, shadows the built-in) so you can install and evolve its skills; hired members use the copy on their next activation.', talentForked: 'Edited', talentRestore: 'Restore built-in', talentRestoreConfirm: 'Delete your editable copy of “{name}” and restore the built-in? Skills installed or evolved in the copy are discarded.', skillEvolve: 'Evolve', skillEvolveHint: 'Have this member optimize the skill with SkillOpt: diagnose the weakest dimension, rewrite, blind review by the reviewer; kept if better, reverted if not.', skillEvolveSent: 'Asked {name} to evolve the skill “{skill}”.', skillEvolveForked: 'Built-in talent “{talent}” was copied into an editable copy, and {name} was asked to evolve the skill “{skill}”.', skillEvolveFailed: 'Could not start skill evolution: {error}',
 			talentHint: 'Pick a talent to prefill the form, rename it or change the model, then hire. Your own talents live in ~/.dsh/ai-team/catalog/user/talents/.',
@@ -860,6 +865,7 @@ window.__ModuleLoader__.load({
 			people: 'People',
 			peopleTitle: 'People',
 			peopleEmpty: 'No members yet; add them in a project.',
+			peopleGoal: 'Members across projects, grouped by person: load, model and a jump to each project.',
 			peopleProjects: '{n} project(s)',
 			refresh: 'Refresh',
 			peopleActiveTasks: '{n} active task(s)',
@@ -881,8 +887,6 @@ window.__ModuleLoader__.load({
 			pendingAcceptanceN: 'awaiting acceptance ×{n}',
 			archivedCount: 'Archived {n}',
 			personModelBtn: 'Set model',
-			personModelTitle: 'Choose the LLM endpoint for "{name}" (applies to all its projects)',
-			personModelDone: 'Set "{name}" to {model} ({done} ok, {failed} failed).',
 			modelCatalogEmpty: 'The model catalog is empty: configure an LLM endpoint in DSH settings first.',
 			q1Title: 'Needs you',
 			q2Title: 'Team is doing',
@@ -1398,7 +1402,42 @@ window.__ModuleLoader__.load({
 			/* 内容型弹窗（添加成员 / 人才市场、成员资料、新建项目、组队）：插件页面的 90% 宽高；确认框等小弹窗保持紧凑。 */
 			.at-modalback:has(> .at-modal-wide) { padding: 0; }
 			.at-modal.at-modal-wide { width: 90%; height: 90%; max-height: 90%; }
-			.at-modal-wide > .at-modalactions:last-child { margin-top: auto; }
+			/* 所有弹窗：标题栏固定在顶部，功能按钮在右上角；内容再长也不用滚到底找按钮。 */
+			.at-modal { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: start; column-gap: 12px; row-gap: 10px; padding-top: 0; }
+			.at-modal > * { grid-column: 1 / -1; min-width: 0; }
+			.at-modal > .at-addtabs { justify-self: start; }
+			.at-modal > .at-modaltitle { grid-column: 1; grid-row: 1; position: sticky; top: 0; z-index: 3; align-self: stretch; margin: 0; padding: 14px 0 10px; background: var(--dsw-alias-bg-layer-2); border-bottom: 1px solid var(--dsw-alias-border-l1); }
+			.at-modal > .at-modalactions { grid-column: 2; grid-row: 1; position: sticky; top: 0; z-index: 3; align-self: stretch; align-items: center; margin: 0; padding: 8px 0; background: var(--dsw-alias-bg-layer-2); border-bottom: 1px solid var(--dsw-alias-border-l1); }
+			.at-actsep { width: 1px; align-self: stretch; margin: 6px 2px; background: var(--dsw-alias-border-l2); }
+			.at-btn-danger { color: var(--dsw-alias-state-error-primary); border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 45%, transparent); }
+			.at-btn-danger:hover { background: color-mix(in srgb, var(--dsw-alias-state-error-primary) 10%, transparent); }
+			.at-btn-warn { color: var(--dsw-alias-state-warn-primary); border-color: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 45%, transparent); }
+			.at-btn-warn:hover { background: color-mix(in srgb, var(--dsw-alias-state-warn-primary) 10%, transparent); }
+			.at-btn-accent { color: var(--dsw-alias-state-business-primary); border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 45%, transparent); }
+			.at-btn-accent:hover { background: color-mix(in srgb, var(--dsw-alias-state-business-primary) 10%, transparent); }
+			.at-fieldgrid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 12px; }
+			.at-fieldgrid3 .at-modelfields, .at-fieldgrid3 .at-modelfields > .at-fieldrow { display: contents; }
+			.at-fieldgrid3 .at-modelfields > :not(.at-fieldrow) { grid-column: 1 / -1; }
+			.at-notesbox { max-height: 200px; overflow-y: auto; padding: 8px 10px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 8px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; white-space: pre-wrap; overflow-wrap: anywhere; }
+			.at-split { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(0, 1.7fr); gap: 16px; align-items: start; }
+			.at-teamcomposer { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(0, 1.4fr) minmax(240px, 1.1fr); gap: 14px; align-items: start; }
+			.at-pane { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+			.at-panetitle { color: var(--dsw-alias-label-secondary); font-size: 12px; font-weight: 600; }
+			.at-panelist { display: flex; flex-direction: column; gap: 2px; max-height: 58vh; overflow-y: auto; padding: 4px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 10px; }
+			.at-pickrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent; color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+			.at-pickrow:hover { background: var(--dsw-alias-interactive-bg-hover); }
+			.at-pickrow[aria-selected="true"] { background: var(--dsw-alias-button-ghost-active-fill); }
+			.at-pickrow > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+			.at-pickrole { color: var(--dsw-alias-label-tertiary); }
+			.at-peoplegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; margin: 0 12px 12px; }
+			.at-pcard { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 12px; border: 1px solid var(--dsw-alias-border-l1); border-radius: 10px; background: var(--dsw-alias-bg-layer-1); }
+			.at-pcard.at-people-failed { border-color: var(--dsw-alias-state-error-primary); }
+			.at-streamwide { max-width: none; }
+			.at-pcard .at-peoplebadges { margin-left: 0; }
+			.at-pcardhead { display: flex; align-items: center; gap: 8px; min-width: 0; }
+			.at-pcardfoot { display: flex; justify-content: flex-end; gap: 6px; margin-top: auto; }
+			.at-peoplecheck { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 6px; }
+			@media (max-width: 900px) { .at-split, .at-teamcomposer, .at-fieldgrid3 { grid-template-columns: minmax(0, 1fr); } }
 			.at-addtabs { align-self: flex-start; }
 			.at-tcskills { display: flex; flex-wrap: wrap; gap: 6px; }
 			.at-tcskill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: rgba(127,127,127,0.15); font-size: 12px; }
@@ -1413,7 +1452,6 @@ window.__ModuleLoader__.load({
 			.at-teampickrow > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 			.at-market { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 			.at-catalogstate { display: inline-flex; align-items: center; gap: 5px; }
-			.at-catalogbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
 			.at-marketsearch { width: 100%; padding: 6px 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: var(--dsw-radius-sm); background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); font: inherit; font-size: 12px; }
 			.at-marketcats { display: flex; flex-wrap: wrap; gap: 4px; }
 			.at-marketcat { min-height: 22px; padding: 0 8px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; background: transparent; color: var(--dsw-alias-label-tertiary); font: inherit; font-size: 11px; cursor: pointer; }
@@ -1425,7 +1463,8 @@ window.__ModuleLoader__.load({
 			.at-talentrole { color: var(--dsw-alias-label-secondary); font-size: 12px; }
 			.at-talentduty { display: inline-flex; align-items: center; gap: 3px; padding: 0 6px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 999px; color: var(--dsw-alias-label-tertiary); font-size: 10.5px; line-height: 16px; }
 			.at-talentdesc { color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; }
-			.at-talentfoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; }
+			.at-talentfoot { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin-top: auto; }
+			.at-talentfoot .at-tcpick { justify-content: flex-end; flex-wrap: nowrap; margin-top: 0; }
 			.at-modalmeta { color: var(--dsw-alias-label-tertiary); font-size: 11px; line-height: 16px; }
 			.at-modal .at-check { display: flex; align-items: center; gap: 6px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
 			.at-modal .at-check input { accent-color: var(--dsw-alias-state-business-primary); }
@@ -1561,7 +1600,7 @@ window.__ModuleLoader__.load({
 			if (name === 'users') return h('svg', common, h('circle', { cx: 6, cy: 5.5, r: 2.4 }), h('path', { d: 'M1.5 13.5a4.5 4.5 0 0 1 9 0' }), h('path', { d: 'M10 3.3a2.4 2.4 0 0 1 0 4.4M12 9.5a4.5 4.5 0 0 1 2.5 4' }));
 			if (name === 'cloud') return h('svg', common, h('path', { d: 'M4.5 12.5h7a3 3 0 0 0 .4-6 4 4 0 0 0-7.7.9 2.6 2.6 0 0 0 .3 5.1Z' }));
 			if (name === 'pen') return h('svg', common, h('path', { d: 'M10.5 3 13 5.5 6 12.5H3.5V10Z' }), h('path', { d: 'M9 4.5 11.5 7' }));
-			if (name === 'spark') return h('svg', common, h('path', { d: 'M8 2v3M8 11v3M2 8h3M11 8h3' }), h('path', { d: 'M8 5.5 9 7l1.5 1L9 9l-1 1.5L7 9 5.5 8 7 7Z' }));
+			if (name === 'spark') return h('svg', common, h('path', { d: 'M7 2.5 8.3 6.2 12 7.5 8.3 8.8 7 12.5 5.7 8.8 2 7.5 5.7 6.2Z' }), h('path', { d: 'M12.5 10.5v3M11 12h3' }));
 			if (name === 'store') return h('svg', common, h('path', { d: 'M2.5 6 3.5 3h9l1 3' }), h('path', { d: 'M2.5 6a1.8 1.8 0 0 0 3.7 0 1.8 1.8 0 0 0 3.6 0 1.8 1.8 0 0 0 3.7 0' }), h('path', { d: 'M3.5 8v5.5h9V8' }));
 			if (name === 'folderPlus') return h('svg', common, h('path', { d: 'M2.5 4.5a1 1 0 0 1 1-1h3l1.5 1.5h4.5a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1Z' }), h('path', { d: 'M8 7.5v3M6.5 9h3' }));
 			if (name === 'loop') return h('svg', { width: 18, height: 18, viewBox: '0 0 32 32', fill: 'none', 'aria-hidden': 'true', focusable: 'false' }, h('rect', { x: 2.5, y: 5.5, width: 21, height: 21, rx: 6.5, stroke: 'currentColor', strokeWidth: 2.6 }), h('circle', { cx: 23.5, cy: 16, r: 4.8, fill: 'var(--dsw-alias-state-business-primary)' }));
@@ -2090,6 +2129,41 @@ window.__ModuleLoader__.load({
 		}
 
 		/**
+		 * 人员池「配置模型」：一次给选中的多位成员（在其所在的全部项目）设同一模型；单人入口也走这里（只勾那一位）。
+		 * 成员资料里的单独设置照旧保留。
+		 */
+		function PeopleModelDialog({ t, catalog, catalogError, people, initial, onApply, onClose }) {
+			const [picked, setPicked] = React.useState(() => new Set(initial));
+			const [provider, setProvider] = React.useState(catalog?.defaultModel?.provider ?? '');
+			const [model, setModel] = React.useState(catalog?.defaultModel?.model ?? '');
+			const [effort, setEffort] = React.useState('');
+			const [busy, setBusy] = React.useState(false);
+			const toggle = (name) => setPicked((prev) => { const next = new Set(prev); if (next.has(name)) next.delete(name); else next.add(name); return next; });
+			const apply = async () => {
+				if (busy || model === '' || picked.size === 0) return;
+				setBusy(true);
+				try { await onApply([...picked], { provider, model, ...(effort === '' ? {} : { reasoningEffort: effort }) }); } finally { setBusy(false); }
+			};
+			return h(ModalBack, { onClose },
+				h('div', { className: 'at-modal at-modal-wide', role: 'dialog', 'aria-modal': 'true', 'aria-label': t('peopleModelTitle') },
+					h('h2', { className: 'at-modaltitle' }, withIco('layers', t('peopleModelTitle'), 16)),
+					h('div', { className: 'at-modalactions' },
+						h('button', { className: 'at-btn', type: 'button', onClick: onClose, disabled: busy }, withIco('close', t('cancel'))),
+						h('button', { className: 'at-btn at-btn-primary', type: 'button', onClick: () => void apply(), disabled: busy || model === '' || picked.size === 0, title: model === '' ? t('peopleModelNeed') : '' }, withIco('check', busy ? t('saving') : tf(t, 'peopleModelPick', { n: picked.size })))),
+					h('div', { className: 'at-modalmeta' }, t('peopleModelHint')),
+					h('div', { className: 'at-fieldgrid3' },
+						h(ModelFields, { t, catalog, provider, effort, onEffort: setEffort, model, onProvider: setProvider, onModel: setModel, error: catalogError })),
+					h('div', { className: 'at-pane' },
+						h('div', { className: 'at-tcpick' },
+							h('span', { className: 'at-panetitle' }, t('peopleTitle') + ' · ' + picked.size + '/' + people.length),
+							h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => setPicked(new Set(people.map((p) => p.name))) }, t('peopleModelAll')),
+							h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => setPicked(new Set()) }, t('peopleModelNone'))),
+						h('div', { className: 'at-peoplecheck' }, people.map((person) => h('label', { key: person.name, className: 'at-check' },
+							h('input', { type: 'checkbox', checked: picked.has(person.name), onChange: () => toggle(person.name) }),
+							h('span', null, person.name + (person.role ? ' · ' + person.role : ''))))))));
+		}
+
+		/**
 		 * 人员池总览（全局层，11-管理视角 §2）：按"人"聚合各项目身份。
 		 * 数据 = GET /ai-team/api/people（各项目账本 members/tasks 的只读聚合）。
 		 */
@@ -2108,10 +2182,11 @@ window.__ModuleLoader__.load({
 			if (!people || people.length === 0) return h('div', { className: 'at-stream', role: 'region', 'aria-label': t('peopleTitle') },
 				h('div', { className: 'at-streaminner' }, h(EmptyState, { t, icon: 'layers', title: t('peopleTitle'), body: t('peopleEmpty') })));
 			return h('div', { className: 'at-stream', role: 'region', 'aria-label': t('peopleTitle') },
-				h('div', { className: 'at-streaminner' },
+				h('div', { className: 'at-streaminner at-streamwide' },
 					h('div', { className: 'at-peoplehead' },
 						h('span', { className: 'at-peoplecount' }, loading ? t('loading') : tf(t, 'peopleProjects', { n: people.length })),
-						h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: onRefresh, disabled: loading }, t('refresh'))),
+						onConfigModel ? h('button', { className: 'at-btn at-btn-small at-btn-accent', type: 'button', onClick: () => onConfigModel(people.map((person) => person.name)) }, withIco('layers', t('peopleModelBatch'), 12)) : null,
+						h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: onRefresh, disabled: loading }, withIco('sync', t('refresh'), 12))),
 					onBindAlias ? h('details', { className: 'at-aliasbox' },
 						h('summary', { className: 'at-peoplesum' }, h('span', { className: 'at-people-role' }, t('aliasTitle'))),
 						h('div', { className: 'at-aliasrow' },
@@ -2120,37 +2195,36 @@ window.__ModuleLoader__.load({
 							h('input', { className: 'at-decisioninput', value: aliasDraft?.target ?? '', placeholder: t('aliasTargetPlaceholder'), onChange: (event) => aliasDraft.onTarget(event.target.value) }),
 							h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => onBindAlias(aliasDraft?.target ?? '') }, t('aliasBind'))),
 						h('div', { className: 'at-modalmeta' }, t('aliasHint'))) : null,
-					people.map((person) => {
-					const badges = [
-						tf(t, 'peopleProjects', { n: person.projects.length }),
-						tf(t, 'peopleActiveTasks', { n: person.activeTasks }),
-					];
-					if (person.failures > 0) badges.push(tf(t, 'peopleFailure', { n: person.failures }));
-					return h('details', { key: person.name, className: cx('at-people', person.failures > 0 && 'at-people-failed') },
-						h('summary', { className: 'at-peoplesum' },
-							h(Avatar, { name: person.name, human: false }),
-							h('span', { className: 'at-peoplename' }, person.name),
-							person.role ? h('span', { className: 'at-people-role' }, person.role) : null,
-							h('span', { className: 'at-peoplebadges' }, badges.join(' · ')),
-							// P2：统一配置该人在所有项目的 LLM 端点（人员池级入口，
-							// 免去逐项目×逐成员修改）。
-							onConfigModel ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: (event) => { event.preventDefault(); onConfigModel(person); } }, t('personModelBtn')) : null),
-						h('div', { className: 'at-peopleprojects' }, person.projects.map((row) => {
-							const failed = row.lastFailure !== undefined && row.lastFailure !== null;
-							const localHere = localNames.has(person.name);
-							return h('div', { key: row.projectId, className: 'at-peopleproject' },
-								h('span', { className: 'at-peopleprojectname' }, row.projectName),
-								row.talentPool
-									? h('span', { className: 'at-peoplestate' }, t('talentPool'))
-									: h('span', { className: 'at-peoplestate' }, t(AGENT_STATUS[row.status] ?? 'agentIdle')),
-								h('span', { className: 'at-peopletasks' }, tf(t, 'peopleActiveTasks', { n: row.activeTasks })),
-								failed ? h('span', { className: 'at-peoplefail', title: row.lastFailure.message ?? '' }, tf(t, 'peopleFailure', { n: 1 }) + ' · ' + failureHuman(t, row.lastFailure.category)) : null,
+					h('div', { className: 'at-peoplegrid' }, people.map((person) => {
+						const badges = [
+							tf(t, 'peopleProjects', { n: person.projects.length }),
+							tf(t, 'peopleActiveTasks', { n: person.activeTasks }),
+						];
+						if (person.failures > 0) badges.push(tf(t, 'peopleFailure', { n: person.failures }));
+						const localHere = localNames.has(person.name);
+						return h('div', { key: person.name, className: cx('at-pcard', person.failures > 0 && 'at-people-failed') },
+							h('div', { className: 'at-pcardhead' },
+								h(Avatar, { name: person.name, human: false }),
+								h('span', { className: 'at-peoplename' }, person.name),
+								person.role ? h('span', { className: 'at-people-role' }, person.role) : null),
+							h('div', { className: 'at-peoplebadges' }, badges.join(' · ')),
+							h('div', { className: 'at-peopleprojects' }, person.projects.map((row) => {
+								const failed = row.lastFailure !== undefined && row.lastFailure !== null;
+								return h('div', { key: row.projectId, className: 'at-peopleproject' },
+									h('span', { className: 'at-peopleprojectname' }, row.projectName),
+									row.talentPool
+										? h('span', { className: 'at-peoplestate' }, t('talentPool'))
+										: h('span', { className: 'at-peoplestate' }, t(AGENT_STATUS[row.status] ?? 'agentIdle')),
+									h('span', { className: 'at-peopletasks' }, tf(t, 'peopleActiveTasks', { n: row.activeTasks })),
+									failed ? h('span', { className: 'at-peoplefail', title: row.lastFailure.message ?? '' }, failureHuman(t, row.lastFailure.category)) : null,
+									h('button', { className: 'at-btn at-btn-small at-iconbtn', type: 'button', title: t('peopleOpenProject'), 'aria-label': t('peopleOpenProject'), onClick: () => onOpenProject(row.projectId) }, h(Ico, { name: 'chevron', size: 12 })));
+							})),
+							h('div', { className: 'at-pcardfoot' },
 								// R-03 入口统一：在本项目内才能直达资料/私信（跨项目先切项目）。
-								localHere ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => onOpenPerson(person.name) }, t('memberProfileTitle')) : null,
-								localHere ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => onChatPerson(person.name) }, t('agentChat')) : null,
-								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => onOpenProject(row.projectId) }, t('peopleOpenProject')));
-						})));
-				})));
+								localHere ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => onOpenPerson(person.name) }, withIco('user', t('memberProfileTitle'), 12)) : null,
+								localHere ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => onChatPerson(person.name) }, withIco('reply', t('agentChat'), 12)) : null,
+								onConfigModel ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => onConfigModel([person.name]) }, withIco('layers', t('personModelBtn'), 12)) : null));
+					}))));
 		}
 
 		/**
@@ -2742,18 +2816,37 @@ window.__ModuleLoader__.load({
 		}
 
 		const DUTY_LABEL = { lead: 'dutyLead', qa: 'dutyQa', executor: 'dutyExecutor' };
+		/** 人才 / 团队成员的卡片正文（人才市场、组队简介、新建项目的团队成员共用一份）。 */
+		function TalentInfo({ t, talent, lead, full }) {
+			const badge = talent.forked ? withIco('pen', t('talentForked'), 10)
+				: talent.source === 'user' ? withIco('user', t('talentUser'), 10)
+					: talent.source === 'official' ? withIco('cloud', t('talentOfficial'), 10) : null;
+			return [
+				h('div', { key: 'head', className: 'at-talenthead' },
+					h('span', { className: 'at-talentname' }, talent.name),
+					talent.role ? h('span', { className: 'at-talentrole' }, talent.role) : null,
+					talent.duty ? h('span', { className: 'at-talentduty' }, t(DUTY_LABEL[talent.duty])) : null,
+					lead ? h('span', { className: 'at-talentduty' }, withIco('check', t('teamLeadMark'), 10)) : null,
+					badge ? h('span', { className: 'at-talentduty' }, badge) : null),
+				talent.description ? h('div', { key: 'desc', className: 'at-talentdesc' }, talent.description) : null,
+				full && talent.personality ? h('div', { key: 'pers', className: 'at-modalmeta' }, talent.personality) : null,
+				talent.skills?.length ? h('div', { key: 'skills', className: 'at-modalmeta' }, tf(t, 'talentSkills', { skills: talent.skills.join('、') })) : null,
+			];
+		}
 		/** 「添加成员」弹窗的人才市场页：分类、搜索、卡片；点「招聘」按人才预填表单。 */
 		function TalentMarket({ t, talents, error, query, onQuery, category, onCategory, onHire, onFork, onRestore, onCancel, catalog, catalogBusy, catalogNote, onSync, onClear }) {
 			const categories = [...new Set((talents ?? []).map((talent) => talent.category).filter(Boolean))];
 			const shown = filterTalents(talents, query, category);
-			return h('div', { className: 'at-market' },
+			// Fragment：按钮栏直接挂在弹窗下，由弹窗的标题栏放到右上角。
+			return h(React.Fragment, null,
+				h('div', { className: 'at-modalactions' },
+					onSync && catalog && onClear ? h('button', { type: 'button', className: 'at-btn', disabled: catalogBusy, onClick: onClear }, withIco('undo', t('catalogClear'))) : null,
+					onSync ? h('button', { type: 'button', className: 'at-btn at-btn-accent', title: t('catalogSyncHint'), disabled: catalogBusy, onClick: onSync }, withIco('sync', catalogBusy ? t('catalogSyncing') : t('catalogSync'))) : null,
+					h('span', { className: 'at-actsep', 'aria-hidden': 'true' }),
+					h('button', { className: 'at-btn', type: 'button', onClick: onCancel }, withIco('close', t('cancel')))),
 				h('div', { className: 'at-modalmeta' }, t('talentHint')),
-				onSync ? h('div', { className: 'at-catalogbar' },
-					h('span', { className: 'at-modalmeta at-catalogstate' }, h(Ico, { name: 'cloud', size: 13 }), catalog ? tf(t, 'catalogAt', { version: catalog.version, time: catalog.syncedAt ? new Date(catalog.syncedAt).toLocaleString() : '' }) : t('catalogNone')),
-					h('span', { className: 'at-tcpick' },
-						catalog && onClear ? h('button', { type: 'button', className: 'at-btn at-btn-small', disabled: catalogBusy, onClick: onClear }, withIco('undo', t('catalogClear'))) : null,
-						h('button', { type: 'button', className: 'at-btn at-btn-small', title: t('catalogSyncHint'), disabled: catalogBusy, onClick: onSync }, withIco('sync', catalogBusy ? t('catalogSyncing') : t('catalogSync'))))) : null,
-				catalogNote ? h('div', { className: 'at-modalmeta', role: 'status' }, catalogNote) : null,
+				onSync ? h('div', { className: 'at-modalmeta at-catalogstate', role: 'status' }, h(Ico, { name: 'cloud', size: 13 }),
+					(catalog ? tf(t, 'catalogAt', { version: catalog.version, time: catalog.syncedAt ? new Date(catalog.syncedAt).toLocaleString() : '' }) : t('catalogNone')) + (catalogNote ? ' · ' + catalogNote : '')) : null,
 				h('input', { className: 'at-marketsearch', type: 'search', value: query, placeholder: t('talentSearch'), 'aria-label': t('talentSearch'), onChange: (event) => onQuery(event.target.value), autoFocus: true }),
 				categories.length > 1 ? h('div', { className: 'at-marketcats', role: 'group', 'aria-label': t('talentMarket') },
 					['', ...categories].map((name) => h('button', {
@@ -2767,21 +2860,13 @@ window.__ModuleLoader__.load({
 				talents === null ? h('div', { className: 'at-modalmeta' }, t('talentLoading'))
 					: shown.length === 0 ? h('div', { className: 'at-modalmeta' }, t('talentEmpty'))
 						: h('div', { className: 'at-marketgrid', role: 'list', 'aria-label': t('talentMarket') }, shown.map((talent) => h('div', { key: talent.id, className: 'at-talent', role: 'listitem' },
-							h('div', { className: 'at-talenthead' },
-								h('span', { className: 'at-talentname' }, talent.name),
-								h('span', { className: 'at-talentrole' }, talent.role),
-								talent.duty ? h('span', { className: 'at-talentduty' }, t(DUTY_LABEL[talent.duty])) : null,
-								talent.forked ? h('span', { className: 'at-talentduty' }, withIco('pen', t('talentForked'), 10)) : talent.source === 'user' ? h('span', { className: 'at-talentduty' }, withIco('user', t('talentUser'), 10)) : talent.source === 'official' ? h('span', { className: 'at-talentduty' }, withIco('cloud', t('talentOfficial'), 10)) : null),
-							talent.description ? h('div', { className: 'at-talentdesc' }, talent.description) : null,
-							talent.skills?.length ? h('div', { className: 'at-modalmeta' }, tf(t, 'talentSkills', { skills: talent.skills.join('、') })) : null,
+							h(TalentInfo, { t, talent }),
 							h('div', { className: 'at-talentfoot' },
 								h('span', { className: 'at-modalmeta' }, [talent.category, ...(talent.tags ?? [])].filter(Boolean).join(' · ')),
 								h('span', { className: 'at-tcpick' },
-									talent.source !== 'user' && onFork ? h('button', { type: 'button', className: 'at-btn at-btn-small', title: t('talentForkHint'), onClick: () => onFork(talent) }, withIco('copy', t('talentFork'))) : null,
-									talent.forked && onRestore ? h('button', { type: 'button', className: 'at-btn at-btn-small', onClick: () => onRestore(talent) }, withIco('undo', t('talentRestore'))) : null,
-									h('button', { type: 'button', className: 'at-btn at-btn-primary', onClick: () => onHire(talent) }, withIco('userPlus', t('talentHire')))))))),
-				h('div', { className: 'at-modalactions' },
-					h('button', { className: 'at-btn', type: 'button', onClick: onCancel }, t('cancel'))));
+									talent.source !== 'user' && onFork ? h('button', { type: 'button', className: 'at-btn at-btn-small', title: t('talentForkHint'), onClick: () => onFork(talent) }, withIco('copy', t('talentFork'), 12)) : null,
+									talent.forked && onRestore ? h('button', { type: 'button', className: 'at-btn at-btn-small', onClick: () => onRestore(talent) }, withIco('undo', t('talentRestore'), 12)) : null,
+									h('button', { type: 'button', className: 'at-btn at-btn-small at-btn-primary', onClick: () => onHire(talent) }, withIco('userPlus', t('talentHire'), 12))))))));
 		}
 		function TalentCreator({ t, initial, onSaved, onCancel }) {
 			const seed = initial && initial.draft ? talentCreatorInit(initial) : null;
@@ -2845,17 +2930,18 @@ window.__ModuleLoader__.load({
 					setBusy(false);
 				}
 			}
-			return h('div', { className: 'at-market' },
+			return h(React.Fragment, null,
 				h('div', { className: 'at-modalmeta' }, t('tcHint')),
 				initial && initial.error ? h('div', { className: 'at-modalerror', role: 'alert' }, initial.error) : null,
 				seed ? h('div', { className: 'at-modalmeta' }, tf(t, 'tcFromMember', { name: seed.sourceName })) : null,
 				seed && seed.model ? h('div', { className: 'at-modalmeta' }, tf(t, 'tcModelKept', { model: [seed.model.provider, seed.model.model].filter(Boolean).join(' / ') })) : null,
 				seed && seed.missing.length ? h('div', { className: 'at-modalmeta' }, tf(t, 'tcMissing', { skills: seed.missing.join('、') })) : null,
-				h('label', { className: 'at-field' }, h('span', null, t('tcName')), h('input', { value: form.name, onChange: set('name'), autoFocus: true })),
-				h('label', { className: 'at-field' }, h('span', null, t('tcRole')), h('input', { value: form.role, onChange: set('role') })),
-				h('label', { className: 'at-field' }, h('span', null, t('tcDuty')), h('select', { value: form.duty, onChange: set('duty') }, ['executor', 'qa', 'lead'].map((d) => h('option', { key: d, value: d }, t(DUTY_LABEL[d]))))),
-				h('label', { className: 'at-field' }, h('span', null, t('tcCategory')), h('input', { value: form.category, onChange: set('category') })),
-				h('label', { className: 'at-field' }, h('span', null, t('tcTags')), h('input', { value: form.tags, onChange: set('tags'), placeholder: t('tcTagsHint') })),
+				h('div', { className: 'at-fieldgrid3' },
+					h('label', { className: 'at-field' }, h('span', null, t('tcName')), h('input', { value: form.name, onChange: set('name'), autoFocus: true })),
+					h('label', { className: 'at-field' }, h('span', null, t('tcRole')), h('input', { value: form.role, onChange: set('role') })),
+					h('label', { className: 'at-field' }, h('span', null, t('tcDuty')), h('select', { value: form.duty, onChange: set('duty') }, ['executor', 'qa', 'lead'].map((d) => h('option', { key: d, value: d }, t(DUTY_LABEL[d]))))),
+					h('label', { className: 'at-field' }, h('span', null, t('tcCategory')), h('input', { value: form.category, onChange: set('category') })),
+					h('label', { className: 'at-field' }, h('span', null, t('tcTags')), h('input', { value: form.tags, onChange: set('tags'), placeholder: t('tcTagsHint') }))),
 				h('label', { className: 'at-field' }, h('span', null, t('tcPersonality')), h('textarea', { value: form.personality, onChange: set('personality'), placeholder: t('tcPersonalityHint') })),
 				h('div', { className: 'at-field' }, h('span', null, t('tcSkills')),
 					pending.length === 0 ? h('div', { className: 'at-modalmeta' }, t('tcEmpty')) : h('div', { className: 'at-tcskills' }, pending.map((sk) => h('span', { key: sk.name, className: 'at-tcskill' }, sk.name, h('button', { type: 'button', 'aria-label': t('tcRemove'), onClick: () => setPending((pp) => pp.filter((x) => x.name !== sk.name)) }, '×')))),
@@ -2868,15 +2954,17 @@ window.__ModuleLoader__.load({
 				error ? h('div', { className: 'at-modalerror', role: 'alert' }, error) : null,
 				h('div', { className: 'at-modalactions' },
 					h('button', { type: 'button', className: 'at-btn', onClick: onCancel }, t('cancel')),
-					h('button', { type: 'button', className: 'at-btn at-btn-primary', disabled: !form.name.trim() || busy, onClick: save }, busy ? t('tcSaving') : t('tcSave'))));
+					h('button', { type: 'button', className: 'at-btn at-btn-primary', disabled: !form.name.trim() || busy, onClick: save }, withIco('check', busy ? t('tcSaving') : t('tcSave')))));
 		}
 		function TeamComposer({ t, talents, onSaved, onCancel }) {
 			const [draft, setDraft] = React.useState({ name: '', description: '', members: [], lead: 0 });
 			const [query, setQuery] = React.useState('');
+			const [focus, setFocus] = React.useState('');
 			const [busy, setBusy] = React.useState(false);
 			const [error, setError] = React.useState('');
-			const shown = filterTalents(talents, query, '').slice(0, 40);
+			const shown = filterTalents(talents, query, '');
 			const byId = (id) => (talents || []).find((x) => x.id === id);
+			const focused = byId(focus) || shown[0] || null;
 			function add(talent) { setDraft((d) => ({ ...d, members: [...d.members, { talent: talent.id, name: '' }] })); }
 			function remove(index) { setDraft((d) => ({ ...d, members: d.members.filter((_, i) => i !== index), lead: d.lead === index ? 0 : d.lead > index ? d.lead - 1 : d.lead })); }
 			function rename(index, name) { setDraft((d) => ({ ...d, members: d.members.map((m, i) => (i === index ? { ...m, name } : m)) })); }
@@ -2895,28 +2983,47 @@ window.__ModuleLoader__.load({
 					setBusy(false);
 				}
 			}
-			return h('div', { className: 'at-market' },
-				h('div', { className: 'at-modalmeta' }, t('teamComposeHint')),
-				h('label', { className: 'at-field' }, h('span', null, t('teamName')), h('input', { value: draft.name, onChange: (e) => setDraft({ ...draft, name: e.target.value }), autoFocus: true })),
-				h('label', { className: 'at-field' }, h('span', null, t('teamDesc')), h('input', { value: draft.description, onChange: (e) => setDraft({ ...draft, description: e.target.value }) })),
-				h('div', { className: 'at-field' }, h('span', null, t('teamMembers')),
-					draft.members.length === 0 ? h('div', { className: 'at-modalmeta' }, t('teamEmptyPick')) : h('div', { className: 'at-teamrows' }, draft.members.map((m, i) => {
-						const talent = byId(m.talent) || { name: m.talent, role: '' };
-						return h('div', { key: i, className: 'at-teamrow' },
-							h('input', { value: m.name, placeholder: talent.name, 'aria-label': t('teamName'), onChange: (e) => rename(i, e.target.value) }),
-							h('span', { className: 'at-modalmeta' }, talent.role),
-							h('label', { className: 'at-teamlead' }, h('input', { type: 'radio', name: 'team-lead', checked: draft.lead === i, onChange: () => setDraft({ ...draft, lead: i }) }), t('teamLead')),
-							h('button', { type: 'button', className: 'at-btn at-btn-small', 'aria-label': t('tcRemove'), onClick: () => remove(i) }, '×'));
-					}))),
-				h('div', { className: 'at-field' }, h('span', null, t('teamPick')),
-					h('input', { className: 'at-marketsearch', type: 'search', value: query, placeholder: t('talentSearch'), onChange: (e) => setQuery(e.target.value) }),
-					talents === null ? h('div', { className: 'at-modalmeta' }, t('talentLoading')) : h('div', { className: 'at-teampick' }, shown.map((talent) => h('div', { key: talent.id, className: 'at-teampickrow' },
-						h('span', null, talent.name + ' · ' + talent.role + (talent.source === 'user' ? ' · ' + t('talentUser') : '')),
-						h('button', { type: 'button', className: 'at-btn at-btn-small', onClick: () => add(talent) }, t('teamAdd')))))),
-				error ? h('div', { className: 'at-modalerror', role: 'alert' }, error) : null,
+			// 三栏：人才列表 → 选中人才的简介（加入）→ 已组的团队（改名、定负责人、移除）。按钮在弹窗右上角。
+			return h(React.Fragment, null,
 				h('div', { className: 'at-modalactions' },
-					h('button', { type: 'button', className: 'at-btn', onClick: onCancel }, t('teamBack')),
-					h('button', { type: 'button', className: 'at-btn at-btn-primary', disabled: busy || !draft.name.trim() || draft.members.length === 0, onClick: save }, busy ? t('saving') : t('teamSave'))));
+					h('button', { type: 'button', className: 'at-btn', onClick: onCancel }, withIco('back', t('teamBack'))),
+					h('button', { type: 'button', className: 'at-btn at-btn-primary', disabled: busy || !draft.name.trim() || draft.members.length === 0, onClick: save }, withIco('check', busy ? t('saving') : t('teamSave')))),
+				h('div', { className: 'at-modalmeta' }, t('teamComposeHint')),
+				h('div', { className: 'at-fieldrow' },
+					h('label', { className: 'at-field' }, h('span', null, t('teamName')), h('input', { value: draft.name, onChange: (e) => setDraft({ ...draft, name: e.target.value }), autoFocus: true })),
+					h('label', { className: 'at-field' }, h('span', null, t('teamDesc')), h('input', { value: draft.description, onChange: (e) => setDraft({ ...draft, description: e.target.value }) }))),
+				error ? h('div', { className: 'at-modalerror', role: 'alert' }, error) : null,
+				h('div', { className: 'at-teamcomposer' },
+					h('div', { className: 'at-pane' },
+						h('div', { className: 'at-panetitle' }, t('teamPick')),
+						h('input', { className: 'at-marketsearch', type: 'search', value: query, placeholder: t('talentSearch'), 'aria-label': t('talentSearch'), onChange: (e) => setQuery(e.target.value) }),
+						talents === null ? h('div', { className: 'at-modalmeta' }, t('talentLoading')) : h('div', { className: 'at-panelist', role: 'listbox', 'aria-label': t('teamPick') }, shown.map((talent) => h('button', {
+							key: talent.id,
+							type: 'button',
+							role: 'option',
+							className: 'at-pickrow',
+							'aria-selected': focused && focused.id === talent.id ? 'true' : 'false',
+							onClick: () => setFocus(talent.id),
+							onDoubleClick: () => add(talent),
+						}, h('span', null, talent.name, ' ', h('span', { className: 'at-pickrole' }, talent.role)), talent.duty ? h('span', { className: 'at-pickrole' }, t(DUTY_LABEL[talent.duty])) : null)))),
+					h('div', { className: 'at-pane' },
+						h('div', { className: 'at-panetitle' }, t('teamPickDetail')),
+						focused ? h('div', { className: 'at-talent' },
+							h(TalentInfo, { t, talent: focused, full: true }),
+							h('div', { className: 'at-talentfoot' },
+								h('span', { className: 'at-modalmeta' }, [focused.category, ...(focused.tags ?? [])].filter(Boolean).join(' · ')),
+								h('span', { className: 'at-tcpick' }, h('button', { type: 'button', className: 'at-btn at-btn-small at-btn-primary', onClick: () => add(focused) }, withIco('plus', t('teamAdd'), 12)))))
+							: h('div', { className: 'at-modalmeta' }, t('teamPickDetailEmpty'))),
+					h('div', { className: 'at-pane' },
+						h('div', { className: 'at-panetitle' }, t('teamMembers') + ' · ' + draft.members.length),
+						draft.members.length === 0 ? h('div', { className: 'at-modalmeta' }, t('teamEmptyPick')) : h('div', { className: 'at-teamrows' }, draft.members.map((m, i) => {
+							const talent = byId(m.talent) || { name: m.talent, role: '' };
+							return h('div', { key: i, className: 'at-teamrow' },
+								h('input', { value: m.name, placeholder: talent.name, 'aria-label': t('teamName'), onChange: (e) => rename(i, e.target.value), onFocus: () => setFocus(m.talent) }),
+								h('span', { className: 'at-modalmeta' }, talent.role),
+								h('label', { className: 'at-teamlead' }, h('input', { type: 'radio', name: 'team-lead', checked: draft.lead === i, onChange: () => setDraft({ ...draft, lead: i }) }), t('teamLead')),
+								h('button', { type: 'button', className: 'at-btn at-btn-small at-iconbtn', 'aria-label': t('tcRemove'), title: t('tcRemove'), onClick: () => remove(i) }, h(Ico, { name: 'close', size: 12 })));
+						})))));
 		}
 		function ModelFields({ t, catalog, provider, model, effort, onEffort, onProvider, onModel, error }) {
 			const providers = Array.isArray(catalog?.providers) ? catalog.providers.slice() : [];
@@ -3370,6 +3477,9 @@ window.__ModuleLoader__.load({
 			const [pSkill, setPSkill] = React.useState('');
 			const [pMessage, setPMessage] = React.useState('');
 			const [pEvolve, setPEvolve] = React.useState('');
+			const [pTab, setPTab] = React.useState('basic');
+			// 人员池「配置模型」弹窗：选中的成员名（null = 关）。
+			const [peopleModel, setPeopleModel] = React.useState(null);
 			const [newOpen, setNewOpen] = React.useState(false);
 			const [nName, setNName] = React.useState('');
 			const [nGoal, setNGoal] = React.useState('');
@@ -3806,62 +3916,30 @@ window.__ModuleLoader__.load({
 					loadPeople();
 				}).catch((error) => sayRight(tf(t, 'sendFailed', { message: error?.message ?? String(error) })));
 			}
-			// P2：人员池统一配置模型——对同名成员在其所有项目逐个
-			// member.config.update（跨项目批量，免逐项目进资料面板）。
-			// catalog 形状：providers[] = { id, name, models: [{ id, name }] }。
-			async function configPersonModel(person) {
-				const providers = modelCatalog?.providers ?? [];
-				const labels = [];
-				const values = [];
-				for (const provider of providers) {
-					for (const entry of provider.models ?? []) {
-						// 兼容历史上可能出现的字符串模型项。
-						const modelId = typeof entry === 'string' ? entry : entry?.id;
-						const modelName = typeof entry === 'string' ? entry : (entry?.name ?? entry?.id);
-						if (typeof modelId !== 'string' || modelId === '') continue;
-						labels.push(provider.name + ' / ' + modelName);
-						values.push({ providerId: provider.id, providerName: provider.name, model: modelId, modelName });
-						if (labels.length >= 60) break;
-					}
-					if (labels.length >= 60) break;
-				}
-				if (labels.length === 0) { say(t('modelCatalogEmpty')); return; }
-				const picked = await askPrompt(tf(t, 'personModelTitle', { name: person.name }), { options: labels });
-				if (picked === null) return;
-				// 用索引映射取值：模型显示名可能含分隔符，不能按字符串拆解。
-				const pickedIndex = labels.indexOf(picked);
-				const target = values[pickedIndex >= 0 ? pickedIndex : 0];
-				if (target === undefined) return;
-				// 该模型若支持推理等级，顺带让用户挑一档；读不到档位就保持模型默认，不阻断改模型。
-				let effort = '';
-				try {
-					const effortsQuery = '?provider=' + encodeURIComponent(target.providerId) + '&model=' + encodeURIComponent(target.model);
-					const effortsResponse = await fetch('/ai-team/api/model-efforts' + effortsQuery, { headers: { accept: 'application/json' } });
-					const effortsBody = await effortsResponse.json().catch(() => null);
-					const effortRows = Array.isArray(effortsBody?.efforts) ? effortsBody.efforts : [];
-					if (effortRows.length > 0) {
-						const effortLabels = [t('memberReasoningDefault')].concat(effortRows.map((entry) => (entry.name === entry.id ? entry.id : entry.name + ' · ' + entry.id)));
-						const pickedEffort = await askPrompt(tf(t, 'memberReasoningAsk', { model: target.modelName ?? target.model }), { options: effortLabels });
-						if (pickedEffort !== null) {
-							const effortIndex = effortLabels.indexOf(pickedEffort) - 1;
-							if (effortIndex >= 0 && effortRows[effortIndex] !== undefined) effort = effortRows[effortIndex].id;
-						}
-					}
-				} catch { /* 读不到档位时按模型默认走 */ }
-				const patch = { provider: target.providerId, model: target.model, ...(effort === '' ? {} : { reasoningEffort: effort }) };
+			// P2：人员池配置模型——选中的成员在其所在的全部项目逐个 member.config.update（批量；单人也走这里）。
+			// 成员资料里的单独设置保留，不受影响（以后再单独改即可）。
+			function configPersonModel(names) {
+				if (!Array.isArray(names) || names.length === 0) return;
+				setPeopleModel(names);
+			}
+			async function applyPeopleModel(names, patch) {
+				const chosen = new Set(names);
 				let done = 0; let failed = 0;
-				for (const row of person.projects ?? []) {
-					const memberIds = Array.isArray(row.memberIds) ? row.memberIds : [];
-					for (const memberId of memberIds) {
-						try {
-							await runCommand('member.config.update', { memberId, patch, reason: 'people pool model' }, row.projectId);
-							done += 1;
-						} catch {
-							failed += 1;
+				for (const person of peopleData ?? []) {
+					if (!chosen.has(person.name)) continue;
+					for (const row of person.projects ?? []) {
+						for (const memberId of Array.isArray(row.memberIds) ? row.memberIds : []) {
+							try {
+								await runCommand('member.config.update', { memberId, patch, reason: 'people pool model' }, row.projectId);
+								done += 1;
+							} catch {
+								failed += 1;
+							}
 						}
 					}
 				}
-				sayRight(tf(t, 'personModelDone', { name: person.name, model: target.modelName ?? target.model, done, failed }));
+				setPeopleModel(null);
+				sayRight(tf(t, 'peopleModelDone', { people: chosen.size, model: patch.model, done, failed }));
 				await reloadData();
 				loadPeople();
 			}
@@ -4457,6 +4535,7 @@ window.__ModuleLoader__.load({
 			function openProfile(agent) {
 				setProfileAgent(agent);
 				setPEvolve('');
+				setPTab('basic');
 				setPName(agent.name ?? '');
 				setPRole(agent.role ?? '');
 				setPPersonality(agent.personality ?? '');
@@ -4966,7 +5045,7 @@ window.__ModuleLoader__.load({
 			const memberViewAgent = data.agents.find((agent) => agent.id === memberViewId) ?? null;
 			const memberViewTasks = memberViewAgent === null ? [] : tasks.filter((task) => task.ownerId === memberViewAgent.id || task.assigneeId === memberViewAgent.id);
 			const headerTitle = inPeople ? t('peopleTitle') : inInbox ? t('inboxTitle') : project ? '# ' + project.name : t('noProject');
-			const headerGoal = inPeople ? t('peopleEmpty') : inInbox ? t('inboxGoal') : (project?.goal ?? '');
+			const headerGoal = inPeople ? t('peopleGoal') : inInbox ? t('inboxGoal') : (project?.goal ?? '');
 			const unread = inboxUnread > 99 ? '99+' : inboxUnread;
 
 			const leftProps = {
@@ -5379,31 +5458,56 @@ window.__ModuleLoader__.load({
 							onSubmit: (event) => { event.preventDefault(); saveProfile(); },
 						},
 							h('h2', { className: 'at-modaltitle' }, withIco('user', tf(t, 'memberProfileTitleName', { name: profileAgent.name }), 16)),
+							// 右上角按钮按用途分组：去看（任务 / 对话）· 复用（复制 / 存为人才）· 会话维护（重试 / 重置 / 重新蒸馏，黄）· 离开（红）· 取消 / 保存。
+							h('div', { className: 'at-modalactions' },
+								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => { const target = profileAgent; setProfileAgent(null); openMemberView(target); } }, withIco('board', t('memberTasks'), 12)),
+								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => { const target = profileAgent; setProfileAgent(null); void openAgentChat(target); } }, withIco('reply', t('agentChat'), 12)),
+								h('span', { className: 'at-actsep', 'aria-hidden': 'true' }),
+								h('button', { className: 'at-btn at-btn-small at-btn-accent', type: 'button', onClick: () => { const source = profileAgent; setProfileAgent(null); openCopyAgent(source); }, disabled: pBusy }, withIco('copy', t('memberCopy'), 12)),
+								h('button', { className: 'at-btn at-btn-small at-btn-accent', type: 'button', onClick: () => { const source = profileAgent; setProfileAgent(null); void openSaveAsTalent(source); }, disabled: pBusy }, withIco('store', t('memberSaveAsTalent'), 12)),
+								h('span', { className: 'at-actsep', 'aria-hidden': 'true' }),
+								profileAgent.status === 'failed' ? h('button', { className: 'at-btn at-btn-small at-btn-warn', type: 'button', onClick: retryProfile, disabled: pBusy }, withIco('sync', t('retry'), 12)) : null,
+								profileAgent.sessionId ? h('button', { className: 'at-btn at-btn-small at-btn-warn', type: 'button', title: t('reseatConfirm'), onClick: reseatProfile, disabled: pBusy }, withIco('undo', t('reseatSession'), 12)) : null,
+								h('button', { className: 'at-btn at-btn-small at-btn-warn', type: 'button', onClick: distillProfile, disabled: pBusy }, withIco('spark', t('redistill'), 12)),
+								h('button', { className: 'at-btn at-btn-small at-btn-danger', type: 'button', onClick: leaveProfile, disabled: pBusy }, withIco('block', t('leaveTeam'), 12)),
+								h('span', { className: 'at-actsep', 'aria-hidden': 'true' }),
+								h('button', { className: 'at-btn', type: 'button', onClick: () => setProfileAgent(null), disabled: pBusy }, withIco('close', t('cancel'))),
+								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: pBusy || !pName.trim() }, withIco('check', pBusy ? t('saving') : t('save')))),
 							h('div', { className: 'at-modalmeta' },
-							tf(t, 'memberProfileMeta', {
-								status: t(AGENT_STATUS[profileAgent.status] ?? 'agentIdle'),
-								version: profileAgent.profileVersion ?? 1,
-								distill: profileAgent.distillVersion ?? 0,
-							})),
+								tf(t, 'memberProfileMeta', {
+									status: t(AGENT_STATUS[profileAgent.status] ?? 'agentIdle'),
+									version: profileAgent.profileVersion ?? 1,
+									distill: profileAgent.distillVersion ?? 0,
+								})),
 							// R-02 权限可见性：把守卫背后的运行事实亮给用户（P6 诚实边界）。
 							h('div', { className: 'at-permbadge', title: t('permissionNote') },
 								t('permissionBadge') + ' @ ' + (project?.workspacePath || '—')),
-							h('div', { className: 'at-modalmeta' }, t('permissionNote')),
-							profileAgent.skills?.length
-								? h('div', { className: 'at-tcskills', 'aria-label': t('memberSkills') },
-									h('span', { className: 'at-modalmeta' }, t('memberSkills') + '：'),
-									profileAgent.skills.map((name) => h('span', { key: name, className: 'at-tcskill' }, name,
-										h('button', { type: 'button', className: 'at-btn at-btn-small', title: t('skillEvolveHint'), onClick: () => void evolveSkill(profileAgent, name) }, withIco('spark', t('skillEvolve'), 12)))))
-								: null,
-							pEvolve ? h('div', { className: 'at-modalmeta', role: 'status' }, pEvolve) : null,
-							profileAgent.notes?.length ? h('div', { className: 'at-modalmeta' }, t('memberNotes') + '：' + profileAgent.notes.slice(-3).join('；')) : null,
-							h('label', { className: 'at-field' }, h('span', null, t('memberName')),
-								h('input', { value: pName, onChange: (event) => setPName(event.target.value), autoFocus: true })),
-							h('label', { className: 'at-field' }, h('span', null, t('memberRole')),
-								h('input', { value: pRole, onChange: (event) => setPRole(event.target.value) })),
-							h('label', { className: 'at-field' }, h('span', null, t('memberPersonality')),
-								h('textarea', { value: pPersonality, onChange: (event) => setPPersonality(event.target.value) })),
-							h('div', { className: 'at-fieldrow' },
+							pError ? h('div', { className: 'at-modalerror', role: 'alert' }, pError) : null,
+							// 仿系统设置：按用途分页签，一页只放一类设置。
+							h('div', { className: 'at-mode at-addtabs', role: 'tablist', 'aria-label': t('memberProfileTitle') },
+								[['basic', 'user', 'profileTabBasic'], ['model', 'layers', 'profileTabModel'], ['skills', 'spark', 'profileTabSkills'], ['collab', 'reply', 'profileTabCollab']].map(([id, icon, key]) => h('button', {
+									key: id,
+									type: 'button',
+									role: 'tab',
+									'aria-selected': pTab === id ? 'true' : 'false',
+									'aria-pressed': pTab === id ? 'true' : 'false',
+									onClick: () => setPTab(id),
+								}, withIco(icon, t(key), 12)))),
+							pTab === 'basic' ? [
+								h('div', { key: 'nr', className: 'at-fieldrow' },
+									h('label', { className: 'at-field' }, h('span', null, t('memberName')),
+										h('input', { value: pName, onChange: (event) => setPName(event.target.value), autoFocus: true })),
+									h('label', { className: 'at-field' }, h('span', null, t('memberRole')),
+										h('input', { value: pRole, onChange: (event) => setPRole(event.target.value) }))),
+								h('label', { key: 'pers', className: 'at-field' }, h('span', null, t('memberPersonality')),
+									h('textarea', { value: pPersonality, rows: 6, onChange: (event) => setPPersonality(event.target.value) })),
+								h('div', { key: 'notes', className: 'at-field' }, h('span', null, t('profileNotes')),
+									profileAgent.notes?.length ? h('div', { className: 'at-notesbox' }, profileAgent.notes.slice(-3).join('\n\n')) : null,
+									h('div', { className: 'at-inlineadd' },
+										h('input', { value: pNote, onChange: (event) => setPNote(event.target.value), placeholder: t('notePlaceholder') }),
+										h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: addNote, disabled: !pNote.trim() }, withIco('plus', t('addNote'), 12)))),
+							] : null,
+							pTab === 'model' ? h('div', { className: 'at-fieldgrid3' },
 								h('label', { className: 'at-field' }, h('span', null, t('memberPreset')),
 									h('select', { value: pPreset, onChange: (event) => setPPreset(event.target.value) },
 										h('option', { value: 'standard' }, t('presetStandard')),
@@ -5411,54 +5515,50 @@ window.__ModuleLoader__.load({
 										h('option', { value: 'minimal' }, t('presetMinimal')),
 										h('option', { value: 'cordis' }, t('presetCordis')))),
 								h('label', { className: 'at-field' }, h('span', null, t('memberMaxTokens')),
-									h('input', { value: pMaxTokens, onChange: (event) => setPMaxTokens(event.target.value), inputMode: 'numeric' }))),
-							h(ModelFields, {
-								t,
-								catalog: modelCatalog,
-								provider: pProvider,
-								effort: pEffort,
-								onEffort: setPEffort,
-								model: pModel,
-								onProvider: setPProvider,
-								onModel: setPModel,
-								error: modelCatalogError,
-							}),
-							h('label', { className: 'at-field' }, h('span', null, t('successor')),
-								h('select', {
-									value: pSuccessor,
-									onChange: (event) => setPSuccessor(event.target.value),
-								},
-									h('option', { value: '' }, t('noSuccessor')),
-									(data?.agents ?? []).filter((candidate) => candidate.id !== profileAgent.id && candidate.status !== 'retired')
-										.map((candidate) => h('option', { key: candidate.id, value: candidate.id }, candidate.name + (candidate.qa ? ' · QA' : ''))))),
-							h('div', { className: 'at-inlineadd' },
-								h('input', { value: pNote, onChange: (event) => setPNote(event.target.value), placeholder: t('notePlaceholder') }),
-								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: addNote, disabled: !pNote.trim() }, t('addNote'))),
-							h('div', { className: 'at-inlineadd' },
-								h('input', { value: pSkill, onChange: (event) => setPSkill(event.target.value), placeholder: t('skillPlaceholder') }),
-								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: addSkill, disabled: !pSkill.trim() }, t('addSkill'))),
-							h('div', { className: 'at-inlineadd' },
-								h('input', {
-									value: pMessage,
-									onChange: (event) => setPMessage(event.target.value),
-									placeholder: t('messagePlaceholder'),
-								}),
-								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: sendMemberMessage, disabled: !pMessage.trim() }, t('sendMessage'))),
-							// 成员作为 DSH 子智能体管理：从「管理的子智能体」面板可直接对话；
-							// 此私信写入同一会话，成员下一轮回复。
-							h('div', { className: 'at-modalmeta' }, t('routingHint')),
-							pError ? h('div', { className: 'at-modalerror', role: 'alert' }, pError) : null,
-							h('div', { className: 'at-modalactions' },
-								h('button', { className: 'at-btn', type: 'button', onClick: () => setProfileAgent(null), disabled: pBusy }, t('cancel')),
-								h('button', { className: 'at-btn', type: 'button', onClick: () => { const target = profileAgent; setProfileAgent(null); openMemberView(target); } }, t('memberTasks')),
-								h('button', { className: 'at-btn', type: 'button', onClick: () => { const target = profileAgent; setProfileAgent(null); void openAgentChat(target); } }, t('agentChat')),
-								h('button', { className: 'at-btn', type: 'button', onClick: () => { const source = profileAgent; setProfileAgent(null); openCopyAgent(source); }, disabled: pBusy }, t('memberCopy')),
-								h('button', { className: 'at-btn', type: 'button', onClick: () => { const source = profileAgent; setProfileAgent(null); void openSaveAsTalent(source); }, disabled: pBusy }, t('memberSaveAsTalent')),
-								h('button', { className: 'at-btn', type: 'button', onClick: leaveProfile, disabled: pBusy }, t('leaveTeam')),
-								profileAgent.status === 'failed' ? h('button', { className: 'at-btn', type: 'button', onClick: retryProfile, disabled: pBusy }, t('retry')) : null,
-								profileAgent.sessionId ? h('button', { className: 'at-btn', type: 'button', title: t('reseatConfirm'), onClick: reseatProfile, disabled: pBusy }, t('reseatSession')) : null,
-								h('button', { className: 'at-btn', type: 'button', onClick: distillProfile, disabled: pBusy }, t('redistill')),
-								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: pBusy || !pName.trim() }, pBusy ? t('saving') : t('save'))))) : null,
+									h('input', { value: pMaxTokens, onChange: (event) => setPMaxTokens(event.target.value), inputMode: 'numeric' })),
+								h('span', { 'aria-hidden': 'true' }),
+								h(ModelFields, {
+									t,
+									catalog: modelCatalog,
+									provider: pProvider,
+									effort: pEffort,
+									onEffort: setPEffort,
+									model: pModel,
+									onProvider: setPProvider,
+									onModel: setPModel,
+									error: modelCatalogError,
+								})) : null,
+							pTab === 'skills' ? [
+								profileAgent.skills?.length
+									? h('div', { key: 'list', className: 'at-tcskills', 'aria-label': t('memberSkills') },
+										profileAgent.skills.map((name) => h('span', { key: name, className: 'at-tcskill' }, name,
+											h('button', { type: 'button', className: 'at-btn at-btn-small', title: t('skillEvolveHint'), onClick: () => void evolveSkill(profileAgent, name) }, withIco('spark', t('skillEvolve'), 12)))))
+									: null,
+								pEvolve ? h('div', { key: 'ev', className: 'at-modalmeta', role: 'status' }, pEvolve) : null,
+								h('div', { key: 'add', className: 'at-inlineadd' },
+									h('input', { value: pSkill, onChange: (event) => setPSkill(event.target.value), placeholder: t('skillPlaceholder') }),
+									h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: addSkill, disabled: !pSkill.trim() }, withIco('plus', t('addSkill'), 12))),
+							] : null,
+							pTab === 'collab' ? [
+								h('label', { key: 'succ', className: 'at-field' }, h('span', null, t('successor')),
+									h('select', {
+										value: pSuccessor,
+										onChange: (event) => setPSuccessor(event.target.value),
+									},
+										h('option', { value: '' }, t('noSuccessor')),
+										(data?.agents ?? []).filter((candidate) => candidate.id !== profileAgent.id && candidate.status !== 'retired')
+											.map((candidate) => h('option', { key: candidate.id, value: candidate.id }, candidate.name + (candidate.qa ? ' · QA' : ''))))),
+								h('div', { key: 'msg', className: 'at-inlineadd' },
+									h('input', {
+										value: pMessage,
+										onChange: (event) => setPMessage(event.target.value),
+										placeholder: t('messagePlaceholder'),
+									}),
+									h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: sendMemberMessage, disabled: !pMessage.trim() }, withIco('reply', t('sendMessage'), 12))),
+								// 成员作为 DSH 子智能体管理：从「管理的子智能体」面板可直接对话；
+								// 此私信写入同一会话，成员下一轮回复。
+								h('div', { key: 'hint', className: 'at-modalmeta' }, t('routingHint')),
+							] : null)) : null,
 					workspaceOpen ? h(ModalBack, { onClose: () => setWorkspaceOpen(false) },
 						h('form', {
 							className: 'at-modal',
@@ -5486,30 +5586,38 @@ window.__ModuleLoader__.load({
 							onSubmit: (event) => { event.preventDefault(); createProject(); },
 						},
 							h('h2', { className: 'at-modaltitle' }, withIco('folderPlus', t('newProjectTitle'), 16)),
-							h('label', { className: 'at-field' }, h('span', null, t('projectName')),
-								h('input', { value: nName, onChange: (event) => setNName(event.target.value), autoFocus: true })),
-							h('label', { className: 'at-field' }, h('span', null, t('projectGoal')),
-								h('textarea', { value: nGoal, onChange: (event) => setNGoal(event.target.value) })),
-							h('label', { className: 'at-field' }, h('span', null, t('workspace')),
-								h('div', { className: 'at-inlineadd' },
-									h('input', { value: nWorkspace, onChange: (event) => setNWorkspace(event.target.value), placeholder: data?.workspaceExample ?? t('workspacePathPlaceholder') }),
-									h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: pickNewWorkspace }, t('workspaceChoose')))),
-							h('label', { className: 'at-field' }, h('span', null, t('projectTeam')),
-								teamList === null ? h('div', { className: 'at-modalmeta' }, t('talentLoading'))
-									: h('select', { value: nTeam, onChange: (event) => setNTeam(event.target.value) }, teamList.filter((entry) => !entry.broken).map((entry) => h('option', { key: entry.id, value: entry.id }, entry.name + '（' + entry.members.length + '）' + (entry.source === 'user' ? ' · ' + t('talentUser') : ''))))),
-							selectedTeam ? h('div', { className: 'at-modalmeta' }, (selectedTeam.description ? selectedTeam.description + '：' : '') + teamMembersLine(selectedTeam)) : null,
-							teamLoadError ? h('div', { className: 'at-modalerror', role: 'alert' }, teamLoadError) : null,
-							h('div', { className: 'at-tcpick' },
-								h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => { setTeamComposeOpen(true); loadTalents(); } }, t('teamCompose')),
-								selectedTeam && selectedTeam.source === 'user' ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => void removeTeam(selectedTeam) }, t('teamDelete')) : null),
-							nError ? h('div', { className: 'at-modalerror', role: 'alert' }, nError) : null,
 							h('div', { className: 'at-modalactions' },
-								h('button', { className: 'at-btn', type: 'button', onClick: () => setNewOpen(false), disabled: nBusy }, t('cancel')),
-								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: nBusy || !nName.trim() || !nWorkspace.trim() }, nBusy ? t('saving') : t('projectCreate'))))) : null,
+								h('button', { className: 'at-btn', type: 'button', onClick: () => setNewOpen(false), disabled: nBusy }, withIco('close', t('cancel'))),
+								h('button', { className: 'at-btn at-btn-primary', type: 'submit', disabled: nBusy || !nName.trim() || !nWorkspace.trim() }, withIco('check', nBusy ? t('saving') : t('projectCreate')))),
+							nError ? h('div', { className: 'at-modalerror', role: 'alert' }, nError) : null,
+							h('div', { className: 'at-split' },
+								h('div', { className: 'at-pane' },
+									h('label', { className: 'at-field' }, h('span', null, t('projectName')),
+										h('input', { value: nName, onChange: (event) => setNName(event.target.value), autoFocus: true })),
+									h('label', { className: 'at-field' }, h('span', null, t('projectGoal')),
+										h('textarea', { value: nGoal, rows: 5, onChange: (event) => setNGoal(event.target.value) })),
+									h('label', { className: 'at-field' }, h('span', null, t('workspace')),
+										h('div', { className: 'at-inlineadd' },
+											h('input', { value: nWorkspace, onChange: (event) => setNWorkspace(event.target.value), placeholder: data?.workspaceExample ?? t('workspacePathPlaceholder') }),
+											h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: pickNewWorkspace }, withIco('folderPlus', t('workspaceChoose'), 12)))),
+									h('label', { className: 'at-field' }, h('span', null, t('projectTeam')),
+										teamList === null ? h('div', { className: 'at-modalmeta' }, t('talentLoading'))
+											: h('select', { value: nTeam, onChange: (event) => setNTeam(event.target.value) }, teamList.filter((entry) => !entry.broken).map((entry) => h('option', { key: entry.id, value: entry.id }, entry.name + '（' + entry.members.length + '）' + (entry.source === 'user' ? ' · ' + t('talentUser') : ''))))),
+									teamLoadError ? h('div', { className: 'at-modalerror', role: 'alert' }, teamLoadError) : null,
+									h('div', { className: 'at-tcpick' },
+										h('button', { className: 'at-btn at-btn-small at-btn-accent', type: 'button', onClick: () => { setTeamComposeOpen(true); loadTalents(); } }, withIco('users', t('teamCompose'), 12)),
+										selectedTeam && selectedTeam.source === 'user' ? h('button', { className: 'at-btn at-btn-small at-btn-danger', type: 'button', onClick: () => void removeTeam(selectedTeam) }, withIco('close', t('teamDelete'), 12)) : null)),
+								// 右栏：选中团队的成员卡片（名字、岗位、职责、简介、技能；负责人标出来）。
+								h('div', { className: 'at-pane' },
+									selectedTeam ? h('div', { className: 'at-panetitle', title: teamMembersLine(selectedTeam) }, selectedTeam.name + ' · ' + tf(t, 'projectTeamMembers', { n: selectedTeam.members.length })) : null,
+									selectedTeam && selectedTeam.description ? h('div', { className: 'at-modalmeta' }, selectedTeam.description) : null,
+									selectedTeam ? h('div', { className: 'at-marketgrid', role: 'list' }, selectedTeam.members.map((member) => h('div', { key: member.id, className: 'at-talent', role: 'listitem' },
+										h(TalentInfo, { t, talent: member, lead: member.id === selectedTeam.lead })))) : null)))) : null,
 					teamComposeOpen ? h(ModalBack, { onClose: () => setTeamComposeOpen(false) },
 						h('div', { className: 'at-modal at-modal-wide', role: 'dialog', 'aria-modal': 'true', 'aria-label': t('teamComposeTitle') },
 							h('h2', { className: 'at-modaltitle' }, withIco('users', t('teamComposeTitle'), 16)),
 							h(TeamComposer, { t, talents, onSaved: (team) => { setTeamComposeOpen(false); void loadTeams(team && team.id); }, onCancel: () => setTeamComposeOpen(false) }))) : null,
+					peopleModel ? h(PeopleModelDialog, { t, catalog: modelCatalog, catalogError: modelCatalogError, people: peopleData ?? [], initial: peopleModel, onApply: applyPeopleModel, onClose: () => setPeopleModel(null) }) : null,
 					dialog ? h(WorkbenchDialog, { key: dialogSeqRef.current, t, dialog, onDismiss: () => setDialog(null) }) : null,
 					shortcutsOpen ? h(ModalBack, { onClose: () => setShortcutsOpen(false) },
 						h('div', { className: 'at-modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': t('shortcutTitle') },
