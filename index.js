@@ -73,7 +73,7 @@ import { messageContent, normalizeAttachments } from './lib/domain/rich-message.
 import { readAttachment, uploadAttachment } from './lib/host/attachment-routes.js';
 import { createDiagLogger, defaultDiagDir, installDiagSink } from './lib/diaglog.js';
 import { CATALOG_PACKAGE, clearOfficialCatalog, officialStatus, syncOfficialCatalog } from './lib/domain/catalog-sync.js';
-import { AVATAR_PACKAGE, avatarOptions, renderAvatarSvg, startAvatarLib } from './lib/domain/avatar.js';
+import { AVATAR_PACKAGE, avatarFile, avatarOptions, renderAvatarSvg, startAvatarLib } from './lib/domain/avatar.js';
 import { DEFAULT_TEAM, catalogRoots, deleteTalent, deleteTeam, forkTalent, installSkill, listInstallableSkills, listTalents, listTeams, loadCatalog, readSkillText, resolveTeam, talentFromMember, talentIdFrom, uniqueTalentId, uniqueTeamId, userCatalogDir, writeTalent, writeTeam } from './lib/domain/catalog.js';
 
 export const name = 'ai-team';
@@ -750,8 +750,8 @@ export function apply(ctx, config = {}) {
 		} catch (error) {
 			diag.append({ ev: 'team.discipline.fail', message: error?.message ?? String(error) });
 		}
-		// 宿主会话的模型不自己跑：Human 与成员发进来的话转进文渊阁主对话，成员完成通知丢弃
-		// （il2c 11-17：它被通知叫醒后成了第二个 PMO；Human 在这里发「继续」，插件收不到）。
+		// 宿主会话的模型不自己跑：Human 与成员发进来的话转进文渊阁主对话，成员收工汇报原文
+		// 不经模型直接呈现（il2c 11-17：它被通知叫醒后成了第二个 PMO；11-19：只剩一排「已完成，用时1秒」）。
 		const hostSessionGate = registerHostSessionGate({
 			on: typeof ctx.on === 'function' ? (name, listener) => ctx.on(name, listener) : undefined,
 			isHostSession: (sessionId) => {
@@ -771,6 +771,21 @@ export function apply(ctx, config = {}) {
 				const member = Object.values(runtime?.service.state.members ?? {}).find((entry) => entry?.sessionId === senderSessionId);
 				if (runtime === null || member === undefined) return Promise.reject(new Error(`no member for session ${senderSessionId}`));
 				return runtime.service.dispatch({ type: 'stream.post', payload: { body }, actor: { kind: 'agent', memberId: member.id }, projectId });
+			},
+			// 收工汇报的抬头：成员名 + 头像（自己设过的 > 来源人才的 > 默认，与界面同一张脸）。
+			memberOf: async (projectId, senderSessionId) => {
+				const member = Object.values(projectRuntime(projectId)?.service.state.members ?? {}).find((entry) => entry?.sessionId === senderSessionId);
+				if (member === undefined) return null;
+				const talent = typeof member.talent === 'string' ? talentCatalog(diag).talents.get(member.talent) : undefined;
+				let avatarUrl = null;
+				try {
+					// 库是懒同步的（界面取头像才查）；这里同样先等一次在途同步，取不到就只出名字。
+					await avatarLib.ready(5000);
+					avatarUrl = avatarFile(dshHome(), member.name, member.avatar ?? talent?.avatar ?? null);
+				} catch (error) {
+					diag.append({ ev: 'host.report.avatar.fail', message: error?.message ?? String(error) });
+				}
+				return { name: member.name, avatarUrl };
 			},
 			diag,
 		});

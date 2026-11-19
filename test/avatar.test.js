@@ -4,11 +4,11 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node
 import { createHash } from 'node:crypto';
 import vm from 'node:vm';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'node:http';
 import { tarOf } from './tar-helper.js';
-import { AVATAR_PACKAGE, avatarLibDir, avatarOptions, BASE_OPTIONS, DEFAULT_AVATAR, parseAvatar, renderAvatarSvg, startAvatarLib, syncAvatarLib, useAvatarLib } from '../lib/domain/avatar.js';
+import { AVATAR_PACKAGE, avatarLibDir, avatarFile, avatarFileDir, avatarOptions, BASE_OPTIONS, DEFAULT_AVATAR, parseAvatar, renderAvatarSvg, startAvatarLib, syncAvatarLib, useAvatarLib } from '../lib/domain/avatar.js';
 import { catalogMirrors } from '../lib/domain/catalog-sync.js';
 import { listTalents, listTeams, loadCatalog, parseTalent, resolveTeam, talentFromMember, writeTalent } from '../lib/domain/catalog.js';
 import { applyEvent, initialState } from '../lib/ledger/fold.js';
@@ -273,4 +273,22 @@ test('client: the picker and image URLs follow the library meta (version in the 
 	assert.deepEqual(JSON.parse(JSON.stringify(c.avatarPickNext({ gender: 'male', art: 'pixel' }, 'art', 'flat'))), { gender: 'male' });
 	const t = (key) => ({ avatar_elf: '精灵', avatar_art_pixel: '像素' })[key] ?? key;
 	assert.deepEqual([c.avatarLabel(t, 'elf'), c.avatarLabel(t, 'pixel', 'avatar_art_'), c.avatarLabel(t, 'capybara2')], ['精灵', '像素', 'capybara2']);
+});
+
+test('avatarFile writes the face to a stable on-disk SVG that DSH markdown can show through its own /api/file (r41)', (t) => {
+	// r41：DSH 会话 markdown 只直接放行绝对 http(s) 图片，插件路由相对地址被当成文件路径 →「图片无法预览」。
+	const home = mkdtempSync(join(tmpdir(), 'avatar-file-'));
+	t.after(() => { useAvatarLib(null); rmSync(home, { recursive: true, force: true }); });
+	useAvatarLib(null);
+	assert.equal(avatarFile(home, '墨渊', null), null, 'no library yet: no avatar, the report still shows the name');
+	useAvatarLib(loadFake('A'), { version: '1.3.0' });
+	const first = avatarFile(home, '墨渊', { gender: 'male', age: 'middle', race: 'asian' });
+	assert.ok(first.startsWith(avatarFileDir(home).split(sep).join('/') + '/') && first.endsWith('.svg'));
+	assert.ok(!first.includes(sep === '/' ? '\0' : sep) && !first.includes('?'), 'forward slashes, no query: DSH treats it as a local file');
+	assert.ok(readFileSync(first, 'utf8').startsWith('<svg'));
+	assert.equal(avatarFile(home, '墨渊', { gender: 'male', age: 'middle', race: 'asian' }), first, 'same name + settings + library version → same file');
+	assert.notEqual(avatarFile(home, '玄策', null), first);
+	useAvatarLib(loadFake('A'), { version: '1.4.0' });
+	assert.notEqual(avatarFile(home, '墨渊', { gender: 'male', age: 'middle', race: 'asian' }), first, 'a new library version never rewrites a file old messages point at');
+	assert.equal(readdirSync(avatarFileDir(home)).filter((name) => name.endsWith('.tmp')).length, 0);
 });
