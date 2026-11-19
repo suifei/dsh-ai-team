@@ -57,8 +57,8 @@ import { buildModelCatalog, buildModelEfforts } from './lib/host/model-catalog.j
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeTaskContext, describeWake, planWakes } from './lib/host/waker.js';
 import { describeCauseChain } from './lib/runtime/error-chain.js';
-import { classifyWakeFailure, isMalformedTurnError, isStaleTreeError } from './lib/runtime/wake-failure.js';
-import { createStaleTreeWakes } from './lib/runtime/stale-tree-wakes.js';
+import { classifyWakeFailure, deferredWakeKind, isCapacityError, isMalformedTurnError } from './lib/runtime/wake-failure.js';
+import { createDeferredWakes } from './lib/runtime/deferred-wakes.js';
 import { registerShellGuard } from './lib/runtime/shell-guard.js';
 import { registerOneShotToolGuard, registerStopGuard } from './lib/runtime/stop-guard.js';
 import { registerTeamDiscipline } from './lib/runtime/deferral-guard.js';
@@ -793,7 +793,7 @@ export function apply(ctx, config = {}) {
 		const offSessionEvent = typeof ctx.on === 'function'
 			? ctx.on('session/event', async (session, event) => {
 				try { teamDiscipline.observe(session, event); } catch { /* 观察失败不影响事件流 */ }
-				try { staleTreeWakes.observe(session, event); } catch { /* 观察失败不影响事件流 */ }
+				try { deferredWakes.observe(session, event); } catch { /* 观察失败不影响事件流 */ }
 				if (typeof session?.id === 'string') {
 					if (event?.type === 'turn/start') turnsInFlight.add(session.id);
 					else if (event?.type === 'turn/end') turnsInFlight.delete(session.id);
@@ -905,9 +905,9 @@ export function apply(ctx, config = {}) {
 			diag.append({ ev: 'team.interrupt', projectId: projectRuntime.id, members: interrupted });
 		};
 		const wakeKeys = new Map();
-		// 热重载后「旧树未散」的唤醒：等宿主收掉成员旧回合 / 退避到点再投（lib/runtime/stale-tree-wakes.js）。
+		// 宿主暂时投不进的唤醒（热重载后旧树未散 / 超过并发上限排队）：等时机到了再投（lib/runtime/deferred-wakes.js）。
 		// 补投仍走 deliverWakePlans；停止的项目不补投（与自动派发同一停止门）。
-		const staleTreeWakes = createStaleTreeWakes({
+		const deferredWakes = createDeferredWakes({
 			diag,
 			redeliver: async ({ projectId, plan }) => {
 				if (disposed) return;
@@ -1051,7 +1051,7 @@ export function apply(ctx, config = {}) {
 		};
 		/**
 		 * 投递一批唤醒计划（事件规划与「旧树未散」补投共用这一份实现）。
-		 * @param {{ seq?: number|null, retry?: boolean }} options retry：这是 staleTreeWakes 的补投
+		 * @param {{ seq?: number|null, retry?: boolean }} options retry：这是 deferredWakes 的补投
 		 */
 		const deliverWakePlans = async (projectRuntime, plans, { seq = null, retry = false } = {}) => {
 			const subagents = serviceOf(ctx, 'subagents');
@@ -1154,7 +1154,7 @@ export function apply(ctx, config = {}) {
 						await titleMemberSession(projectRuntime, member);
 						persistModelSelection(member.sessionId, member.config, member.name);
 					}
-					staleTreeWakes.delivered(member.sessionId, { projectId: projectRuntime.id, memberId: plan.memberId, reason: plan.reason, messageId });
+					deferredWakes.delivered(projectRuntime.id, plan.memberId, { sessionId: member.sessionId ?? null, reason: plan.reason, messageId });
 					await projectRuntime.service.recordWake(plan.memberId, {
 						ok: true, taskId: plan.taskId, reason: plan.reason, messageId,
 					}, projectRuntime.id);
@@ -1169,12 +1169,13 @@ export function apply(ctx, config = {}) {
 					});
 				} catch (error) {
 					wakeKeys.delete(plan.key);
-					// 热重载后「旧树未散」：成员重载前开的回合仍挂在旧插件实例的宿主 Agent 下，
-					// 宿主拒绝以新宿主 Agent 投递（il2c 11-19 04:47 起 mem_coder 连续 UNAUTHORIZED）。
-					// 不是会话坏了：暂存，等宿主收掉旧回合 / 退避到点再投，不记失败。
-					const staleMember = projectRuntime.service.state.members?.[plan.memberId];
-					if (isStaleTreeError(error) && typeof staleMember?.sessionId === 'string'
-						&& staleTreeWakes.defer({ sessionId: staleMember.sessionId, projectId: projectRuntime.id, memberId: plan.memberId, plan, retry })) {
+					// 宿主暂时投不进，不是会话坏了：暂存，时机到了再投，不记失败。
+					// - 热重载后「旧树未散」：成员重载前开的回合仍挂在旧插件实例的宿主 Agent 下（il2c 11-19 04:47）。
+					// - 超过宿主并发上限（默认 8）：宿主不排队直接拒绝，团队多出来的人由插件排队。
+					const deferMember = projectRuntime.service.state.members?.[plan.memberId];
+					const deferKind = deferredWakeKind(error);
+					if (deferKind !== null && (deferKind !== 'stale-tree' || typeof deferMember?.sessionId === 'string')
+						&& deferredWakes.defer({ kind: deferKind, sessionId: deferMember?.sessionId ?? null, projectId: projectRuntime.id, memberId: plan.memberId, plan, retry })) {
 						continue;
 					}
 					const causeChain = describeCauseChain(error);
@@ -2253,7 +2254,11 @@ export function apply(ctx, config = {}) {
 				// failMember，会把 retired 覆写成 failed——退役是终态，之后 member.bind
 				// 还能把成员复活。所以只对仍在册的成员记失败。
 				const currentStatus = projectRuntime.service.state.members?.[member.id]?.status;
-				if (currentStatus !== 'retired') {
+				// 超过宿主并发上限：不是成员失败——记 failed 会让 waker 再也不叫它（团队超过 8 人时第 9 位
+				// 首次激活就会被永久搁置）。保持原状态，唤醒路径会把它排进 deferredWakes 的 capacity 队列。
+				if (isCapacityError(error)) {
+					diag.append({ ev: 'member.activate.capacity', memberId: member.id, projectId: projectRuntime.id, message: error?.message ?? String(error) });
+				} else if (currentStatus !== 'retired') {
 					try {
 						await projectRuntime.service.failMember(
 							{ actor: { kind: 'human', memberId: HUMAN_ID }, projectId: projectRuntime.id },
@@ -3338,7 +3343,7 @@ export function apply(ctx, config = {}) {
 			try { disposeStopGuard(); } catch { /* already disposed */ }
 			try { disposeOneShotToolGuard(); } catch { /* already disposed */ }
 			try { teamDiscipline.dispose(); } catch { /* already disposed */ }
-			try { staleTreeWakes.dispose(); } catch { /* already disposed */ }
+			try { deferredWakes.dispose(); } catch { /* already disposed */ }
 			hostSessionGate.dispose();
 			// 在途的 boot 也算本组合的资源：等它落定（落定时见 disposed 会自行关账本），
 			// 否则下一组合抢在关锁之前打开同一账本。
