@@ -1623,10 +1623,13 @@ export function apply(ctx, config = {}) {
 					name: 'skillopt_rubric',
 					description: 'Score a SKILL.md against the 9-dimension Darwin rubric (triage only — absolute scores must not be used for keep/revert).',
 					parameters: {
-						project: { type: 'string', description: 'Project directory (defaults to cwd)' },
-						skillPath: { type: 'string', description: 'Path to SKILL.md to score' },
-						dim8: { type: 'number', description: 'Measured effect score 1-10 (omit for dry-run)' },
-						measured: { type: 'boolean', description: 'Set when dim8 came from a real prompt run' },
+						type: 'object',
+						properties: {
+							project: { type: 'string', description: 'Project directory (defaults to cwd)' },
+							skillPath: { type: 'string', description: 'Path to SKILL.md to score' },
+							dim8: { type: 'number', description: 'Measured effect score 1-10 (omit for dry-run)' },
+							measured: { type: 'boolean', description: 'Set when dim8 came from a real prompt run' },
+						},
 					},
 					// DSH 工具输出协议：render 必须返回 content 数组（与 vendored 一致）。
 					output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: String(value) }] },
@@ -1648,9 +1651,12 @@ export function apply(ctx, config = {}) {
 					name: 'skillopt_judge',
 					description: 'Paired independent-judge verdict (N odd votes, majority) for before/after SKILL.md — the authoritative keep/revert signal.',
 					parameters: {
-						project: { type: 'string', description: 'Project directory' },
-						beforePath: { type: 'string', description: 'Baseline file path (default: current live SKILL.md)' },
-						afterPath: { type: 'string', description: 'Candidate file path (default: latest staged proposal)' },
+						type: 'object',
+						properties: {
+							project: { type: 'string', description: 'Project directory' },
+							beforePath: { type: 'string', description: 'Baseline file path (default: current live SKILL.md)' },
+							afterPath: { type: 'string', description: 'Candidate file path (default: latest staged proposal)' },
+						},
 					},
 					// DSH 工具输出协议：render 必须返回 content 数组（与 vendored 一致）。
 					output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: String(value) }] },
@@ -1681,9 +1687,12 @@ export function apply(ctx, config = {}) {
 					name: 'skillopt_optimize',
 					description: 'Start a Darwin hill-climbing job for one SKILL.md (diagnose, generate candidate, paired judge, keep/revert). The PMO tick harvests it; poll skillopt_jobs for the outcome.',
 					parameters: {
-						project: { type: 'string', description: 'Project directory' },
-						skillPath: { type: 'string', description: 'Path to SKILL.md to optimize' },
-						candidate: { type: 'string', description: 'Full improved SKILL.md text. Omit to get the diagnosis + rewrite request first; pass it to start the reviewer round.' },
+						type: 'object',
+						properties: {
+							project: { type: 'string', description: 'Project directory' },
+							skillPath: { type: 'string', description: 'Path to SKILL.md to optimize' },
+							candidate: { type: 'string', description: 'Full improved SKILL.md text. Omit to get the diagnosis + rewrite request first; pass it to start the reviewer round.' },
+						},
 					},
 					output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: String(value) }] },
 					async execute(args) {
@@ -1753,7 +1762,7 @@ export function apply(ctx, config = {}) {
 				const jobsTool = guardedTools.register({
 					name: 'skillopt_jobs',
 					description: 'List optimize jobs (state, target dimension, verdict) for a project.',
-					parameters: { project: { type: 'string', description: 'Project directory' } },
+					parameters: { type: 'object', properties: { project: { type: 'string', description: 'Project directory' } } },
 					output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: String(value) }] },
 					async execute(args) {
 						// 主动收割：工具调用即驱动（不依赖 PMO 定时器——实测宿主热重载/
