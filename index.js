@@ -57,7 +57,8 @@ import { buildModelCatalog, buildModelEfforts } from './lib/host/model-catalog.j
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeTaskContext, describeWake, planWakes } from './lib/host/waker.js';
 import { describeCauseChain } from './lib/runtime/error-chain.js';
-import { classifyWakeFailure, isMalformedTurnError } from './lib/runtime/wake-failure.js';
+import { classifyWakeFailure, isMalformedTurnError, isStaleTreeError } from './lib/runtime/wake-failure.js';
+import { createStaleTreeWakes } from './lib/runtime/stale-tree-wakes.js';
 import { registerShellGuard } from './lib/runtime/shell-guard.js';
 import { registerOneShotToolGuard, registerStopGuard } from './lib/runtime/stop-guard.js';
 import { registerTeamDiscipline } from './lib/runtime/deferral-guard.js';
@@ -792,6 +793,7 @@ export function apply(ctx, config = {}) {
 		const offSessionEvent = typeof ctx.on === 'function'
 			? ctx.on('session/event', async (session, event) => {
 				try { teamDiscipline.observe(session, event); } catch { /* 观察失败不影响事件流 */ }
+				try { staleTreeWakes.observe(session, event); } catch { /* 观察失败不影响事件流 */ }
 				if (typeof session?.id === 'string') {
 					if (event?.type === 'turn/start') turnsInFlight.add(session.id);
 					else if (event?.type === 'turn/end') turnsInFlight.delete(session.id);
@@ -903,6 +905,18 @@ export function apply(ctx, config = {}) {
 			diag.append({ ev: 'team.interrupt', projectId: projectRuntime.id, members: interrupted });
 		};
 		const wakeKeys = new Map();
+		// 热重载后「旧树未散」的唤醒：等宿主收掉成员旧回合 / 退避到点再投（lib/runtime/stale-tree-wakes.js）。
+		// 补投仍走 deliverWakePlans；停止的项目不补投（与自动派发同一停止门）。
+		const staleTreeWakes = createStaleTreeWakes({
+			diag,
+			redeliver: async ({ projectId, plan }) => {
+				if (disposed) return;
+				const runtime = projectRuntime(projectId);
+				if (runtime === null) return;
+				if (runtime.service.state.projects?.[projectId]?.runState === 'stopped') return;
+				await deliverWakePlans(runtime, [plan], { retry: true });
+			},
+		});
 			// provider 探测状态去重：能力缺失/确认无 provider 只各记一次，避免每轮刷日志。
 			let lastProviderState = '';
 		// PMO tick 是 fire-and-forget：慢 tick（模型/IO）会被下一分钟的定时器再入，
@@ -1033,6 +1047,13 @@ export function apply(ctx, config = {}) {
 				if (!key.endsWith(projectSuffix)) continue;
 				if (Number.isSafeInteger(seq) && head - seq > 500) wakeKeys.delete(key);
 			}
+			await deliverWakePlans(projectRuntime, plans, { seq: result?.event?.seq ?? head });
+		};
+		/**
+		 * 投递一批唤醒计划（事件规划与「旧树未散」补投共用这一份实现）。
+		 * @param {{ seq?: number|null, retry?: boolean }} options retry：这是 staleTreeWakes 的补投
+		 */
+		const deliverWakePlans = async (projectRuntime, plans, { seq = null, retry = false } = {}) => {
 			const subagents = serviceOf(ctx, 'subagents');
 			const sessions = serviceOf(ctx, 'sessions');
 			const permissionPresets = serviceOf(ctx, 'permissionPresets');
@@ -1073,7 +1094,7 @@ export function apply(ctx, config = {}) {
 				}
 				// Reserve before the async delivery: the HTTP result and the ledger
 				// event both schedule the same plan, and only one may deliver it.
-				wakeKeys.set(plan.key, result?.event?.seq ?? head);
+				wakeKeys.set(plan.key, seq ?? projectRuntime?.ledger?.head?.seq ?? 0);
 				const cwd = projectWorkspacePath;
 				try {
 					// Idle default members have no Agent session yet. A wake must
@@ -1133,6 +1154,7 @@ export function apply(ctx, config = {}) {
 						await titleMemberSession(projectRuntime, member);
 						persistModelSelection(member.sessionId, member.config, member.name);
 					}
+					staleTreeWakes.delivered(member.sessionId, { projectId: projectRuntime.id, memberId: plan.memberId, reason: plan.reason, messageId });
 					await projectRuntime.service.recordWake(plan.memberId, {
 						ok: true, taskId: plan.taskId, reason: plan.reason, messageId,
 					}, projectRuntime.id);
@@ -1147,6 +1169,14 @@ export function apply(ctx, config = {}) {
 					});
 				} catch (error) {
 					wakeKeys.delete(plan.key);
+					// 热重载后「旧树未散」：成员重载前开的回合仍挂在旧插件实例的宿主 Agent 下，
+					// 宿主拒绝以新宿主 Agent 投递（il2c 11-19 04:47 起 mem_coder 连续 UNAUTHORIZED）。
+					// 不是会话坏了：暂存，等宿主收掉旧回合 / 退避到点再投，不记失败。
+					const staleMember = projectRuntime.service.state.members?.[plan.memberId];
+					if (isStaleTreeError(error) && typeof staleMember?.sessionId === 'string'
+						&& staleTreeWakes.defer({ sessionId: staleMember.sessionId, projectId: projectRuntime.id, memberId: plan.memberId, plan, retry })) {
+						continue;
+					}
 					const causeChain = describeCauseChain(error);
 					// 实机根因：成员会话的**写句柄没有释放**——`sessions.get()` 已取不到它，
 					// 但 persistence 仍判定它「already owned by an active write handle」，
@@ -3299,6 +3329,7 @@ export function apply(ctx, config = {}) {
 			try { disposeStopGuard(); } catch { /* already disposed */ }
 			try { disposeOneShotToolGuard(); } catch { /* already disposed */ }
 			try { teamDiscipline.dispose(); } catch { /* already disposed */ }
+			try { staleTreeWakes.dispose(); } catch { /* already disposed */ }
 			hostSessionGate.dispose();
 			// 在途的 boot 也算本组合的资源：等它落定（落定时见 disposed 会自行关账本），
 			// 否则下一组合抢在关锁之前打开同一账本。

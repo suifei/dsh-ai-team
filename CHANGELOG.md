@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.138 - 2026-11-19
+
+**热重载后「旧树未散」的唤醒：暂存，等成员旧回合结束再补投**
+
+- 问题：il2c 在桌面版里把插件关再开（04:47）后，唤醒玄策连续 `UNAUTHORIZED target belongs to another subagent tree`，记成唤醒失败（11-10…11-18 零次，整机重启后零次）。
+- 根因：宿主 Agent 的生命周期挂在创建它的插件作用域上，插件卸载即拆，新实例 resume 出新对象当子智能体树的根；成员重载前开的回合仍常驻在旧树下，宿主要求投递者与常驻成员同根（dsh-subagent `deliverToMember`），所以以新根投递一律被拒。官方 `subagents.prompt` 按旧根投递，旧根已不在线，同样被拒（实测）。成员回合结束、宿主把它收掉之后，下一次投递在新根下冷恢复（il2c：玄策旧回合 05:00:06 结束，14 秒后开出新回合，此后零失败）。
+- 现在（`lib/runtime/stale-tree-wakes.js`）：只认这一种拒绝（`isStaleTreeError`；「another parent session」血缘错配不在此列）。被拒的唤醒暂存，不往账本记失败；同一成员只留最新一条。成员会话 `turn/end` 后等 5 秒（宿主收尾）补投，另有退避定时器兜底（30 秒 → 1 → 2 → 5 → 10 分钟，封顶最后一档）。旧回合没结束时被拒不计入放弃次数；回合结束后仍连续被拒、退避用尽才放弃，按普通唤醒失败处理。补投与平时唤醒走同一段投递实现（`deliverWakePlans`）；停止的项目不补投；卸载清掉全部定时器。
+- 诊断日志：`wake.tree-stale`、`wake.tree-stale.redeliver`（trigger：`turn-end` / `timer`）、`wake.tree-stale.recovered`（最终投到，发布默认 `errors` 级别也落盘）、`wake.tree-stale.giveup.fail`、`wake.tree-stale.redeliver.fail`。
+- 测试：新增 `test/stale-tree-wakes.test.js`（错误识别、turn/end 后补投最新计划、旧回合内被拒不耗尽、放弃只记一次、补投异常只记日志、卸载、index.js 接线）。全量 451。实机：隔离宿主里成员跑 120 秒的回合，中途关再开插件并发私信：被拒 3 次后旧回合结束，5 秒后补投成功，成员开新回合回复「三号收到」（`.ptc/rounds/r43-stale-tree.4.out`）。
+
 ## 0.4.137 - 2026-11-19
 
 **PMO 宿主会话里显示成员的收工汇报全文，带头像，不经模型**
