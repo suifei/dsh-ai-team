@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { repairArchivedHosts } from '../lib/runtime/host-repair.js';
+import { readFileSync } from 'node:fs';
+import { repairArchivedHosts, repairOnce } from '../lib/runtime/host-repair.js';
 
 /** A runtime whose member sessions hang from a host Session. */
 function runtimeWith(hostSessionId, memberSessionIds) {
@@ -72,3 +73,30 @@ test('the success row survives the shipped errors level', async () => {
 	assert.equal(isErrorEvent('host.unarchive.fail'), true);
 });
 
+
+test('concurrent repair calls share one run; a run that did not finish the repair is retried next time (il2c hot reload: 3 × host.repair.ok)', async () => {
+	let runs = 0;
+	let done = false;
+	let release;
+	const gate = repairOnce(async () => { runs += 1; await new Promise((resolve) => { release = resolve; }); }, () => done);
+	const calls = [gate(), gate(), gate()];
+	await new Promise((resolve) => setImmediate(resolve));
+	assert.equal(runs, 1, '并发三路只跑一次');
+	release();
+	await Promise.all(calls);
+	// 第一次没修成（registry 未就绪，done 仍为 false）：下一次调用重跑。
+	const retry = gate();
+	await new Promise((resolve) => setImmediate(resolve));
+	assert.equal(runs, 2);
+	done = true;
+	release();
+	await retry;
+	await gate();
+	assert.equal(runs, 2, '修好后不再跑');
+});
+
+test('index.js routes every repair call through repairOnce', () => {
+	const index = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+	assert.match(index, /const repairArchivedHosts = repairOnce\(async \(\) => \{/);
+	assert.match(index, /\}, \(\) => hostRepaired\);/);
+});

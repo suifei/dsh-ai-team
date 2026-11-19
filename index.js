@@ -25,7 +25,7 @@ import { ids } from './lib/domain/ids.js';
 import { MemberRuntime, validatePermissionProfile } from './lib/runtime/member-runtime.js';
 import { ensureHostAgent } from './lib/runtime/host-agent.js';
 import { activationSpec } from './lib/runtime/activation-spec.js';
-import { repairArchivedHosts as repairHostSessions } from './lib/runtime/host-repair.js';
+import { repairArchivedHosts as repairHostSessions, repairOnce } from './lib/runtime/host-repair.js';
 import { classifyLlmFailure, nextRequestAttempt, retryDecision } from './lib/runtime/failure-policy.js';
 import { memberIdentity } from './lib/domain/member-profile.js';
 import { findSkill, findSkillText, loadSkillContext } from './lib/runtime/skill-loader.js';
@@ -2015,8 +2015,8 @@ export function apply(ctx, config = {}) {
 		// 模型请求（实测 453 blocked / 0 completed）。旧版本把 host 归档用于隐藏会话。
 		let hostRepaired = false;
 		let hostRepairWarned = false;
-		const repairArchivedHosts = async () => {
-			if (hostRepaired) return;
+		// 启动 tick、ensureParent、blocked 回合会并发调用：repairOnce 保证同一时刻只跑一次。
+		const repairArchivedHosts = repairOnce(async () => {
 			try {
 				const registry = serviceOf(ctx, 'workspaceRegistry');
 				const repaired = await repairHostSessions({
@@ -2063,7 +2063,7 @@ export function apply(ctx, config = {}) {
 				hostRepaired = true;
 				diag.append({ ev: 'host.unarchive.sweep.fail', error: error?.message ?? String(error) });
 			}
-		};
+		}, () => hostRepaired);
 		/**
 		 * 取项目的 PMO 会话（成员的父会话）。核心模型：一个项目一个 PMO，驻留在项目工作区；
 		 * 成员都是它的子会话，于是全部落在同一工作区。不传项目时取活动项目（skillopt 评审等

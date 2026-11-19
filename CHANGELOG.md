@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.139 - 2026-11-20
+
+**Grok 4.7 不再在第一条回复前报 HTTP 400；热重载时归档修复只跑一次**
+
+- Grok 4.7（#88，感谢 @TardisBooo）：11 个 SkillOpt 工具的 `parameters` 是裸属性表（`{ project: { type: 'string' } }`），不是对象 JSON Schema。这种写法只对宿主的 `defineTool()` 有效（它会先编译）；插件直接 `tools.register()`，内置 SkillOpt 的 `defineTool` 又是原样透传，所以裸属性表原样发给了模型。Grok 4.7 严格校验，整个请求 400；Qwen、DeepSeek 一直容忍。现在都包成 `{ type: 'object', properties }`；参数里没有 `required` / `enum`，参数名与含义不变。实测：直连 Grok 4.7，修复前 11 个工具单发各 400，修复后 12 个工具一起发 200；DSH 宿主里成员路由到 Grok 4.7，修复前第一步 `400 invalid_request_error`，修复后回合正常结束。Qwen 修复前后都正常，调 `skillopt_rubric` 时 `dim8` 从字符串 `"7"` 变成数字 `7`（模型现在看得懂参数类型）。
+- 回归测试 `test/tool-schemas.test.js`：走插件真实的 `apply()`，捕获插件注册的**每一个**工具（含 index.js 自己注册的 `skillopt_rubric` / `judge` / `optimize` / `jobs`，以及以后新加的），逐个断言是对象 schema；单独断言按 Agent 注册的 `team` 工具。退掉 #88 任一处修复，测试都会失败。
+- 归档修复只跑一次（`repairOnce`，`lib/runtime/host-repair.js`）：启动 tick、取 PMO 会话、回合被拦会并发调用修复，旧写法在 `await` 之前只查「修好没」，几路都通过，同一批会话被解档、PMO 被归入工作区好几遍（il2c 每次热重载 3 行 `host.repair.ok`）。现在修好之前同一时刻只跑一次，并发调用共享这一次；没修成（如工作区注册服务未就绪）下次照常重跑。实测：隔离宿主热重载两次，0.4.138 写 2 / 5 / 2 行，现在 1 / 1 / 1 行。
+- 测试：`test/host-repair.test.js` 新增并发共享与重跑、index.js 接线。
+
 ## 0.4.138 - 2026-11-19
 
 **热重载后「旧树未散」的唤醒：暂存，等成员旧回合结束再补投**
