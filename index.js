@@ -8,7 +8,7 @@
  * The member runtime (real Agent sessions) lands in M2. Until then the
  * ledger/domain service is the only writer and the Host never fakes work.
  */
-import { planDispatch, planIdleRetry, planTaskNudges } from './lib/host/pmo.js';
+import { HOST_SUBAGENT_LIMIT, planDispatch, planIdleRetry, planIdleStaffing, planStaffingAdvice, planTaskNudges } from './lib/host/pmo.js';
 import { pmoHasNews } from './lib/ledger/fold.js';
 import { homedir, tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -57,8 +57,8 @@ import { buildModelCatalog, buildModelEfforts } from './lib/host/model-catalog.j
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeTaskContext, describeWake, planWakes } from './lib/host/waker.js';
 import { describeCauseChain } from './lib/runtime/error-chain.js';
-import { classifyWakeFailure, isMalformedTurnError, isStaleTreeError } from './lib/runtime/wake-failure.js';
-import { createStaleTreeWakes } from './lib/runtime/stale-tree-wakes.js';
+import { capacityLimit, classifyWakeFailure, deferredWakeKind, isCapacityError, isMalformedTurnError } from './lib/runtime/wake-failure.js';
+import { createDeferredWakes } from './lib/runtime/deferred-wakes.js';
 import { registerShellGuard } from './lib/runtime/shell-guard.js';
 import { registerOneShotToolGuard, registerStopGuard } from './lib/runtime/stop-guard.js';
 import { registerTeamDiscipline } from './lib/runtime/deferral-guard.js';
@@ -127,6 +127,8 @@ export const Config = z.object({
 	// 有界自主：Human 每次操作后，PMO 最多自主推进（无 active Task 时开会、自拟下一批卡）几轮；
 	// 用尽即暂停并在主流告知，等 Human 续。0 = 从不自主推进。Issue #1：一句「在吗」跑 7 小时。
 	pmoMaxRounds: z.number().step(1).min(0).max(100).default(3),
+	// 加人建议：可认领的待办没人接、或待验收排队，持续这么多分钟算「推进过慢」，给 Human 收件箱一条加人建议。
+	staffingAdviceMinutes: z.number().step(1).min(1).max(1440).default(30),
 	// 新项目的初始团队：内置 teams/<团队>/，或 ~/.dsh/ai-team/catalog/user/teams/<团队>/（同名覆盖内置）。
 	teamPreset: z.string().default('default'),
 });
@@ -793,7 +795,7 @@ export function apply(ctx, config = {}) {
 		const offSessionEvent = typeof ctx.on === 'function'
 			? ctx.on('session/event', async (session, event) => {
 				try { teamDiscipline.observe(session, event); } catch { /* 观察失败不影响事件流 */ }
-				try { staleTreeWakes.observe(session, event); } catch { /* 观察失败不影响事件流 */ }
+				try { deferredWakes.observe(session, event); } catch { /* 观察失败不影响事件流 */ }
 				if (typeof session?.id === 'string') {
 					if (event?.type === 'turn/start') turnsInFlight.add(session.id);
 					else if (event?.type === 'turn/end') turnsInFlight.delete(session.id);
@@ -905,9 +907,9 @@ export function apply(ctx, config = {}) {
 			diag.append({ ev: 'team.interrupt', projectId: projectRuntime.id, members: interrupted });
 		};
 		const wakeKeys = new Map();
-		// 热重载后「旧树未散」的唤醒：等宿主收掉成员旧回合 / 退避到点再投（lib/runtime/stale-tree-wakes.js）。
+		// 宿主暂时投不进的唤醒（热重载后旧树未散 / 超过并发上限排队）：等时机到了再投（lib/runtime/deferred-wakes.js）。
 		// 补投仍走 deliverWakePlans；停止的项目不补投（与自动派发同一停止门）。
-		const staleTreeWakes = createStaleTreeWakes({
+		const deferredWakes = createDeferredWakes({
 			diag,
 			redeliver: async ({ projectId, plan }) => {
 				if (disposed) return;
@@ -945,6 +947,14 @@ export function apply(ctx, config = {}) {
 		const pmoLastStall = new Map();
 		const pmoLastHeartbeat = new Map();
 		const pmoLastDispatch = new Map();
+		// 空闲必派的节流状态（按项目）：上次叫的时间、局面签名、同一局面重复次数（planIdleStaffing）。
+		const pmoLastStaffing = new Map();
+		// 宿主同时在跑的子智能体上限：默认 8，见到容量报错就以报错里的数字为准（加人建议的排队提示用）。
+		let hostCapacity = HOST_SUBAGENT_LIMIT;
+		const noteHostCapacity = (error) => {
+			const limit = capacityLimit(error);
+			if (limit !== null) hostCapacity = limit;
+		};
 		const pmoLastEscalate = new Map();
 		const pmoLastReview = new Map();
 		let pmoTimer = null;
@@ -1051,7 +1061,7 @@ export function apply(ctx, config = {}) {
 		};
 		/**
 		 * 投递一批唤醒计划（事件规划与「旧树未散」补投共用这一份实现）。
-		 * @param {{ seq?: number|null, retry?: boolean }} options retry：这是 staleTreeWakes 的补投
+		 * @param {{ seq?: number|null, retry?: boolean }} options retry：这是 deferredWakes 的补投
 		 */
 		const deliverWakePlans = async (projectRuntime, plans, { seq = null, retry = false } = {}) => {
 			const subagents = serviceOf(ctx, 'subagents');
@@ -1154,7 +1164,7 @@ export function apply(ctx, config = {}) {
 						await titleMemberSession(projectRuntime, member);
 						persistModelSelection(member.sessionId, member.config, member.name);
 					}
-					staleTreeWakes.delivered(member.sessionId, { projectId: projectRuntime.id, memberId: plan.memberId, reason: plan.reason, messageId });
+					deferredWakes.delivered(projectRuntime.id, plan.memberId, { sessionId: member.sessionId ?? null, reason: plan.reason, messageId });
 					await projectRuntime.service.recordWake(plan.memberId, {
 						ok: true, taskId: plan.taskId, reason: plan.reason, messageId,
 					}, projectRuntime.id);
@@ -1169,12 +1179,14 @@ export function apply(ctx, config = {}) {
 					});
 				} catch (error) {
 					wakeKeys.delete(plan.key);
-					// 热重载后「旧树未散」：成员重载前开的回合仍挂在旧插件实例的宿主 Agent 下，
-					// 宿主拒绝以新宿主 Agent 投递（il2c 11-19 04:47 起 mem_coder 连续 UNAUTHORIZED）。
-					// 不是会话坏了：暂存，等宿主收掉旧回合 / 退避到点再投，不记失败。
-					const staleMember = projectRuntime.service.state.members?.[plan.memberId];
-					if (isStaleTreeError(error) && typeof staleMember?.sessionId === 'string'
-						&& staleTreeWakes.defer({ sessionId: staleMember.sessionId, projectId: projectRuntime.id, memberId: plan.memberId, plan, retry })) {
+					// 宿主暂时投不进，不是会话坏了：暂存，时机到了再投，不记失败。
+					// - 热重载后「旧树未散」：成员重载前开的回合仍挂在旧插件实例的宿主 Agent 下（il2c 11-19 04:47）。
+					// - 超过宿主并发上限（默认 8）：宿主不排队直接拒绝，团队多出来的人由插件排队。
+					const deferMember = projectRuntime.service.state.members?.[plan.memberId];
+					const deferKind = deferredWakeKind(error);
+					noteHostCapacity(error);
+					if (deferKind !== null && (deferKind !== 'stale-tree' || typeof deferMember?.sessionId === 'string')
+						&& deferredWakes.defer({ kind: deferKind, sessionId: deferMember?.sessionId ?? null, projectId: projectRuntime.id, memberId: plan.memberId, plan, retry })) {
 						continue;
 					}
 					const causeChain = describeCauseChain(error);
@@ -1410,6 +1422,20 @@ export function apply(ctx, config = {}) {
 					nudgeClocks[kind].set(task.id, now);
 					await wakeFromResult(projectRuntime, { event: nudgeEvent[kind](task) }, {});
 				}
+			}
+			// 空闲必派：看板上还有活时，空闲开发一个都不能闲着（判定在 planIdleStaffing，lib/host/pmo.js）。
+			const staffing = planIdleStaffing(state, { now, inTurn: (id) => turnsInFlight.has(id), last: pmoLastStaffing.get(projectRuntime.id) });
+			if (staffing !== null) {
+				pmoLastStaffing.set(projectRuntime.id, { at: now, signature: staffing.signature, repeats: staffing.repeats });
+				diag.append({ ev: 'pmo.staffing', projectId: projectRuntime.id, claims: staffing.claims, spare: staffing.spare, repeats: staffing.repeats });
+				await wakeFromResult(projectRuntime, {
+					event: { type: 'pmo/staffing', payload: { claims: staffing.claims, spare: staffing.spare, bucket: Math.floor(now / 60_000) } },
+				}, {});
+			}
+			// 加人建议：推进过慢（待办没人接 / 待验收排长队）时给 Human 收件箱一条建议，由 Human 决定（planStaffingAdvice）。
+			for (const advice of planStaffingAdvice(state, { now, inTurn: (id) => turnsInFlight.has(id), capacity: hostCapacity, humanId: projectRuntime.service.humanId(), wait: (config.staffingAdviceMinutes ?? 30) * 60_000 })) {
+				const item = await projectRuntime.service.recordStaffingAdvice(projectRuntime.id, advice);
+				diag.append({ ev: 'pmo.advice', projectId: projectRuntime.id, role: advice.role, count: advice.count, title: advice.title, itemId: item?.id ?? null });
 			}
 			if (active.length > 0) {
 				// Prune per-task clock entries whose task left the active set, so
@@ -2253,7 +2279,12 @@ export function apply(ctx, config = {}) {
 				// failMember，会把 retired 覆写成 failed——退役是终态，之后 member.bind
 				// 还能把成员复活。所以只对仍在册的成员记失败。
 				const currentStatus = projectRuntime.service.state.members?.[member.id]?.status;
-				if (currentStatus !== 'retired') {
+				// 超过宿主并发上限：不是成员失败——记 failed 会让 waker 再也不叫它（团队超过 8 人时第 9 位
+				// 首次激活就会被永久搁置）。保持原状态，唤醒路径会把它排进 deferredWakes 的 capacity 队列。
+				if (isCapacityError(error)) {
+					noteHostCapacity(error);
+					diag.append({ ev: 'member.activate.capacity', memberId: member.id, projectId: projectRuntime.id, message: error?.message ?? String(error) });
+				} else if (currentStatus !== 'retired') {
 					try {
 						await projectRuntime.service.failMember(
 							{ actor: { kind: 'human', memberId: HUMAN_ID }, projectId: projectRuntime.id },
@@ -3338,7 +3369,7 @@ export function apply(ctx, config = {}) {
 			try { disposeStopGuard(); } catch { /* already disposed */ }
 			try { disposeOneShotToolGuard(); } catch { /* already disposed */ }
 			try { teamDiscipline.dispose(); } catch { /* already disposed */ }
-			try { staleTreeWakes.dispose(); } catch { /* already disposed */ }
+			try { deferredWakes.dispose(); } catch { /* already disposed */ }
 			hostSessionGate.dispose();
 			// 在途的 boot 也算本组合的资源：等它落定（落定时见 disposed 会自行关账本），
 			// 否则下一组合抢在关锁之前打开同一账本。
