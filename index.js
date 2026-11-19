@@ -8,7 +8,7 @@
  * The member runtime (real Agent sessions) lands in M2. Until then the
  * ledger/domain service is the only writer and the Host never fakes work.
  */
-import { planDispatch, planIdleRetry, planTaskNudges } from './lib/host/pmo.js';
+import { planDispatch, planIdleRetry, planIdleStaffing, planTaskNudges } from './lib/host/pmo.js';
 import { pmoHasNews } from './lib/ledger/fold.js';
 import { homedir, tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -945,6 +945,8 @@ export function apply(ctx, config = {}) {
 		const pmoLastStall = new Map();
 		const pmoLastHeartbeat = new Map();
 		const pmoLastDispatch = new Map();
+		// 空闲必派的节流状态（按项目）：上次叫的时间、局面签名、同一局面重复次数（planIdleStaffing）。
+		const pmoLastStaffing = new Map();
 		const pmoLastEscalate = new Map();
 		const pmoLastReview = new Map();
 		let pmoTimer = null;
@@ -1411,6 +1413,15 @@ export function apply(ctx, config = {}) {
 					nudgeClocks[kind].set(task.id, now);
 					await wakeFromResult(projectRuntime, { event: nudgeEvent[kind](task) }, {});
 				}
+			}
+			// 空闲必派：看板上还有活时，空闲开发一个都不能闲着（判定在 planIdleStaffing，lib/host/pmo.js）。
+			const staffing = planIdleStaffing(state, { now, inTurn: (id) => turnsInFlight.has(id), last: pmoLastStaffing.get(projectRuntime.id) });
+			if (staffing !== null) {
+				pmoLastStaffing.set(projectRuntime.id, { at: now, signature: staffing.signature, repeats: staffing.repeats });
+				diag.append({ ev: 'pmo.staffing', projectId: projectRuntime.id, claims: staffing.claims, spare: staffing.spare, repeats: staffing.repeats });
+				await wakeFromResult(projectRuntime, {
+					event: { type: 'pmo/staffing', payload: { claims: staffing.claims, spare: staffing.spare, bucket: Math.floor(now / 60_000) } },
+				}, {});
 			}
 			if (active.length > 0) {
 				// Prune per-task clock entries whose task left the active set, so
