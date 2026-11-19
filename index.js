@@ -8,7 +8,7 @@
  * The member runtime (real Agent sessions) lands in M2. Until then the
  * ledger/domain service is the only writer and the Host never fakes work.
  */
-import { planDispatch, planIdleRetry, planIdleStaffing, planTaskNudges } from './lib/host/pmo.js';
+import { HOST_SUBAGENT_LIMIT, planDispatch, planIdleRetry, planIdleStaffing, planStaffingAdvice, planTaskNudges } from './lib/host/pmo.js';
 import { pmoHasNews } from './lib/ledger/fold.js';
 import { homedir, tmpdir } from 'node:os';
 import { randomUUID } from 'node:crypto';
@@ -57,7 +57,7 @@ import { buildModelCatalog, buildModelEfforts } from './lib/host/model-catalog.j
 import { createTeamTool } from './lib/host/member-tools.js';
 import { describeTaskContext, describeWake, planWakes } from './lib/host/waker.js';
 import { describeCauseChain } from './lib/runtime/error-chain.js';
-import { classifyWakeFailure, deferredWakeKind, isCapacityError, isMalformedTurnError } from './lib/runtime/wake-failure.js';
+import { capacityLimit, classifyWakeFailure, deferredWakeKind, isCapacityError, isMalformedTurnError } from './lib/runtime/wake-failure.js';
 import { createDeferredWakes } from './lib/runtime/deferred-wakes.js';
 import { registerShellGuard } from './lib/runtime/shell-guard.js';
 import { registerOneShotToolGuard, registerStopGuard } from './lib/runtime/stop-guard.js';
@@ -127,6 +127,8 @@ export const Config = z.object({
 	// 有界自主：Human 每次操作后，PMO 最多自主推进（无 active Task 时开会、自拟下一批卡）几轮；
 	// 用尽即暂停并在主流告知，等 Human 续。0 = 从不自主推进。Issue #1：一句「在吗」跑 7 小时。
 	pmoMaxRounds: z.number().step(1).min(0).max(100).default(3),
+	// 加人建议：可认领的待办没人接、或待验收排队，持续这么多分钟算「推进过慢」，给 Human 收件箱一条加人建议。
+	staffingAdviceMinutes: z.number().step(1).min(1).max(1440).default(30),
 	// 新项目的初始团队：内置 teams/<团队>/，或 ~/.dsh/ai-team/catalog/user/teams/<团队>/（同名覆盖内置）。
 	teamPreset: z.string().default('default'),
 });
@@ -947,6 +949,12 @@ export function apply(ctx, config = {}) {
 		const pmoLastDispatch = new Map();
 		// 空闲必派的节流状态（按项目）：上次叫的时间、局面签名、同一局面重复次数（planIdleStaffing）。
 		const pmoLastStaffing = new Map();
+		// 宿主同时在跑的子智能体上限：默认 8，见到容量报错就以报错里的数字为准（加人建议的排队提示用）。
+		let hostCapacity = HOST_SUBAGENT_LIMIT;
+		const noteHostCapacity = (error) => {
+			const limit = capacityLimit(error);
+			if (limit !== null) hostCapacity = limit;
+		};
 		const pmoLastEscalate = new Map();
 		const pmoLastReview = new Map();
 		let pmoTimer = null;
@@ -1176,6 +1184,7 @@ export function apply(ctx, config = {}) {
 					// - 超过宿主并发上限（默认 8）：宿主不排队直接拒绝，团队多出来的人由插件排队。
 					const deferMember = projectRuntime.service.state.members?.[plan.memberId];
 					const deferKind = deferredWakeKind(error);
+					noteHostCapacity(error);
 					if (deferKind !== null && (deferKind !== 'stale-tree' || typeof deferMember?.sessionId === 'string')
 						&& deferredWakes.defer({ kind: deferKind, sessionId: deferMember?.sessionId ?? null, projectId: projectRuntime.id, memberId: plan.memberId, plan, retry })) {
 						continue;
@@ -1422,6 +1431,11 @@ export function apply(ctx, config = {}) {
 				await wakeFromResult(projectRuntime, {
 					event: { type: 'pmo/staffing', payload: { claims: staffing.claims, spare: staffing.spare, bucket: Math.floor(now / 60_000) } },
 				}, {});
+			}
+			// 加人建议：推进过慢（待办没人接 / 待验收排长队）时给 Human 收件箱一条建议，由 Human 决定（planStaffingAdvice）。
+			for (const advice of planStaffingAdvice(state, { now, inTurn: (id) => turnsInFlight.has(id), capacity: hostCapacity, humanId: projectRuntime.service.humanId(), wait: (config.staffingAdviceMinutes ?? 30) * 60_000 })) {
+				const item = await projectRuntime.service.recordStaffingAdvice(projectRuntime.id, advice);
+				diag.append({ ev: 'pmo.advice', projectId: projectRuntime.id, role: advice.role, count: advice.count, title: advice.title, itemId: item?.id ?? null });
 			}
 			if (active.length > 0) {
 				// Prune per-task clock entries whose task left the active set, so
@@ -2268,6 +2282,7 @@ export function apply(ctx, config = {}) {
 				// 超过宿主并发上限：不是成员失败——记 failed 会让 waker 再也不叫它（团队超过 8 人时第 9 位
 				// 首次激活就会被永久搁置）。保持原状态，唤醒路径会把它排进 deferredWakes 的 capacity 队列。
 				if (isCapacityError(error)) {
+					noteHostCapacity(error);
 					diag.append({ ev: 'member.activate.capacity', memberId: member.id, projectId: projectRuntime.id, message: error?.message ?? String(error) });
 				} else if (currentStatus !== 'retired') {
 					try {

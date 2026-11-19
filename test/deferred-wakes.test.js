@@ -165,7 +165,7 @@ test('index.js defers both kinds instead of recording a failure, redelivers thro
 	assert.match(index, /deferredWakes\.delivered\(projectRuntime\.id, plan\.memberId, /);
 	assert.match(index, /try \{ deferredWakes\.observe\(session, event\); \}/);
 	assert.match(index, /try \{ deferredWakes\.dispose\(\); \}/);
-	assert.match(index, /if \(isCapacityError\(error\)\) \{\s*diag\.append\(\{ ev: 'member\.activate\.capacity'[^\n]*\n\s*\} else if \(currentStatus !== 'retired'\) \{/, '容量满不 failMember');
+	assert.match(index, /if \(isCapacityError\(error\)\) \{\s*(?:noteHostCapacity\(error\);\s*)?diag\.append\(\{ ev: 'member\.activate\.capacity'[^\n]*\n\s*\} else if \(currentStatus !== 'retired'\) \{/, '容量满不 failMember');
 	assert.equal((index.match(/const deliverWakePlans = /g) ?? []).length, 1);
 	assert.equal((index.match(/subagents\.prompt\(/g) ?? []).length, 0, 'prompt 兜底实测无效（r43 第二轮），不得引入');
 });
