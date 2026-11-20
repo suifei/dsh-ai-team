@@ -123,6 +123,13 @@ window.__ModuleLoader__.load({
 			inboxItemTitle: '收件箱消息',
 			inboxCompletedTitle: 'Task 已完成：{title}',
 			inboxOpenTask: '打开 Task',
+			inboxOpenCard: '打开 #{number}',
+			inboxOpenCardN: '打开第 {n} 张卡',
+			inboxOpenMember: '查看 {name}',
+			inboxStateRead: '已读',
+			inboxStateResolved: '已处理',
+			inboxStateDismissed: '已忽略',
+			inboxStateSuperseded: '已过时',
 			inboxAck: '知道了',
 			inboxAcked: '已标记处理。',
 			decisionChoose: '请选择…',
@@ -579,6 +586,13 @@ window.__ModuleLoader__.load({
 			inboxItemTitle: 'Inbox message',
 			inboxCompletedTitle: 'Task completed: {title}',
 			inboxOpenTask: 'Open Task',
+			inboxOpenCard: 'Open #{number}',
+			inboxOpenCardN: 'Open card {n}',
+			inboxOpenMember: 'View {name}',
+			inboxStateRead: 'Read',
+			inboxStateResolved: 'Handled',
+			inboxStateDismissed: 'Dismissed',
+			inboxStateSuperseded: 'Superseded',
 			inboxAck: 'Acknowledge',
 			inboxAcked: 'Marked handled.',
 			decisionChoose: 'Choose…',
@@ -982,6 +996,9 @@ window.__ModuleLoader__.load({
 			: actor?.kind === 'agent' ? ' · ' + (actor.memberId ?? 'Agent')
 			: actor?.kind === 'system' ? ' · 系统'
 			: '';
+		/** 收件箱条目状态的显示文字（账本里是 read / resolved / dismissed / superseded）；未知状态原样显示。 */
+		const INBOX_STATE_KEYS = { read: 'inboxStateRead', resolved: 'inboxStateResolved', done: 'inboxStateResolved', dismissed: 'inboxStateDismissed', superseded: 'inboxStateSuperseded' };
+		const inboxStateLabel = (t, state) => (INBOX_STATE_KEYS[state] ? t(INBOX_STATE_KEYS[state]) : state);
 		const tf = (t, key, vars) => String(t(key)).replace(/\{(\w+)\}/g, (match, name) => (
 			vars && Object.prototype.hasOwnProperty.call(vars, name) ? String(vars[name]) : match
 		));
@@ -4888,6 +4905,25 @@ window.__ModuleLoader__.load({
 					say(tf(t, 'sendFailed', { message: error?.message ?? String(error) }));
 				}
 			}
+			/**
+			 * 加人建议涉及几张卡、几个人：每张卡一个按钮（写卡号），停摆的成员各一个「查看」按钮，
+			 * 而不是只给一个打开第一张卡的「打开 Task」。旧条目没有卡号时按序号写。
+			 */
+			function staffingAdviceActions(item) {
+				const ids = Array.isArray(item.ref?.taskIds) && item.ref.taskIds.length ? item.ref.taskIds : item.ref?.taskId ? [item.ref.taskId] : [];
+				const numbers = item.ref?.taskNumbers ?? {};
+				const here = !item.projectId || item.projectId === projectId;
+				const cards = ids.slice(0, 5).map((taskId, index) => {
+					const number = numbers[taskId] ?? (here ? tasks.find((task) => task.id === taskId)?.number : undefined);
+					return h('button', { key: taskId, className: 'at-btn at-btn-small', type: 'button', onClick: () => openInboxTask({ ...item, ref: { ...item.ref, taskId } }) },
+						number ? tf(t, 'inboxOpenCard', { number }) : tf(t, 'inboxOpenCardN', { n: index + 1 }));
+				});
+				const people = (item.ref?.action === 'recover' && here ? item.ref.memberIds ?? [] : [])
+					.map((memberId) => data.agents.find((agent) => agent.id === memberId))
+					.filter(Boolean)
+					.map((agent) => h('button', { key: agent.id, className: 'at-btn at-btn-small', type: 'button', onClick: () => openMemberView(agent) }, tf(t, 'inboxOpenMember', { name: agent.name })));
+				return [...people, ...cards];
+			}
 			async function openInboxTask(item) {
 				if (item.projectId && item.projectId !== projectId) {
 					const switched = await switchProject({ id: item.projectId, name: item.projectName });
@@ -5334,9 +5370,11 @@ window.__ModuleLoader__.load({
 										item.ref?.memberName ?? (item.ref?.memberId ? item.ref.memberId : ''),
 										' · ',
 										fmtTime(item.createdAt)),
-									item.state !== 'unread' ? h('div', { className: 'at-inboxstate' }, item.state) : null),
+									item.state !== 'unread' ? h('div', { className: 'at-inboxstate' }, inboxStateLabel(t, item.state)) : null),
 								h('div', { className: 'at-inboxactions' },
-									item.ref?.taskId ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => openInboxTask(item) }, t('inboxOpenTask')) : null,
+									item.ref?.kind === 'staffing_advice'
+										? staffingAdviceActions(item)
+										: item.ref?.taskId ? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => openInboxTask(item) }, t('inboxOpenTask')) : null,
 									item.type === 'decision_required' && item.state !== 'unread' && Array.isArray(item.ref?.questions) && item.ref.questions.length
 										? h('button', { className: 'at-btn at-btn-small', type: 'button', onClick: () => reopenDecision(item) }, t('decisionReopen'))
 										: null,

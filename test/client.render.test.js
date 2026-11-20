@@ -42,6 +42,8 @@ const BOOTSTRAP = {
 	inbox: [
 		{ id: 'i1', memberId: 'h1', type: 'decision_required', requiresDecision: true, state: 'unread', createdAt: now - 25 * 3600000, ackedAt: null, projectName: '测试项目', ref: { title: '迁移脚本验收', taskId: 't2', category: 'billing', memberName: '墨渊', questions: [{ id: 'q1', text: '是否通过验收？', options: ['通过', '打回'], recommendation: '通过' }] } },
 		{ id: 'i2', memberId: 'h1', type: 'decision_required', requiresDecision: true, state: 'done', createdAt: now - 96 * 3600000, ackedAt: now - 90 * 3600000, projectName: '测试项目', ref: { title: '历史决策', taskId: 't3', questions: [] } },
+		// 加人建议（il2c 2026-11-20）：停摆的验收人给「查看」，每张卡一个按钮；旧条目没有卡号时按序号写。
+		{ id: 'i3', memberId: 'h1', type: 'decision_required', requiresDecision: true, state: 'read', createdAt: now - 3600000, ackedAt: now - 1800000, projectName: '测试项目', ref: { kind: 'staffing_advice', action: 'recover', memberIds: ['a2'], taskIds: ['t2', 't9'], taskNumbers: { t2: 2 }, taskId: 't2', title: '建议恢复停摆的验收：2 张卡待验收已等 555 分钟', memberName: 'PMO' } },
 	],
 	quadrants: {
 		rev: 42, generatedAt: now,
@@ -142,7 +144,8 @@ function makeReact() {
 		Component: class Component { constructor(props) { if (props) this.props = props; } },
 		useState(initial) {
 			const slot = currentSlots.cursor++;
-			if (slot >= currentSlots.items.length) currentSlots.items.push({ value: initial });
+			// 与 React 一致：函数形式的初值（惰性初始化）只在首次调用并取其返回值。
+			if (slot >= currentSlots.items.length) currentSlots.items.push({ value: typeof initial === 'function' ? initial() : initial });
 			const entry = currentSlots.items[slot];
 			const set = (next) => {
 				entry.value = typeof next === 'function' ? next(entry.value) : next;
@@ -312,4 +315,37 @@ test('headless render: workbench main path evaluates every component without ref
 	assert.ok(rbody, 'the thread panel renders after opening a task');
 	assert.equal(typeof rbody.props.onScroll, 'function', 'the thread body tracks the reader position');
 	assert.ok(rbody.props.ref && 'current' in rbody.props.ref, 'the thread body is measured through the follow hook');
+
+	// 收件箱：状态写中文（不是 read / done 原文）；加人建议给每张卡和停摆成员各一个按钮，不是一个笼统的「打开 Task」。
+	let inboxNav = null;
+	const findNav = (node) => {
+		if (inboxNav !== null || node === null || typeof node !== 'object') return;
+		if (Array.isArray(node)) { node.forEach(findNav); return; }
+		if (String(node.props?.className ?? '').startsWith('at-navrow') && 'aria-current' in (node.props ?? {})) { inboxNav = node; return; }
+		if (Array.isArray(node.children)) node.children.forEach(findNav);
+		else if (node.children !== undefined) findNav(node.children);
+	};
+	findNav(tree4);
+	assert.ok(inboxNav, 'the inbox nav row renders');
+	inboxNav.props.onClick();
+	mainRender();
+	const inboxStrings = [];
+	const gather = (node) => {
+		if (typeof node === 'string') inboxStrings.push(node);
+		else if (Array.isArray(node)) node.forEach(gather);
+		else if (node && typeof node === 'object') {
+			if (Array.isArray(node.children)) node.children.forEach(gather);
+			else if (node.children !== undefined) gather(node.children);
+		}
+	};
+	gather(mainRender());
+	// 本测试的 t() 返回键名：i2（done）、i3（read）显示状态文案；i3 有「查看 成员」、有卡号的卡和按序号的卡各一个按钮。
+	for (const key of ['inboxStateResolved', 'inboxStateRead', 'inboxOpenMember', 'inboxOpenCard', 'inboxOpenCardN']) {
+		assert.ok(inboxStrings.includes(`agentTeam.${key}`), `inbox shows ${key}`);
+	}
+	assert.ok(!inboxStrings.includes('read') && !inboxStrings.includes('done'), 'raw inbox states are not shown');
+	assert.equal(inboxStrings.filter((text) => text === 'agentTeam.inboxOpenTask').length, 2, '只有 i1、i2 用「打开 Task」，加人建议不用');
+	for (const [key, zh] of [['inboxStateRead', '已读'], ['inboxStateResolved', '已处理'], ['inboxOpenCard', '打开 #{number}'], ['inboxOpenMember', '查看 {name}']]) {
+		assert.ok(source.includes(`${key}: '${zh}'`), `${key} 中文为「${zh}」`);
+	}
 });
