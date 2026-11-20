@@ -125,7 +125,7 @@ window.__ModuleLoader__.load({
 			inboxOpenTask: '打开 Task',
 			inboxOpenCard: '打开 #{number}',
 			inboxOpenCardN: '打开第 {n} 张卡',
-			inboxOpenMember: '查看 {name}',
+			inboxRecoverMember: '恢复 {name}',
 			inboxStateRead: '已读',
 			inboxStateResolved: '已处理',
 			inboxStateDismissed: '已忽略',
@@ -588,7 +588,7 @@ window.__ModuleLoader__.load({
 			inboxOpenTask: 'Open Task',
 			inboxOpenCard: 'Open #{number}',
 			inboxOpenCardN: 'Open card {n}',
-			inboxOpenMember: 'View {name}',
+			inboxRecoverMember: 'Recover {name}',
 			inboxStateRead: 'Read',
 			inboxStateResolved: 'Handled',
 			inboxStateDismissed: 'Dismissed',
@@ -4906,7 +4906,7 @@ window.__ModuleLoader__.load({
 				}
 			}
 			/**
-			 * 加人建议涉及几张卡、几个人：每张卡一个按钮（写卡号），停摆的成员各一个「查看」按钮，
+			 * 加人建议涉及几张卡、几个人：每张卡一个按钮（写卡号），停摆的成员各一个「恢复」按钮（打开成员资料窗，「重试」就在那里），
 			 * 而不是只给一个打开第一张卡的「打开 Task」。旧条目没有卡号时按序号写。
 			 */
 			function staffingAdviceActions(item) {
@@ -4921,7 +4921,7 @@ window.__ModuleLoader__.load({
 				const people = (item.ref?.action === 'recover' && here ? item.ref.memberIds ?? [] : [])
 					.map((memberId) => data.agents.find((agent) => agent.id === memberId))
 					.filter(Boolean)
-					.map((agent) => h('button', { key: agent.id, className: 'at-btn at-btn-small', type: 'button', onClick: () => openMemberView(agent) }, tf(t, 'inboxOpenMember', { name: agent.name })));
+					.map((agent) => h('button', { key: agent.id, className: 'at-btn at-btn-small at-btn-warn', type: 'button', onClick: () => openProfile(agent) }, tf(t, 'inboxRecoverMember', { name: agent.name })));
 				return [...people, ...cards];
 			}
 			async function openInboxTask(item) {
