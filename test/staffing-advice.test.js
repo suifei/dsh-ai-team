@@ -105,6 +105,8 @@ test('the advice lands in the Human inbox without questions, so it is never auto
 		assert.equal(stored.ref.kind, 'staffing_advice');
 		assert.equal(stored.ref.title, '建议加 2 名开发：x');
 		assert.equal(stored.ref.questions, undefined);
+		assert.equal(stored.ref.action, 'add');
+		assert.deepEqual(stored.ref.taskNumbers, {}, '卡不在看板上时不写卡号，界面按序号显示');
 		assert.deepEqual(await service.autoAnswerDecisions(runtime.id), []);
 		assert.equal(service.state.inbox[item.id].state, 'unread');
 		assert.equal(planStaffingAdvice({ ...service.state, tasks: { t3: card('t3', 'pending', 0) } }, { now: Date.now(), inTurn: () => false, humanId: service.humanId() }).some((a) => a.role === 'developer'), false, '账本里的未读建议挡住重复');
