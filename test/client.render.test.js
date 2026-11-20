@@ -339,13 +339,40 @@ test('headless render: workbench main path evaluates every component without ref
 		}
 	};
 	gather(mainRender());
-	// 本测试的 t() 返回键名：i2（done）、i3（read）显示状态文案；i3 有「查看 成员」、有卡号的卡和按序号的卡各一个按钮。
-	for (const key of ['inboxStateResolved', 'inboxStateRead', 'inboxOpenMember', 'inboxOpenCard', 'inboxOpenCardN']) {
+	// 本测试的 t() 返回键名：i2（done）、i3（read）显示状态文案；i3 有「恢复 成员」、有卡号的卡和按序号的卡各一个按钮。
+	for (const key of ['inboxStateResolved', 'inboxStateRead', 'inboxRecoverMember', 'inboxOpenCard', 'inboxOpenCardN']) {
 		assert.ok(inboxStrings.includes(`agentTeam.${key}`), `inbox shows ${key}`);
 	}
 	assert.ok(!inboxStrings.includes('read') && !inboxStrings.includes('done'), 'raw inbox states are not shown');
 	assert.equal(inboxStrings.filter((text) => text === 'agentTeam.inboxOpenTask').length, 2, '只有 i1、i2 用「打开 Task」，加人建议不用');
-	for (const [key, zh] of [['inboxStateRead', '已读'], ['inboxStateResolved', '已处理'], ['inboxOpenCard', '打开 #{number}'], ['inboxOpenMember', '查看 {name}']]) {
+	for (const [key, zh] of [['inboxStateRead', '已读'], ['inboxStateResolved', '已处理'], ['inboxOpenCard', '打开 #{number}'], ['inboxRecoverMember', '恢复 {name}']]) {
 		assert.ok(source.includes(`${key}: '${zh}'`), `${key} 中文为「${zh}」`);
 	}
+
+	// 「恢复 墨渊」直接打开成员资料窗，「重试」就在窗里（用户 2026-11-20：恢复白砚要先找到资料窗才看得到「重试」）。
+	let recover = null;
+	const findRecover = (node) => {
+		if (recover !== null || node === null || typeof node !== 'object') return;
+		if (Array.isArray(node)) { node.forEach(findRecover); return; }
+		if ([].concat(node.children).includes('agentTeam.inboxRecoverMember') && typeof node.props?.onClick === 'function') { recover = node; return; }
+		if (Array.isArray(node.children)) node.children.forEach(findRecover);
+		else if (node.children !== undefined) findRecover(node.children);
+	};
+	findRecover(mainRender());
+	assert.ok(recover, 'the recover button renders');
+	assert.match(recover.props.className, /at-btn-warn/);
+	recover.props.onClick();
+	mainRender();
+	const profileStrings = [];
+	const gatherProfile = (node) => {
+		if (typeof node === 'string') profileStrings.push(node);
+		else if (Array.isArray(node)) node.forEach(gatherProfile);
+		else if (node && typeof node === 'object') {
+			if (Array.isArray(node.children)) node.children.forEach(gatherProfile);
+			else if (node.children !== undefined) gatherProfile(node.children);
+		}
+	};
+	gatherProfile(mainRender());
+	assert.ok(profileStrings.includes('agentTeam.memberProfileTitleName'), 'the member profile dialog opens');
+	assert.ok(profileStrings.includes('agentTeam.retry'), 'the failed member profile shows 重试');
 });
