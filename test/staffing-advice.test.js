@@ -55,6 +55,25 @@ test('acceptance queue: suggest one QA when there is none, or each QA has 2+ car
 	assert.deepEqual(advise(team([...devs, agent('qa1', '验收', '3'), agent('qa2', '验收', '4')], twoWaiting)), [], '两位验收人各一张：不算慢');
 });
 
+// 实机 il2c 2026-11-20：验收人白砚 06:53 模型报错停摆（member/llm-failed），两张卡待验收 555 分钟，
+// 旧版把停摆的人当成不存在，提示「团队没有验收人，建议加 1 名」——人还在，恢复即可。
+test('a stalled QA or developer is recovered, not replaced: the advice names them and skips the queue note', () => {
+	const old = NOW - 555 * MIN;
+	const waiting = [card('t1', 'pending_acceptance', old, { assigneeId: 'dev1' }), card('t2', 'pending_acceptance', old, { assigneeId: 'dev2' })];
+	const many = Array.from({ length: 7 }, (_, i) => agent(`d${i}`, '编程', String(i)));
+	const [qa] = advise(team([...many, agent('qa1', '验收', '9', { name: '白砚', status: 'failed' })], waiting));
+	assert.equal(qa.role, 'qa');
+	assert.equal(qa.action, 'recover');
+	assert.deepEqual(qa.memberIds, ['qa1']);
+	assert.equal(qa.title, '建议恢复停摆的验收：2 张卡待验收已等 555 分钟，而验收人 白砚 停摆了（收件箱里有失败提醒）：恢复后即可接手，不必加人');
+	assert.doesNotMatch(qa.title, /没有验收人|排队/);
+	assert.equal(advise(team([...devs, agent('qa1', '验收', '3', { status: 'retired' })], waiting))[0].action, 'add', '退役是有意离队：照常建议加人');
+
+	const [dev] = advise(team([...devs, agent('dev3', '编程', '3', { name: '青岚', status: 'unavailable' }), agent('qa1', '验收', '4')], [...busy, card('t3', 'pending', NOW - 40 * MIN)]));
+	assert.equal(dev.action, 'recover');
+	assert.match(dev.title, /^建议恢复停摆的开发：1 张待办已等 40 分钟，开发都在忙，而开发 青岚 停摆了/);
+});
+
 test('over the host limit the advice says the extra members queue; one per kind per 4 hours, none while the last is unread', () => {
 	const many = Array.from({ length: 7 }, (_, i) => agent(`d${i}`, '编程', String(i)));
 	const tasks = [...many.map((m, i) => card(`t${i}`, 'in_progress', NOW, { assigneeId: m.id })), card('t9', 'pending', NOW - 50 * MIN)];
