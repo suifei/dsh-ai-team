@@ -125,6 +125,20 @@ test('loop: a revert stops the loop and restores the baseline', async () => {
 	assert.match(h.state.results[0].split('\t')[5], /revert/);
 });
 
+test('loop: unparseable judges are recorded as inconclusive, apart from a valid revert', async () => {
+	const h = harness({ initial: 'A'.repeat(100), candidates: ['A'.repeat(110)], verdicts: ['revert'] });
+	h.input.judge = async () => ({ verdict: 'inconclusive', better: 0, worse: 0, ties: 0, valid: 0, unparsed: 3, votes: [], errors: ['judge 1: unparseable', 'judge 2: unparseable', 'judge 3: timeout'] });
+	const result = await runOptimizeLoop({ ...h.input, rounds: 3 });
+	assert.equal(result.status, 'reverted', '没验成的改动照样回滚');
+	assert.equal(h.state.text().length, 100);
+	const cols = h.state.results[0].split('\t');
+	assert.equal(cols[5], 'inconclusive', 'status 列不再写 revert');
+	assert.equal(cols[7], '0-0 inconclusive · unparsed 3/3 (judge 1: unparseable; judge 2: unparseable; judge 3: timeout)');
+	const valid = harness({ initial: 'A'.repeat(100), candidates: ['A'.repeat(110)], verdicts: ['revert'] });
+	await runOptimizeLoop({ ...valid.input, rounds: 3 });
+	assert.deepEqual(valid.state.results[0].split('\t').slice(5, 8), ['revert', 'dim3', '1-2 revert'], '有效评分但没提升仍是 revert');
+});
+
 test('loop: oversized candidate is skipped without judging', async () => {
 	const h = harness({ initial: 'A'.repeat(100), candidates: ['A'.repeat(200)], verdicts: ['keep'] });
 	const result = await runOptimizeLoop({ ...h.input, rounds: 1 });

@@ -51,6 +51,7 @@ import { HANDOFF_DIR, stepHandoff } from './lib/skillopt/handoff-answerer.js';
 import { execFile } from 'node:child_process';
 import { collectReview, startReview } from './lib/skillopt/review-runner.js';
 import { REVIEWER_NAME } from './lib/skillopt/reviewer.js';
+import { judgeRecord } from './lib/skillopt/judge.js';
 import { createMemberPermissionGuard } from './lib/host/permission-guard.js';
 import { installFaultAdapter } from './lib/host/fault-adapter.js';
 import { buildModelCatalog, buildModelEfforts } from './lib/host/model-catalog.js';
@@ -1939,9 +1940,9 @@ export function apply(ctx, config = {}) {
 								job.skillName,
 								String(beforeScore ?? '-'),
 								String(afterScore ?? '-'),
-								kept ? 'keep' : 'revert',
+								judgeRecord(collected.decision).status,
 								job.dimension ?? '-',
-								`${collected.decision.better}-${collected.decision.worse} ${collected.decision.verdict}` ,
+								judgeRecord(collected.decision).note,
 								'paired',
 								sha12(job.candidate),
 							].join('\t'));
@@ -1949,7 +1950,7 @@ export function apply(ctx, config = {}) {
 							// 评审卡必须收口：否则它保持 pending 进入 PMO 的 active 集合，
 							// 会被 heartbeat/stall/escalate 反复唤醒评审官（每 job 永久留一张卡）。
 							await closeReviewCard(runtime, job.reviewTaskId, `blind review collected: ${collected.decision.verdict}`);
-							diag.append({ ev: 'skillopt.job.done', jobId: job.id, verdict: collected.decision.verdict, better: collected.decision.better, worse: collected.decision.worse, kept, source: 'reviewer-card' });
+							diag.append({ ev: 'skillopt.job.done', jobId: job.id, verdict: collected.decision.verdict, better: collected.decision.better, worse: collected.decision.worse, unparsed: collected.decision.unparsed, kept, source: 'reviewer-card' });
 						}
 						if (jobs.length === 0) return '[skillopt jobs] none';
 						// 重新读一遍再打印：本次调用刚把某些 job 判成 keep/revert/done，
