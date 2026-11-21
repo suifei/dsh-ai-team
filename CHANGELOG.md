@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.144 - 2026-11-21
+
+**SkillOpt：采纳闸门回归借自上游；评审记录把「评分解析失败」和「有效评分但没提升」分开**
+
+- 夜间自优化（内置的 SkillOpt-Sleep 引擎）新增采纳闸门回归 `test/skillopt-sleep-gate.test.js`，借自上游 microsoft/SkillOpt 的 `TestVerifierDiscipline`（MIT）：用真实的 `consolidate` 加脚本化后端跑三个场景，分别断言基线分、候选分和 `gate_action`，不只看最后有没有采纳。
+  - 奖励作弊：训练集 0→1、留出集 1→0，必须拒绝；
+  - 部分退化：训练集 0→1、留出集 1.0→0.5（两道题坏一道），必须拒绝；
+  - 真提升：训练集与留出集都 0→1，必须采纳为新最佳。
+- 断言里写明一个容易看错的地方：拒绝后引擎回滚再测，顶层 `candidate_score` 等于基线；候选的真实分（0 / 0.5）只在 `gate_trials` 里。
+- 变异实测：在临时副本里让闸门不看分数，三个场景的 `gate_action` 仍写 reject / accept_new_best，但 `accepted` 变成 true、试验里的候选被采纳。只看 `gate_action` 或只看最后结果都发现不了，这条回归能发现。
+- 文渊阁自己的成对评审（优化循环、异步任务、评审卡三处写 `results.tsv`）：以前评审输出解析不出、超时或缺票，与「三票都有效、评审认为没提升」都写 `revert`，看记录分不出是评审坏了还是改动没用。现在 status 列分三种：`keep`、`revert`（有效评分但没提升）、`inconclusive`（有效票不足，多半是评分解析失败）；note 在有无效票时附「unparsed 无效票数/总票数」，例如 `0-1 inconclusive · unparsed 2/3`；诊断事件 `skillopt.job.done` 带 `unparsed`。三处写记录共用 `judgeRecord` 一个函数。评审卡里解析不出的回帖以前直接跳过，现在按应投数量补成无效票计入。采纳判据不变：只有 `keep` 能放行。
+- 测试：全量 481。
+
 ## 0.4.143 - 2026-11-20
 
 **「建议恢复」里的成员按钮改为「恢复 白砚」，直接打开成员资料窗**

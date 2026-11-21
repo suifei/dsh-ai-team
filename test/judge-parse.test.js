@@ -1,6 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { decideByMajority, parseJudgeOutput } from '../lib/skillopt/judge.js';
+import { decideByMajority, judgeRecord, parseJudgeOutput } from '../lib/skillopt/judge.js';
+import { decideReviewVotes } from '../lib/skillopt/reviewer.js';
+
+// 用户 2026-11-21：排查评分时把「评分解析失败」和「有效评分但没提升」分开记。
+test('judge records separate unparseable votes (inconclusive) from a valid no-improvement verdict (revert)', () => {
+	const noGain = decideByMajority(['worse', 'worse', 'better']);
+	assert.equal(noGain.unparsed, 0);
+	assert.deepEqual(judgeRecord(noGain), { status: 'revert', note: '1-2 revert' }, '三票都有效、评审说没提升：真结论');
+	const broken = decideByMajority([null, null, 'worse']);
+	assert.equal(broken.unparsed, 2);
+	assert.deepEqual(judgeRecord(broken), { status: 'inconclusive', note: '0-1 inconclusive · unparsed 2/3' }, '两票解析不出：评审坏了，不是改动的结论');
+	const allBroken = decideByMajority([null, null, null]);
+	assert.deepEqual(judgeRecord(allBroken), { status: 'inconclusive', note: '0-0 inconclusive · unparsed 3/3' });
+	const keptDespiteOne = decideByMajority(['better', 'better', null]);
+	assert.deepEqual(judgeRecord(keptDespiteOne), { status: 'keep', note: '2-0 keep · unparsed 1/3' }, '采纳也记下有一票无效');
+	// 评审卡：解析不出的回帖在 parseReviewReplies 里被跳过，按应投数量补成无效票。
+	const review = decideReviewVotes([{ better: 'A', aIsAfter: true }], 3);
+	assert.equal(review.verdict, 'inconclusive');
+	assert.equal(review.unparsed, 2);
+	assert.equal(judgeRecord(review).note, '1-0 inconclusive · unparsed 2/3');
+});
 
 test('a single surviving vote out of three cannot decide keep', () => {
 	const result = decideByMajority(['better', null, null]);
