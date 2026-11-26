@@ -30,6 +30,7 @@
 
 ## 最近更新
 
+- **工作目录选择兜底**（待发布）：新建和编辑项目时，如果宿主没有提供此表单可用的目录选择器，可直接粘贴或输入完整路径。不改宿主配置，也不会在提交项目前注册 Workspace（感谢 [@ljyzww](https://github.com/ljyzww) 的反馈，[#100](https://github.com/suifei/dsh-ai-team/issues/100)）。
 - **输入框与 @成员**（0.4.120–0.4.123）：输入框随内容长高、可拖大；能贴图、拖文件、选附件；@ 能点名具体成员，被 @ 的成员可以直接在主对话回你；成员可一键复制。文渊阁对话框和 DSH 标准会话（「文渊阁·PMO」）是同一套实现（感谢 [@xiuchuan666](https://github.com/xiuchuan666) 的反馈与建议，#65）。
 - **人才市场**（0.4.124–0.4.129）：9 个内置团队、44 位内置人才，各自带看家技能。可以招聘、复制为可编辑、自建人才并装技能，也能把项目成员「存为人才」；新建项目时选团队，或从人才里挑人组新团队（源自 [@xiuchuan666](https://github.com/xiuchuan666) 在 #65 里的建议）。
 - **主理人只调度交付**（0.4.128）：主理人不看产出，只问负责人做全没有；内容由验收人把关。
@@ -330,6 +331,7 @@ round-19  DeepSeek + Zhipu 双 provider
 
 | 贡献者 | 贡献 | 带来的进展 |
 |---|---|---|
+| [@ljyzww](https://github.com/ljyzww) | Windows 目录选择反馈 [#100](https://github.com/suifei/dsh-ai-team/issues/100) | 新建和编辑项目共用目录选择失败提示，保留手填路径 |
 | [@xiuchuan666](https://github.com/xiuchuan666) | 反馈与建议 [#65](https://github.com/suifei/dsh-ai-team/issues/65) | 输入框长高可拖大、贴图拖文件、@ 点名成员（0.4.120–0.4.123）；人才市场与在线人才库（0.4.124–0.4.131）；团队扩编：超限排队、开发验收配对、空闲必派、写入范围、加人建议（0.4.140） |
 | [@TardisBooo](https://github.com/TardisBooo) | 代码 [#88](https://github.com/suifei/dsh-ai-team/pull/88) | 工具参数改为对象 JSON Schema，Grok 4.7 可用（0.4.139） |
 
