@@ -19,6 +19,13 @@
 
 <p align="center">觉得有用？点右上角 ⭐ <a href="https://github.com/suifei/dsh-ai-team">Star</a> 支持一下，也欢迎 <a href="https://github.com/suifei/dsh-ai-team/issues">提 issue</a> 和 <a href="https://github.com/suifei/dsh-ai-team/pulls">发 PR</a>。</p>
 
+> [!IMPORTANT]
+> **🤝 社区共创：文渊阁下一步怎么走，由社区决定。**
+>
+> 任何想法都欢迎[提到 Issue 里](https://github.com/suifei/dsh-ai-team/issues/new/choose)：想加的功能、用着不顺的地方，或者你希望文渊阁以后长成什么样。**项目路线完全由本仓库的 Issue 驱动，不由维护者凭个人偏好改方向。**
+>
+> 每条建议都会认真看、公开反馈。社区讨论定下来的改动，由我们负责实现、验证和发版，发布结果也会回到对应的 Issue。
+
 > 文渊阁，藏修、校勘、纂辑之地。  
 > 在这里，Human 不在环里逐条调度，而是在环上定方向、守信任、做最后那一步。
 
