@@ -265,8 +265,8 @@ window.__ModuleLoader__.load({
 			workspaceDialogTitle: '设置项目工作目录',
 			workspaceDialogHint: 'Project 的成员会在这个目录里执行 Task；多个 Project 用不同目录隔离。',
 			workspacePathPlaceholder: '例如 D:/work/my-project',
-			workspacePickUnavailable: '当前宿主不支持目录选择，请手动输入路径。',
-			workspacePickFailed: '目录选择失败，请手动输入路径。',
+			workspacePickUnavailable: '当前宿主的目录选择器不能用于此表单。请在「工作目录」中粘贴或输入完整路径。',
+			workspacePickFailed: '未能打开目录选择器。请重试，或在「工作目录」中粘贴或输入完整路径。',
 			workspaceSave: '保存目录',
 			projectCreate: '创建项目',
 			projectCreated: '已创建项目 {name}。',
@@ -729,8 +729,8 @@ window.__ModuleLoader__.load({
 			workspaceDialogTitle: 'Set Project workspace',
 			workspaceDialogHint: 'Members run Tasks in this directory; separate Projects use separate directories.',
 			workspacePathPlaceholder: 'e.g. D:/work/my-project',
-			workspacePickUnavailable: 'This host has no directory picker; type a path.',
-			workspacePickFailed: 'Directory picker failed; type a path.',
+			workspacePickUnavailable: 'The host’s directory picker is unavailable for this form. Paste or enter the full path in the Workspace field.',
+			workspacePickFailed: 'Could not open the directory picker. Retry, or paste or enter the full path in the Workspace field.',
 			workspaceSave: 'Save directory',
 			projectCreate: 'Create project',
 			projectCreated: 'Created project {name}.',
@@ -4324,15 +4324,26 @@ window.__ModuleLoader__.load({
 				}
 				try {
 					return { path: await service.pickDirectory(), error: null };
-				} catch {
-					return { error: 'failed', path: null };
+				} catch (error) {
+					// Harness rc.5 wraps the RPC error in a plain Error and retains only its message.
+					const unavailable = error?.code === 'directory-picker/unavailable'
+						|| error?.message === 'directory picker failed: directoryPicker.pick needs the native capability; the composed picker serves "browse"';
+					return { error: unavailable ? 'unavailable' : 'failed', path: null };
+				}
+			}
+			async function applyWorkspacePick(setPath, setError) {
+				const picked = await pickWorkspacePath();
+				const unavailable = t('workspacePickUnavailable');
+				const failed = t('workspacePickFailed');
+				if (picked.path) {
+					setPath(picked.path);
+					setError((previous) => previous === unavailable || previous === failed ? '' : previous);
+				} else if (picked.error) {
+					setError(picked.error === 'unavailable' ? unavailable : failed);
 				}
 			}
 			async function pickNewWorkspace() {
-				const picked = await pickWorkspacePath();
-				if (picked.path) setNWorkspace(picked.path);
-				else if (picked.error === 'unavailable') setNError(t('workspacePickUnavailable'));
-				else if (picked.error === 'failed') setNError(t('workspacePickFailed'));
+				await applyWorkspacePick(setNWorkspace, setNError);
 			}
 			function openWorkspaceEditor() {
 				setWorkspaceDraft(project?.workspacePath ?? '');
@@ -4340,10 +4351,7 @@ window.__ModuleLoader__.load({
 				setWorkspaceOpen(true);
 			}
 			async function pickProjectWorkspace() {
-				const picked = await pickWorkspacePath();
-				if (picked.path) setWorkspaceDraft(picked.path);
-				else if (picked.error === 'unavailable') setWorkspaceError(t('workspacePickUnavailable'));
-				else if (picked.error === 'failed') setWorkspaceError(t('workspacePickFailed'));
+				await applyWorkspacePick(setWorkspaceDraft, setWorkspaceError);
 			}
 			async function saveWorkspace() {
 				if (!project || workspaceBusy || !workspaceDraft.trim()) return;

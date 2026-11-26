@@ -31,3 +31,33 @@ test('falls back to scoring when the recommendation matches no option', () => {
 	}]);
 	assert.equal(answers[0].value, '完整核心方案');
 });
+
+
+test('explicit short recommendation matches a parenthetically annotated option', () => {
+	const options = ['A（推荐）：立即重启并补采', 'B：完整处理', 'C：继续等待，不推荐'];
+	assert.equal(chooseDecisionAnswers([{ options, recommendation: '建议 A' }])[0].value, options[0]);
+	const reordered = ['C：完整处理', 'A（最低限度）：仅试跑', 'B：继续等待，不推荐'];
+	assert.equal(chooseDecisionAnswers([{ options: reordered, recommendation: '建议 A' }])[0].value, reordered[1]);
+});
+
+test('negative recommendation never beats a non-negated fallback', () => {
+	const positive = 'A（推荐）：立即重启并补采';
+	assert.equal(chooseDecisionAnswers([{ options: [positive, 'B：仅预览', 'C：继续等待 —— 不推荐，无超时机制不会自愈'] }])[0].value, positive);
+	for (const negated of ['B：完整方案，不推荐', 'B：完整方案，不建议', 'B：完整方案, NOT recommended']) {
+		assert.equal(chooseDecisionAnswers([{ options: [negated, 'A：预览'] }])[0].value, 'A：预览');
+	}
+});
+
+test('labels do not influence fallback rankings and ordinary delivery priority remains', () => {
+	for (const [low, high] of [['C', 'A'], ['A', 'C'], ['B', 'A']]) {
+		const preferred = high + '：完整交付';
+		assert.equal(chooseDecisionAnswers([{ options: [low + '：最小骨架', preferred] }])[0].value, preferred);
+	}
+	const first = 'A：先导出清单';
+	assert.equal(chooseDecisionAnswers([{ options: [first, 'C：查看清单'] }])[0].value, first);
+});
+
+test('a negated structured hint does not explicitly select the disfavored letter', () => {
+	const options = ['A：完整交付', 'B：暂缓'];
+	assert.equal(chooseDecisionAnswers([{ options, recommendation: '不推荐 B' }])[0].value, options[0]);
+});

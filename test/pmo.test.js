@@ -37,7 +37,10 @@ test('PMO auto-answers a structured decision and records mem_pmo in the Thread',
 			type: 'decision.request', actor: agent, projectId: 'prj_pmo',
 			payload: {
 				title: '需要拍板', taskId: created.task.id,
-				questions: [{ id: 'q1', text: '范围？', options: ['A 最小', 'B 核心（推荐）'], recommendation: '建议 B' }],
+				questions: [
+					{ id: 'q1', text: '范围？', options: ['A（推荐）：先试跑', 'B：完整交付', 'C：继续等待，不推荐'] },
+					{ id: 'q2', text: '第二步？', options: ['A（先试跑）：仅做最小骨架', 'B：完整交付'], recommendation: '建议 A' },
+				],
 			},
 		});
 		const results = await service.autoAnswerDecisions();
@@ -45,6 +48,12 @@ test('PMO auto-answers a structured decision and records mem_pmo in the Thread',
 		assert.equal(results[0].entry.authorId, 'mem_pmo');
 		assert.equal(service.state.inbox[request.item.id].state, 'resolved');
 		assert.match(results[0].entry.body, /PMO 自动决策/);
+		assert.match(results[0].entry.body, /范围？: A（推荐）：先试跑/);
+		assert.match(results[0].entry.body, /第二步？: A（先试跑）：仅做最小骨架/);
+		assert.deepEqual(service.state.inbox[request.item.id].decision.answers, [
+			{ id: 'q1', value: 'A（推荐）：先试跑' },
+			{ id: 'q2', value: 'A（先试跑）：仅做最小骨架' },
+		]);
 		const off = await service.dispatch({ type: 'project.pmo.update', actor: human, projectId: 'prj_pmo', payload: { pmoAuto: false } });
 		assert.equal(off.project.pmoAuto, false);
 		assert.equal(service.state.projects.prj_pmo.pmoAuto, false);
